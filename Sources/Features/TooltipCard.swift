@@ -1127,6 +1127,8 @@ struct TooltipCard: View {
     var deepSeekPricingEnabled: Bool = true
     var deepSeekPricingSchedule: DeepSeekPricing.Schedule = .current
     var tailOffset: CGFloat = 0
+    var stockCharts: StockChartStore? = nil
+    var stockPreferences: Preferences? = nil
     /// A tap on a session row jumps to that session's terminal — nil leaves
     /// the rows as plain text.
     var onFocusSession: ((pid_t) -> Void)? = nil
@@ -1139,10 +1141,15 @@ struct TooltipCard: View {
         return activity.note ?? activity.sessions.first?.name ?? L10n.t("Thinking")
     }
 
+    private var chartStock: WatchedStock? {
+        guard snapshot.id.hasPrefix("widget-stock:") else { return nil }
+        return WatchedStock.parse(String(snapshot.id.dropFirst("widget-stock:".count)))
+    }
+
     /// The same figure the hover region uses, so what is drawn and what is
     /// reachable can never drift apart.
     private var height: CGFloat {
-        NotchLayout.cardHeight(
+        let height = NotchLayout.cardHeight(
             windowCount: snapshot.windows.count,
             groupCount: snapshot.windowGroupCount,
             moneyWindowCount: snapshot.windows.filter { $0.money != nil }.count,
@@ -1162,6 +1169,7 @@ struct TooltipCard: View {
             hasNetworkSettings: snapshot.id == "system-network",
             cpuCoreCount: snapshot.cpuCores.count
         )
+        return height + (chartStock == nil ? 0 : NotchLayout.stockChartSectionHeight)
     }
 
     var body: some View {
@@ -1174,6 +1182,9 @@ struct TooltipCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ProviderTooltip(activityNote: localActivityNote, snapshot: snapshot, now: now, resetTimeFormat: resetTimeFormat,
                                     showUsagePace: showUsagePace)
+                    if let chartStock, let stockCharts, let stockPreferences {
+                        StockChartSection(store: stockCharts, preferences: stockPreferences, stock: chartStock)
+                    }
                     if !snapshot.cpuCores.isEmpty {
                         CPUCoreLoads(cores: snapshot.cpuCores, colorOverride: snapshot.systemColor?.color)
                     }

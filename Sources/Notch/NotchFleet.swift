@@ -19,6 +19,7 @@ final class NotchFleet {
     /// the displays' models are fed, so a model's line there is decorated —
     /// speed, context, phase, today's tokens — exactly as its cell is.
     let menuModel = NotchViewModel()
+    let stockCharts = StockChartStore()
     /// Every model a reading has to reach.
     private var models: [NotchViewModel] { [menuModel] + controllers.values.map(\.model) }
 
@@ -482,6 +483,7 @@ final class NotchFleet {
         controller.model.onOpenSettings = onOpenSettings
         controller.model.onFocusSession = onFocusSession
         controller.model.todoPreferences = todoPreferences
+        controller.model.stockCharts = stockCharts
         controller.onReposition = onReposition
         controller.onMoveToEdge = onMoveToEdge
         controller.signInItems = signInItems

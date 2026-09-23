@@ -329,6 +329,17 @@ final class Preferences: ObservableObject {
         }
     }
 
+    @Published var stockChartCount: Int {
+        didSet {
+            let clamped = min(max(stockChartCount, 1), 20)
+            if clamped != stockChartCount { stockChartCount = clamped; return }
+            defaults.set(clamped, forKey: "stockChartCount")
+        }
+    }
+    @Published var stockChartInterval: StockChartInterval {
+        didSet { defaults.set(stockChartInterval.rawValue, forKey: "stockChartInterval") }
+    }
+
     /// Returns false when the text is not a Korean code or a US ticker, or when
     /// the list is already full.
     @discardableResult
@@ -923,6 +934,8 @@ final class Preferences: ObservableObject {
         self.showsStocks = defaults.object(forKey: "showsStocks") as? Bool ?? false
         self.notchMeterStyle = NotchMeterStyle(rawValue: defaults.string(forKey: "notchMeterStyle") ?? "") ?? .ring
         self.stockSymbols = defaults.stringArray(forKey: "stockSymbols") ?? []
+        self.stockChartCount = min(max(defaults.object(forKey: "stockChartCount") as? Int ?? 20, 1), 20)
+        self.stockChartInterval = StockChartInterval(rawValue: defaults.string(forKey: "stockChartInterval") ?? "") ?? .tenMinutes
         self.weatherLocation = defaults.data(forKey: "weatherLocation")
             .flatMap { try? JSONDecoder().decode(WeatherLocation.self, from: $0) }
             .flatMap { $0.isValid ? $0 : nil }

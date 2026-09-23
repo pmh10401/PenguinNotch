@@ -95,6 +95,23 @@ struct StockSettings: View {
                 message = nil
             }
         }
+        HStack {
+            Text(L10n.t("Stock candles to show"))
+            Spacer()
+            TextField(L10n.t("Candles"), value: $preferences.stockChartCount, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 54)
+            Stepper(L10n.t("Candles"), value: $preferences.stockChartCount, in: 1...20)
+                .labelsHidden()
+        }
+        Picker(L10n.t("Default chart interval"), selection: $preferences.stockChartInterval) {
+            ForEach(StockChartInterval.allCases) { interval in
+                Text(interval.rawValue).tag(interval)
+            }
+        }
+        .pickerStyle(.segmented)
+        Text(L10n.t("1–20 candles · Refreshes per stock every 10 minutes"))
+            .font(.caption).foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: 10) {
             Label(L10n.t("Add symbol"), systemImage: "plus.circle.fill")
                 .font(.headline)

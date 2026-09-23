@@ -121,6 +121,8 @@ struct NotchRootView: View {
                                 deepSeekPricingEnabled: model.deepSeekPricingEnabled,
                                 deepSeekPricingSchedule: model.deepSeekPricingSchedule,
                                 tailOffset: tooltipTailOffset(index: index, snapshot: snapshot),
+                                stockCharts: model.stockCharts,
+                                stockPreferences: model.todoPreferences,
                                 onFocusSession: model.onFocusSession
                             )
                         }

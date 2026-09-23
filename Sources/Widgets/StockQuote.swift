@@ -60,6 +60,15 @@ struct StockTick: Equatable {
     var currency: String
 }
 
+struct StockCandle {
+    var end: Date
+    var open: Decimal
+    var high: Decimal
+    var low: Decimal
+    var close: Decimal
+    var volume: Decimal
+}
+
 enum TossSocketEvent {
     case tick(id: String, tick: StockTick)
     case subscribed([String])
@@ -249,6 +258,43 @@ enum StockQuoteCodec {
             guard let close = decimal(row["closePrice"]), let date = date(row["timestamp"]) else { return nil }
             return (date, close)
         }
+    }
+
+    static func candles(from data: Data) -> [StockCandle]? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let result = object["result"] as? [String: Any],
+              let rows = result["candles"] as? [[String: Any]] else { return nil }
+        let candles = rows.compactMap { row -> StockCandle? in
+            guard let end = date(row["timestamp"]),
+                  let open = decimal(row["openPrice"]), let high = decimal(row["highPrice"]),
+                  let low = decimal(row["lowPrice"]), let close = decimal(row["closePrice"]),
+                  let volume = decimal(row["volume"])
+            else { return nil }
+            return StockCandle(end: end, open: open, high: high, low: low,
+                               close: close, volume: volume)
+        }
+        guard candles.count == rows.count else { return nil }
+        return candles
+    }
+
+    /// The API's minute timestamp marks the *end* of [minute - 1, minute).
+    /// Subtract a second so 09:10 joins 09:01–09:09, not 09:11–09:20.
+    static func tenMinuteCandles(from minutes: [StockCandle]) -> [StockCandle] {
+        var result: [StockCandle] = []
+        for minute in minutes.sorted(by: { $0.end < $1.end }) {
+            let end = Date(timeIntervalSince1970: floor((minute.end.timeIntervalSince1970 - 1) / 600) * 600 + 600)
+            if let last = result.indices.last, result[last].end == end {
+                result[last].high = max(result[last].high, minute.high)
+                result[last].low = min(result[last].low, minute.low)
+                result[last].close = minute.close
+                result[last].volume += minute.volume
+            } else {
+                var candle = minute
+                candle.end = end
+                result.append(candle)
+            }
+        }
+        return result
     }
 
     private static func rows(in data: Data) -> [[String: Any]]? {

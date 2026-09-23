@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.2",
+                headline: "Stock candlestick charts on hover",
+                changes: [
+                    ReleaseNote.Change(title: "Inspect 1-minute, 10-minute and daily candles",
+                                       detail: "Choose 1–20 bars in Settings. Each stock's chart refreshes no more than once every ten minutes.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.1",
                 headline: "Faster stock quotes on startup",
                 changes: [

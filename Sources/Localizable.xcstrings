@@ -47756,6 +47756,50 @@
         }
       }
     },
+    "Stock candles to show": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "표시할 주식 봉 개수" } } }
+    },
+    "Candles": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "봉 개수" } } }
+    },
+    "Default chart interval": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "기본 차트 주기" } } }
+    },
+    "1–20 candles · Refreshes per stock every 10 minutes": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "봉 1~20개 · 종목별 10분마다 갱신" } } }
+    },
+    "Stock chart": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "주식 차트" } } }
+    },
+    "Chart interval": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "차트 주기" } } }
+    },
+    "Chart unavailable": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "차트를 불러올 수 없습니다" } } }
+    },
+    "No recent candles": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "최근 봉 데이터가 없습니다" } } }
+    },
+    "Updated": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "갱신" } } }
+    },
+    "Every 10 minutes": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "10분 간격" } } }
+    },
+    "Each stock refreshes every 10 minutes": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "종목마다 10분 간격으로 갱신됩니다" } } }
+    },
     "Realtime trades from Toss Securities. Turn Stocks on under Notch items and order. Register this Mac's public IP under WTS → Settings → Open API → Allowed IPs. The client secret stays in the Keychain.": {
       "extractionState": "manual",
       "localizations": {

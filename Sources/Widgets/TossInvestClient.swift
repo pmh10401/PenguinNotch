@@ -107,21 +107,42 @@ enum TossInvestAPI {
     /// per symbol; a missing candle leaves that symbol without a ring.
     static func previousClose(token: String, stock: WatchedStock, priceTime: Date,
                               session: URLSession = .shared) async throws -> Decimal? {
+        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 2,
+                                        session: session)
+        return StockQuoteCodec.previousClose(closes: StockQuoteCodec.dailyCloses(from: data),
+                                             priceTime: priceTime,
+                                             timeZone: StockQuoteCodec.timeZone(for: stock.market))
+    }
+
+    static func chartCandles(token: String, stock: WatchedStock,
+                             session: URLSession = .shared) async throws -> StockChartData {
+        async let minuteData = candleData(token: token, symbol: stock.symbol, interval: "1m", count: 200,
+                                           session: session)
+        async let dailyData = candleData(token: token, symbol: stock.symbol, interval: "1d", count: 20,
+                                          session: session)
+        guard let minutes = StockQuoteCodec.candles(from: try await minuteData),
+              let days = StockQuoteCodec.candles(from: try await dailyData) else {
+            throw Failure.invalidResponse
+        }
+        return StockChartData(minutes: minutes.sorted { $0.end < $1.end },
+                              tenMinutes: StockQuoteCodec.tenMinuteCandles(from: minutes),
+                              days: days.sorted { $0.end < $1.end })
+    }
+
+    private static func candleData(token: String, symbol: String, interval: String, count: Int,
+                                   session: URLSession) async throws -> Data {
         guard var components = URLComponents(url: base.appending(path: "/api/v1/candles"), resolvingAgainstBaseURL: false) else {
             throw Failure.invalidResponse
         }
         components.queryItems = [
-            URLQueryItem(name: "symbol", value: stock.symbol),
-            URLQueryItem(name: "interval", value: "1d"),
-            URLQueryItem(name: "count", value: "2")
+            URLQueryItem(name: "symbol", value: symbol),
+            URLQueryItem(name: "interval", value: interval),
+            URLQueryItem(name: "count", value: String(count))
         ]
         guard let url = components.url else { throw Failure.invalidResponse }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let data = try await body(for: request, session: session)
-        return StockQuoteCodec.previousClose(closes: StockQuoteCodec.dailyCloses(from: data),
-                                             priceTime: priceTime,
-                                             timeZone: StockQuoteCodec.timeZone(for: stock.market))
+        return try await body(for: request, session: session)
     }
 
     /// Holds the socket open, forwarding frames until the server or the task ends.

@@ -5,6 +5,7 @@ import Combine
 final class NotchViewModel: ObservableObject {
     @Published var snapshots: [ProviderSnapshot] = []
     var todoPreferences: Preferences?
+    var stockCharts: StockChartStore?
     private var order: [String] = []
 
     func apply(order: [String]) {
@@ -599,7 +600,7 @@ final class NotchViewModel: ObservableObject {
         if snapshot.kind == .calendar { return NotchLayout.calendarCardHeight }
         if snapshot.kind == .todo { return NotchLayout.todoCardHeight }
         let cap = sessionCap ?? self.sessionCap
-        return NotchLayout.cardHeight(windowCount: snapshot.windows.count,
+        let height = NotchLayout.cardHeight(windowCount: snapshot.windows.count,
             groupCount: snapshot.windowGroupCount,
             moneyWindowCount: snapshot.windows.filter { $0.money != nil }.count,
             usageDetailGroupCount: snapshot.usageDetail?.visibleGroups.count ?? 0,
@@ -618,6 +619,7 @@ final class NotchViewModel: ObservableObject {
             showsDeepSeekPricing: deepSeekPricingEnabled,
             hasNetworkSettings: snapshot.id == "system-network",
             cpuCoreCount: snapshot.cpuCores.count)
+        return height + (snapshot.id.hasPrefix("widget-stock:") ? NotchLayout.stockChartSectionHeight : 0)
     }
 
     private func contentCardHeight(sessionCap: Int) -> CGFloat {
