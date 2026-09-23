@@ -1289,11 +1289,11 @@ function renderWidgets(){
   const order=(p.order&&p.order.length)?p.order.slice():METER_ROWS.map(row=>row[0]);
   METER_ROWS.forEach(row=>{ if(order.indexOf(row[0])<0) order.push(row[0]); });
   const name=id=>wui((METER_ROWS.find(row=>row[0]===id)||[id,id])[1]);
-  let html=`<div class="item"><span>${esc(wui('Enable system monitoring'))}</span><button class="switch" id="sw-system" role="switch" aria-checked="${p.system?'true':'false'}"></button></div>`;
+  let html=`<div class="item"><span>${esc(wui('Enable system monitoring'))}</span><button class="switch${p.system?' on':''}" id="sw-system" role="switch" aria-checked="${p.system?'true':'false'}"></button></div>`;
   html+=`<div class="item cap">${esc(wui('Meters refresh about once a second. Hiding one does not stop the others.'))}</div>`;
-  html+=`<div class="item"><span>${esc(wui('Calendar'))}</span><button class="switch" id="sw-cal" role="switch" aria-checked="${p.calendar?'true':'false'}"></button></div>`;
-  html+=`<div class="item"><span>${esc(wui('Weather'))}</span><button class="switch" id="sw-wx" role="switch" aria-checked="${p.weather?'true':'false'}"></button></div>`;
-  html+=`<div class="item"><span>${esc(wui('To-do'))}</span><button class="switch" id="sw-todo" role="switch" aria-checked="${p.todo?'true':'false'}"></button></div>`;
+  html+=`<div class="item"><span>${esc(wui('Calendar'))}</span><button class="switch${p.calendar?' on':''}" id="sw-cal" role="switch" aria-checked="${p.calendar?'true':'false'}"></button></div>`;
+  html+=`<div class="item"><span>${esc(wui('Weather'))}</span><button class="switch${p.weather?' on':''}" id="sw-wx" role="switch" aria-checked="${p.weather?'true':'false'}"></button></div>`;
+  html+=`<div class="item"><span>${esc(wui('To-do'))}</span><button class="switch${p.todo?' on':''}" id="sw-todo" role="switch" aria-checked="${p.todo?'true':'false'}"></button></div>`;
   html+=`<div class="item cap">${esc(wui('Hidden items keep their color and place.'))}</div>`;
   order.forEach((id,index)=>{
     const on=!hidden.has(id);
@@ -1301,7 +1301,7 @@ function renderWidgets(){
     html+=`<div class="item"><span>${esc(name(id))}</span><span>
       <button data-move="${id}" data-dir="-1" ${index===0?'disabled':''}>${esc(wui('Up'))}</button>
       <button data-move="${id}" data-dir="1" ${index===order.length-1?'disabled':''}>${esc(wui('Down'))}</button>
-      <button class="switch" data-hide="${id}" role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(wui('Show'))}"></button>
+      <button class="switch${on?' on':''}" data-hide="${id}" role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(wui('Show'))}"></button>
       <button data-color="${id}" title="${esc(color||'auto')}" style="width:16px;height:16px;border-radius:99px;border:0;background:${color?'#'+color:'#888'}"></button>
     </span></div>`;
   });
