@@ -23,9 +23,9 @@ two never disagree.
 
 [![Download for macOS](docs/design/download-macos.svg)](../../releases)
 
-That button opens Releases. For now, select the preview release and its
-versioned disk image under Assets. A signed and notarized release has not been
-published yet.
+That button opens Releases. For now, select the preview release and the disk
+image whose commit ID matches its title. A signed and notarized release has
+not been published yet.
 
 To try unreleased `main` without an Xcode install, the [preview
 build](../../releases/tag/preview) is rebuilt from every commit, and the

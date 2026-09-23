@@ -11,6 +11,10 @@ on:
   # main first — this is the button to press when you just want to try it.
   workflow_dispatch:
 
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   package:
     if: github.repository == 'pmh10401/PenguinNotch'
@@ -101,10 +105,13 @@ jobs:
         run: |
           set -euo pipefail
           TAG=preview
-          DMG=$(ls build/ci/*.dmg)
+          DMG="build/ci/PenguinNotch-${VERSION}-${GITHUB_SHA:0:7}-unsigned.dmg"
+          cp "$(ls build/ci/*.dmg)" "$DMG"
 
           cat > notes.md <<EOF
           Built from \`main\` at ${GITHUB_SHA}.
+
+          Select \`$(basename "$DMG")\` under Assets for this build.
 
           A build of unreleased \`main\`, so the app can be tried without
           installing Xcode and compiling it. It is ad-hoc signed rather than
@@ -121,17 +128,14 @@ jobs:
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # The tag has to follow, or the release keeps advertising the
-            # commit it was first cut from while serving a newer build.
+            # ponytail: retain older assets while GitHub returns 404 when
+            # deleting their IDs; prune them when that API works again.
+            gh release upload "$TAG" "$DMG"
+            # Move the tag only after the current asset is available.
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" \
               -f sha="${GITHUB_SHA}" -F force=true >/dev/null
-            # By name, not --clobber: the filename carries the version, so the
-            # release would otherwise accumulate one stale dmg per release.
-            gh release view "$TAG" --json assets -q '.assets[].name' \
-              | while read -r asset; do gh release delete-asset "$TAG" "$asset" --yes; done
             gh release edit "$TAG" --prerelease \
               --title "Preview — ${VERSION} (${GITHUB_SHA:0:7})" --notes-file notes.md >/dev/null
-            gh release upload "$TAG" "$DMG"
           else
             gh release create "$TAG" "$DMG" --prerelease --target "${GITHUB_SHA}" \
               --title "Preview — ${VERSION} (${GITHUB_SHA:0:7})" --notes-file notes.md
