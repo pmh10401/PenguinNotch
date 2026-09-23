@@ -246,21 +246,28 @@ final class StockQuotesMonitor: ObservableObject {
                 let access = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
                                                                   clientSecret: credentials.clientSecret)
                 let symbolsOnly = symbols.map(\.symbol)
+                async let fetchedNames = TossInvestAPI.names(token: access.value, symbols: symbolsOnly)
                 let prices = try await TossInvestAPI.prices(token: access.value, symbols: symbolsOnly)
-                let fetchedNames = (try? await TossInvestAPI.names(token: access.value, symbols: symbolsOnly)) ?? [:]
                 guard generation == token else { return }
                 quotes.merge(prices) { _, new in new }
-                names.merge(fetchedNames) { _, new in new }
-                for stock in symbols {
-                    guard generation == token, !Task.isCancelled else { return }
-                    let priceTime = quotes[stock.id]?.timestamp ?? Date()
-                    if let close = try? await TossInvestAPI.previousClose(token: access.value, stock: stock, priceTime: priceTime) {
-                        closes[stock.id] = close
-                    }
-                }
+                publish()
+                names.merge((try? await fetchedNames) ?? [:]) { _, new in new }
                 guard generation == token else { return }
                 link = .live
                 publish()
+                // Daily candles are per-symbol; let trades start while rings fill in.
+                let candles = Task {
+                    for stock in symbols {
+                        guard generation == token, !Task.isCancelled else { return }
+                        let priceTime = quotes[stock.id]?.timestamp ?? Date()
+                        if let close = try? await TossInvestAPI.previousClose(token: access.value, stock: stock, priceTime: priceTime) {
+                            guard generation == token, !Task.isCancelled else { return }
+                            closes[stock.id] = close
+                            publish()
+                        }
+                    }
+                }
+                defer { candles.cancel() }
                 try await TossInvestAPI.stream(token: access.value, stocks: symbols) { [weak self] event in
                     guard let self, self.generation == token else { return }
                     self.absorb(event)

@@ -37,7 +37,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// and its tail on the left. `fitZoom` in ui/notch.html divides by the same width.
 pub const NOTCH_W: f64 = 360.0;
 /// Hand-bumped build tag, written to run.log at startup so a log can always be matched to the exe that wrote it.
-pub const BUILD: &str = "r32";
+pub const BUILD: &str = "r33";
 /// The upright notch also holds system meters, calendar, weather and to-do cells.
 pub const NOTCH_UPRIGHT_H: f64 = 980.0;
 /// The flat notch needs this much width for its rings and height for its card.

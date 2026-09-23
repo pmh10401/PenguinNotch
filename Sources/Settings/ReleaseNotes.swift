@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.1",
+                headline: "Faster stock quotes on startup",
+                changes: [
+                    ReleaseNote.Change(title: "Show batched prices and start live trades sooner",
+                                       detail: "Load stock names alongside prices, then fill in change rings without holding up the live feed.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.0",
                 headline: "Upstream usage and interface improvements",
                 changes: [

@@ -42,6 +42,25 @@ final class StockQuoteTests: XCTestCase {
         if case .pong = StockQuoteCodec.event(from: #"{"type":"pong"}"#) {} else { XCTFail("expected pong") }
     }
 
+    func testCurrentPricesUseOneRequestForTwoHundredSymbols() async throws {
+        let symbols = (0..<200).map { "T\($0)" }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        StockPricesEndpoint.reset()
+
+        let quotes = try await TossInvestAPI.prices(token: "test-token", symbols: symbols, session: session)
+
+        XCTAssertEqual(quotes.count, 200)
+        XCTAssertEqual(quotes["us:T199"]?.price, 199)
+        XCTAssertEqual(StockPricesEndpoint.requests.count, 1)
+        let request = try XCTUnwrap(StockPricesEndpoint.requests.first)
+        XCTAssertEqual(request.url?.path, "/api/v1/prices")
+        XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "symbols" })?.value, symbols.joined(separator: ","))
+    }
+
     func testSubscriptionDeclaresEachMarketOnce() throws {
         let json = StockQuoteCodec.subscriptionJSON([
             WatchedStock(symbol: "005930", market: .kr),
@@ -162,5 +181,30 @@ final class StockQuoteTests: XCTestCase {
             XCTAssertNil(KeychainItem.newest(service: oldService, account: account))
             XCTAssertEqual(KeychainItem.read(service: newService, account: account), account)
         }
+    }
+}
+
+private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    private static var recorded: [URLRequest] = []
+    static var requests: [URLRequest] { lock.withLock { recorded } }
+
+    static func reset() { lock.withLock { recorded = [] } }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+
+    override func startLoading() {
+        Self.lock.withLock { Self.recorded.append(request) }
+        let rows: [[String: String]] = (0..<200).map {
+            ["symbol": "T\($0)", "lastPrice": "\($0)", "currency": "USD"]
+        }
+        let data = try! JSONSerialization.data(withJSONObject: ["result": rows])
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                       headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
     }
 }
