@@ -52,4 +52,5 @@ check_signing 'multiple development identities select one team' \
 SIGNING_IDENTITIES='  1) AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA "Developer ID Application: Maintainer (6WFPL8B9FB)"
   2) BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB "Apple Development: Contributor (TEAM123456)"
      2 valid identities found'
-check_signing 'Developer ID preserves project signing settings' 'Debug  '
+check_signing 'Developer ID supplies its identity and team' \
+    'Debug CODE_SIGN_IDENTITY="Developer ID Application: Maintainer (6WFPL8B9FB)" DEVELOPMENT_TEAM="ORPHAN1234" CODE_SIGN_STYLE=Manual'
