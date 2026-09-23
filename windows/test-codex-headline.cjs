@@ -59,12 +59,37 @@ test('Selected providers and system widgets are listed together', () => {
     claudeCells: () => [{ id: 'claude', base: 'claude' }],
     codexSnap: { status: 'ready' }, glmSnap: absent, cursorSnap: absent,
     grokSnap: absent, agSnap: absent,
-    notchSlots: [{ provider: 'claude' }], slotFor: id => id === 'claude',
+    notchSlots: [{ provider: 'claude' }],
     window: { PenguinNotchWidgets: widgets }, PenguinNotchWidgets: widgets,
     systemPayload: { order: [] }, uiLang: 'en',
   });
+  selected.slotFor = id => selected.notchSlots?.find(slot => slot.provider === id);
   vm.runInContext(markedSource(html, 'PROVIDERS'), selected);
   assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['claude', 'system-cpu']);
   selected.notchSlots = [];
+  assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['system-cpu']);
+  selected.notchSlots = null;
   assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['claude', 'codex', 'system-cpu']);
+});
+
+test('Settings can save the last AI provider off and restore automatic selection', async () => {
+  const settings = readFileSync(join(__dirname, 'penguinnotch/ui/settings.html'), 'utf8');
+  const source = settings.slice(settings.indexOf('function notchOn(){'), settings.indexOf('const accountsPane ='));
+  const calls = [];
+  const page = vm.createContext({
+    notchSlots: [{ provider: 'claude' }],
+    providerList: () => [{ id: 'claude' }],
+    renderAccounts: () => {}, toast: () => {}, strip: () => {},
+    invoke: (name, args) => { calls.push({ name, args }); return Promise.resolve(); },
+  });
+  vm.runInContext(source, page);
+  page.renderAccounts = () => {};
+  page.toggleNotch('claude');
+  assert.deepEqual(Array.from(page.notchOn()), []);
+  assert.equal(calls[0].name, 'set_notch_slots');
+  assert.deepEqual(Array.from(calls[0].args.slots), []);
+  page.toggleNotch('claude');
+  assert.deepEqual(Array.from(page.notchOn(), slot => slot.provider), ['claude']);
+  assert.equal(calls[1].name, 'set_notch_slots');
+  assert.equal(calls[1].args.slots, null);
 });

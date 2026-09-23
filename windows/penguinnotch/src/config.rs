@@ -69,9 +69,12 @@ pub struct Config {
     /// kept so an existing config migrates cleanly.
     #[serde(default)]
     pub notch_providers: Vec<String>,
-    /// Which providers get a ring on the notch, in order. An empty list means every provider.
+    /// Which providers get a ring on the notch, in order. See notch_slots_custom for empty lists.
     #[serde(default)]
     pub notch_slots: Vec<TraySlot>,
+    /// False keeps the automatic "all providers" default; true permits an explicitly empty list.
+    #[serde(default)]
+    pub notch_slots_custom: bool,
     /// Antigravity's lane on the ring, as the Mac app's "Notch reads": "automatic", "5h" or "weekly"
     #[serde(default = "default_antigravity_limit")]
     pub antigravity_limit: String,
@@ -229,6 +232,7 @@ impl Default for Config {
             weekly_ring: default_weekly_ring(),
             notch_providers: Vec::new(), // empty = show them all
             notch_slots: Vec::new(),     // filled in by load(), from notch_providers
+            notch_slots_custom: false,
             antigravity_limit: default_antigravity_limit(),
             antigravity_model: default_antigravity_model(),
             glm_notch_fixed: true, // a fresh install picks from the full list already
@@ -272,12 +276,15 @@ pub fn load() -> Config {
 
     // Migration: before slots existed the notch was a plain provider list, one ring each. That is
     // exactly a list of slots, so nobody's choice is lost and nobody has to reconfigure anything.
-    if cfg.notch_slots.is_empty() {
+    if !cfg.notch_slots_custom && cfg.notch_slots.is_empty() {
         cfg.notch_slots = cfg
             .notch_providers
             .iter()
             .map(|p| TraySlot { provider: p.clone() })
             .collect();
+    }
+    if !cfg.notch_slots.is_empty() {
+        cfg.notch_slots_custom = true;
     }
 
     carry_shared_position(&mut cfg);
@@ -378,6 +385,15 @@ mod tests {
         v["notch_y"] = serde_json::json!(0.3);
         let back: Config = serde_json::from_value(v).unwrap();
         assert_eq!(back.notch_y, 0.3);
+    }
+
+    #[test]
+    fn an_explicitly_empty_provider_selection_survives_config_serialization() {
+        let mut saved = Config::default();
+        saved.notch_slots_custom = true;
+        let restored: Config = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+        assert!(restored.notch_slots_custom);
+        assert!(restored.notch_slots.is_empty());
     }
 
     #[test]

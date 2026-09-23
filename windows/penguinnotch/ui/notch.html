@@ -719,7 +719,7 @@ function glyphHtml(p,small){
   return small?'':p.glyph; // fallback letter
 }
 // Provider table (order = top to bottom in the pill). `glyph` is the fallback letter used when no mark is available
-// Which providers get a ring: [{provider}]. null or an empty list means every provider.
+// Which providers get a ring: null means automatic, [] means no AI providers.
 let notchSlots=null;
 function slotFor(id){
   if(!Array.isArray(notchSlots)) return null;
@@ -756,12 +756,7 @@ function providers(){
   if(cursorSnap.status!=='absent') list.push({id:'cursor',base:'cursor',name:'Cursor',glyph:'Cu',snap:cursorSnap});
   if(grokSnap.status!=='absent') list.push({id:'grok',base:'grok',name:'Grok',glyph:'Gk',snap:grokSnap});
   if(agSnap.status!=='absent') list.push({id:'gemini',base:'gemini',name:'Antigravity',glyph:'Ag',snap:agSnap});
-  if(Array.isArray(notchSlots)&&notchSlots.length){
-    const picked=list.filter(p=>!!slotFor(p.base));
-    // Never leave the notch with nothing in it: an empty result means the choice no longer matches
-    // any available provider, so fall back to showing everything rather than an empty pill.
-    if(picked.length) list=picked;
-  }
+  if(Array.isArray(notchSlots)) list=list.filter(p=>!!slotFor(p.base));
   // Meters and widgets are not account slots. They join after the filter, then the saved order mixes them.
   if(window.PenguinNotchWidgets&&systemPayload){
     list=PenguinNotchWidgets.arrange(list.concat(PenguinNotchWidgets.extraCells(systemPayload, uiLang)), systemPayload.order||[]);
@@ -1425,7 +1420,7 @@ listen('antigravity',e=>{agSnap=e.payload||agSnap;settle('gemini');renderRing();
 invoke('get_antigravity').then(u=>{agSnap=u||agSnap;renderRing();}).catch(()=>{});
 listen('glm',e=>{glmSnap=e.payload||glmSnap;renderRing();if(card.classList.contains('show'))renderCard();}).catch(()=>{});
 invoke('get_glm').then(u=>{glmSnap=u||glmSnap;renderRing();}).catch(()=>{});
-invoke('get_notch_slots').then(v=>{if(Array.isArray(v)){notchSlots=v;renderRing();}}).catch(()=>{});
+invoke('get_notch_slots').then(v=>{notchSlots=Array.isArray(v)?v:null;renderRing();}).catch(()=>{});
 listen('notch_slots',e=>{
   notchSlots=Array.isArray(e.payload)?e.payload:null;
   renderRing();

@@ -1268,24 +1268,25 @@ fn set_antigravity_prefs(app: AppHandle, limit: String, model: String) -> Antigr
     prefs
 }
 
-/// Which providers get a ring on the notch. An empty list means every provider.
+/// None means the automatic all-provider default; Some([]) means none.
 #[tauri::command]
-fn get_notch_slots(app: AppHandle) -> Vec<config::TraySlot> {
+fn get_notch_slots(app: AppHandle) -> Option<Vec<config::TraySlot>> {
     let st = app.state::<AppState>();
     let c = st.cfg.lock().unwrap();
-    c.notch_slots.clone()
+    c.notch_slots_custom.then(|| c.notch_slots.clone())
 }
 
 #[tauri::command]
-fn set_notch_slots(app: AppHandle, slots: Vec<config::TraySlot>) {
+fn set_notch_slots(app: AppHandle, slots: Option<Vec<config::TraySlot>>) {
     let list = {
         let st = app.state::<AppState>();
         let mut c = st.cfg.lock().unwrap();
-        c.notch_slots = slots;
+        c.notch_slots_custom = slots.is_some();
+        c.notch_slots = slots.unwrap_or_default();
         // Kept in step so an older build reading this file still shows the right providers
         c.notch_providers = c.notch_slots.iter().map(|s| s.provider.clone()).collect();
         config::save(&c);
-        c.notch_slots.clone()
+        c.notch_slots_custom.then(|| c.notch_slots.clone())
     };
     // The notch is a separate window and draws its own cells, so it has to be told.
     let _ = app.emit("notch_slots", list);

@@ -214,8 +214,9 @@ fn begin_weather(cfg: &Config, rt: &mut Runtime) -> Option<(u64, WeatherLocation
         return None;
     }
     let key = format!("{}:{}:{}", location.id, location.latitude, location.longitude);
+    let retry_after = if rt.live.weather_failed { 60 } else { 15 * 60 };
     let due = rt.weather_key != key
-        || rt.weather_at.map(|then| then.elapsed() >= Duration::from_secs(15 * 60)).unwrap_or(true);
+        || rt.weather_at.map(|then| then.elapsed() >= Duration::from_secs(retry_after)).unwrap_or(true);
     if !due {
         return None;
     }
@@ -258,23 +259,42 @@ fn fetch_weather(location: &WeatherLocation) -> Option<WeatherView> {
     widgets::decode_weather(&body, now, false)
 }
 
-pub fn search_cities(name: &str) -> Vec<WeatherLocation> {
+pub fn search_cities(name: &str) -> Result<Vec<WeatherLocation>, String> {
     let query = name.trim();
     if !(2..=100).contains(&query.chars().count()) {
-        return Vec::new();
+        return Ok(Vec::new());
     }
+    let korean = query.chars().any(|c| ('가'..='힣').contains(&c));
+    let mut rows = geocode(query, if korean { "ko" } else { "en" })?;
+    if korean && !query.ends_with('시') && !rows.iter().any(|city| city.name == query) {
+        let city_query = format!("{query}시");
+        if city_query.chars().count() <= 100 {
+            if let Ok(more) = geocode(&city_query, "ko") {
+                for city in more {
+                    if city.name == city_query && !rows.iter().any(|found| found.id == city.id) {
+                        rows.insert(0, city);
+                    }
+                }
+            }
+        }
+    }
+    Ok(rows)
+}
+
+fn geocode(query: &str, language: &str) -> Result<Vec<WeatherLocation>, String> {
     let url = format!(
-        "https://geocoding-api.open-meteo.com/v1/search?name={}&count=5&language=en",
-        urlencoding_min(query)
+        "https://geocoding-api.open-meteo.com/v1/search?name={}&count=5&language={language}",
+        urlencoding_min(query),
     );
-    let Ok(body) = ureq::get(&url).timeout(Duration::from_secs(20)).call() else {
-        return Vec::new();
-    };
-    let Ok(body) = body.into_string() else { return Vec::new() };
-    let Ok(root) = serde_json::from_str::<serde_json::Value>(&body) else {
-        return Vec::new();
-    };
-    root.get("results")
+    let body = ureq::get(&url).timeout(Duration::from_secs(10)).call()
+        .map_err(|e| format!("City search request failed: {e}"))?
+        .into_string().map_err(|e| format!("City search response failed: {e}"))?;
+    if body.len() > 1_000_000 {
+        return Err("City search response is too large".into());
+    }
+    let root: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|e| format!("City search response is invalid: {e}"))?;
+    Ok(root.get("results")
         .and_then(|value| value.as_array())
         .map(|rows| {
             rows.iter().filter_map(|row| {
@@ -289,7 +309,7 @@ pub fn search_cities(name: &str) -> Vec<WeatherLocation> {
                 location.is_valid().then_some(location)
             }).collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default())
 }
 
 fn urlencoding_min(text: &str) -> String {
@@ -442,8 +462,9 @@ pub fn set_widget_prefs(app: AppHandle, prefs: WidgetPrefs) -> serde_json::Value
 }
 
 #[tauri::command]
-pub fn search_weather_cities(name: String) -> Vec<WeatherLocation> {
-    search_cities(&name)
+pub async fn search_weather_cities(name: String) -> Result<Vec<WeatherLocation>, String> {
+    tauri::async_runtime::spawn_blocking(move || search_cities(&name)).await
+        .map_err(|e| format!("City search could not finish: {e}"))?
 }
 
 #[tauri::command]
@@ -717,7 +738,7 @@ mod tests {
 
     #[test]
     fn a_city_search_rejects_a_one_letter_name() {
-        assert!(search_cities("a").is_empty());
-        assert!(search_cities("  ").is_empty());
+        assert!(search_cities("a").unwrap().is_empty());
+        assert!(search_cities("  ").unwrap().is_empty());
     }
 }
