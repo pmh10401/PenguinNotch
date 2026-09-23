@@ -2,6 +2,19 @@ import XCTest
 @testable import PenguinNotch
 
 final class StockChartTests: XCTestCase {
+    func testPriceAxisZoomsToVisibleCandleRange() {
+        let candles = [
+            StockCandle(end: .now, open: 100, high: 101.5, low: 99.5, close: 101, volume: 1),
+            StockCandle(end: .now, open: 101, high: 102, low: 100.5, close: 101.5, volume: 1)
+        ]
+
+        let domain = StockChartSection.priceDomain(for: candles)
+        XCTAssertGreaterThan(domain.lowerBound, 90)
+        XCTAssertLessThan(domain.lowerBound, 99.5)
+        XCTAssertGreaterThan(domain.upperBound, 102)
+        XCTAssertLessThan(domain.upperBound, 110)
+    }
+
     func testTenMinuteCandlesUseMinuteEndsAndAggregateOHLCV() throws {
         let start = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-03-25T09:00:00Z"))
         let minutes = [

@@ -84,6 +84,13 @@ struct StockChartSection: View {
             .suffix(preferences.stockChartCount))
     }
 
+    static func priceDomain(for candles: [StockCandle]) -> ClosedRange<Double> {
+        let low = candles.map { NSDecimalNumber(decimal: $0.low).doubleValue }.min() ?? 0
+        let high = candles.map { NSDecimalNumber(decimal: $0.high).doubleValue }.max() ?? 0
+        let padding = max((high - low) * 0.08, max(abs(high) * 0.005, 0.00000001))
+        return (low - padding)...(high + padding)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Design.px(12)) {
             Rectangle().fill(Palette.textSecondary.opacity(0.35)).frame(height: NotchLayout.hairline)
@@ -137,6 +144,7 @@ struct StockChartSection: View {
                         }
                     }
                     .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) }
+                    .chartYScale(domain: Self.priceDomain(for: candles))
                 }
             }
             .frame(height: NotchLayout.stockChartPlotHeight)

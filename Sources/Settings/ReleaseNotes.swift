@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.3",
+                headline: "Clearer stock candlestick charts on macOS",
+                changes: [
+                    ReleaseNote.Change(title: "Fit the price axis to visible candles",
+                                       detail: "The chart now scales to the displayed highs and lows so short price movements remain visible.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.2",
                 headline: "Stock candlestick charts on hover",
                 changes: [
