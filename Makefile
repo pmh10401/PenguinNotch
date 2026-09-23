@@ -14,19 +14,13 @@ RESOLVED_PACKAGES := $(PROJECT)/project.xcworkspace/xcshareddata/swiftpm/Package
 ARCH    ?= $(shell uname -m)
 DEST    ?= platform=macOS,arch=$(ARCH)
 
-# Debug signs itself when the maintainer's Developer ID certificate isn't in
-# the keychain, which is every machine but the maintainer's — so a contributor
-# can `make build`/`make test`/`make run` with no Apple account at all, per
-# CONTRIBUTING.md. On the maintainer's own machine this is empty and changes
-# nothing: project.yml's stable identity is what keeps a keychain "Always
-# Allow" grant alive across rebuilds, and forcing another one there would throw
-# that away and bring the prompt back on every `make run`.
-#
-# `grep`, not `grep -c`: `-c` prints "0" rather than nothing when it matches
-# nothing, so `ifeq (,...)` was never true and a machine *without* the
-# certificate fell through to signing with an identity it does not have —
-# "Signing for PenguinNotch requires a development team", on every target.
-HAS_DEVELOPER_ID := $(shell security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application")
+# Use an installed Developer ID identity when available; contributors can
+# still build with Apple Development or ad-hoc signing and no paid account.
+RELEASE_IDENTITY := $(shell security find-identity -v -p codesigning 2>/dev/null \
+	| sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)
+RELEASE_TEAM := $(if $(RELEASE_IDENTITY),$(shell security find-certificate -c "$(RELEASE_IDENTITY)" -p 2>/dev/null \
+	| openssl x509 -noout -subject -nameopt sep_multiline 2>/dev/null \
+	| sed -n 's/^ *OU=\([A-Z0-9]*\)$$/\1/p' | head -1))
 
 # A personal "Apple Development" certificate, where there is one, is preferred
 # over ad-hoc for exactly the reason the maintainer's identity is: it is
@@ -45,13 +39,15 @@ DEV_TEAM := $(if $(DEV_IDENTITY),$(shell security find-certificate -c "$(DEV_IDE
 	| openssl x509 -noout -subject -nameopt sep_multiline 2>/dev/null \
 	| sed -n 's/^ *OU=\([A-Z0-9]*\)$$/\1/p' | head -1))
 
-ifeq (,$(HAS_DEVELOPER_ID))
+ifeq (,$(RELEASE_IDENTITY))
 ifeq (,$(DEV_TEAM))
 DEV_SIGN := CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Automatic
 else
 DEV_SIGN := CODE_SIGN_IDENTITY="Apple Development" CODE_SIGN_STYLE=Manual \
 	DEVELOPMENT_TEAM="$(DEV_TEAM)" PROVISIONING_PROFILE_SPECIFIER=""
 endif
+else
+DEV_SIGN := CODE_SIGN_IDENTITY="$(RELEASE_IDENTITY)" DEVELOPMENT_TEAM="$(RELEASE_TEAM)" CODE_SIGN_STYLE=Manual
 endif
 
 .PHONY: gen build test test-ci verify-deps run install clean
@@ -121,26 +117,29 @@ clean:
 # One-time setup, which you have to run yourself because it takes a password:
 #
 #   xcrun notarytool store-credentials UsageNotch \
-#       --apple-id <your-apple-id> --team-id 6WFPL8B9FB --password <app-specific-password>
+#       --apple-id <your-apple-id> --team-id <your-team-id> --password <app-specific-password>
 #
 # The app-specific password comes from appleid.apple.com → Sign-In and Security
 # → App-Specific Passwords. Not your Apple ID password.
 
 RELEASE_DIR := build/release
 APP_NAME    := PenguinNotch
-# The label of the stored notarytool credential in the login keychain, not
-# anything to do with the app's name — it was created before the rename and
-# renaming the variable is what broke `make release` after it. Recreating it
-# needs an app-specific password, so the label simply stays as it is.
-NOTARY_PROFILE := UsageNotch
+# The keychain credential label can be overridden for another maintainer.
+NOTARY_PROFILE ?= UsageNotch
 DMG := $(RELEASE_DIR)/$(APP_NAME).dmg
 
-.PHONY: archive dmg notarize release verify-release publish
+.PHONY: release-preflight archive dmg notarize release verify-release publish
+
+release-preflight:
+	@test -n "$(RELEASE_TEAM)" || (echo "A valid Developer ID Application certificate is required for a notarized release" && exit 1)
+	@test -n "$(SPARKLE_BIN)" || (echo "Sparkle tools not found — run make build first" && exit 1)
+	@test "$$($(SPARKLE_BIN)/generate_keys --account penguin-notch -p)" = "$$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' Sources/Info.plist)" \
+		|| (echo "The Sparkle private key is missing or does not match SUPublicEDKey" && exit 1)
 
 # Release configuration, exported with the Developer ID identity. `xcodebuild
 # archive` + `-exportArchive` rather than a plain build: it re-signs the bundle
 # as a distributable, which a Debug build is not.
-archive: gen
+archive: release-preflight gen
 	rm -rf $(RELEASE_DIR)
 	mkdir -p $(RELEASE_DIR)
 	@# Spotlight indexes build output as installed applications, so every
@@ -148,13 +147,14 @@ archive: gen
 	@# real one in /Applications. This stops the whole tree being indexed.
 	@touch build/.metadata_never_index
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DEST)' \
-		-configuration Release -archivePath $(RELEASE_DIR)/$(APP_NAME).xcarchive archive
+		-configuration Release -archivePath $(RELEASE_DIR)/$(APP_NAME).xcarchive \
+		DEVELOPMENT_TEAM="$(RELEASE_TEAM)" CODE_SIGN_IDENTITY="$(RELEASE_IDENTITY)" archive
 	printf '%s\n' \
 		'<?xml version="1.0" encoding="UTF-8"?>' \
 		'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
 		'<plist version="1.0"><dict>' \
 		'<key>method</key><string>developer-id</string>' \
-		'<key>teamID</key><string>6WFPL8B9FB</string>' \
+		'<key>teamID</key><string>$(RELEASE_TEAM)</string>' \
 		'<key>signingStyle</key><string>manual</string>' \
 		'<key>signingCertificate</key><string>Developer ID Application</string>' \
 		'</dict></plist>' > $(RELEASE_DIR)/ExportOptions.plist
@@ -173,7 +173,7 @@ dmg: archive
 	ln -s /Applications $(RELEASE_DIR)/stage/Applications
 	hdiutil create -volname "$(APP_NAME)" -srcfolder $(RELEASE_DIR)/stage \
 		-ov -format UDZO $(DMG)
-	codesign --force --sign "Developer ID Application" --timestamp $(DMG)
+	codesign --force --sign "$(RELEASE_IDENTITY)" --timestamp $(DMG)
 	@# The app is inside the dmg now. Leaving the loose copies around is how
 	@# three spare "PenguinNotch" entries end up in Spotlight; everything
 	@# downstream (notarize, verify, appcast) works from the dmg alone.

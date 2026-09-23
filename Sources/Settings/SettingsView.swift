@@ -628,8 +628,9 @@ struct SettingsView: View {
     private func selectSection(_ section: SettingsSection) {
         guard section != selection else { return }
         withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { selection = section }
-        // A pane opens the way the window does: nothing being typed in.
-        if let window = NSApp.keyWindow { SettingsWindowController.startUnfocused(window) }
+        // Clear the previous pane's editor now. The deferred startup cleanup
+        // can otherwise discard the first click into a field in this pane.
+        NSApp.keyWindow?.makeFirstResponder(nil)
     }
 
     /// How many providers are switched on, beside Accounts in the sidebar.
@@ -1298,7 +1299,7 @@ struct SettingsView: View {
                     // a way to switch it off, is the difference between a
                     // background updater and something that looks like it is
                     // hiding.
-                    Text("Version \(updater.currentVersion). Updates install in the background and apply next time PenguinNotch starts.")
+                    Text("Version \(updater.currentVersion). Signed releases update in the background and apply next time PenguinNotch starts.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -5472,55 +5472,61 @@
         }
       }
     },
-    "Version %@. Updates install in the background and apply next time PenguinNotch starts.": {
+    "Version %@. Signed releases update in the background and apply next time PenguinNotch starts.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Version %@. Les mises à jour s'installent en arrière-plan et s'appliquent au prochain démarrage de PenguinNotch."
+            "value": "Version %@. Les versions signées se mettent à jour en arrière-plan et s'appliquent au prochain démarrage de PenguinNotch."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "バージョン %@。アップデートはバックグラウンドでインストールされ、次回 PenguinNotch を起動したときに適用されます。"
+            "value": "バージョン %@。署名済みリリースはバックグラウンドで更新され、次回 PenguinNotch を起動したときに適用されます。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Versão %@. As atualizações são instaladas em segundo plano e valem na próxima vez que o PenguinNotch iniciar."
+            "value": "Versão %@. Versões assinadas são atualizadas em segundo plano e entram em vigor na próxima inicialização do PenguinNotch."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "版本 %@。更新在后台安装，下次启动 PenguinNotch 时生效。"
+            "value": "版本 %@。已签名的正式版本会在后台更新，并在下次启动 PenguinNotch 时生效。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "版本 %@。更新在背景安裝，下次啟動 PenguinNotch 時生效。"
+            "value": "版本 %@。已簽署的正式版本會在背景更新，並在下次啟動 PenguinNotch 時生效。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Версия %@. Обновления устанавливаются в фоне и применяются при следующем запуске PenguinNotch."
+            "value": "Версия %@. Подписанные выпуски обновляются в фоновом режиме и применяются при следующем запуске PenguinNotch."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Version %@. Updates werden im Hintergrund installiert und gelten ab dem nächsten Start von PenguinNotch."
+            "value": "Version %@. Signierte Versionen werden im Hintergrund aktualisiert und beim nächsten Start von PenguinNotch angewendet."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Версія %@. Оновлення встановлюються у фоні й застосовуються під час наступного запуску PenguinNotch."
+            "value": "Версія %@. Підписані випуски оновлюються у фоновому режимі й застосовуються під час наступного запуску PenguinNotch."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "버전 %@. 서명된 릴리스는 백그라운드에서 업데이트되고 PenguinNotch를 다음에 시작할 때 적용됩니다."
           }
         }
       }
@@ -39478,6 +39484,10 @@
     "Penguin Notch is up to date.": {
       "extractionState": "manual",
       "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "PenguinNotch가 최신 버전입니다." } } }
+    },
+    "Couldn't load the update feed. It may be unavailable, or no signed release has been published yet. Check GitHub Releases.": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "업데이트 정보를 불러올 수 없습니다. 피드를 사용할 수 없거나 서명된 릴리스가 아직 게시되지 않았을 수 있습니다. GitHub Releases를 확인하세요." } } }
     },
     "Couldn't reach the update server. Penguin Notch will try again on its own — nothing is wrong with this copy.": {
       "extractionState": "manual",

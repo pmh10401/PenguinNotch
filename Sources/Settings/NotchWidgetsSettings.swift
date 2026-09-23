@@ -95,20 +95,30 @@ struct StockSettings: View {
                 message = nil
             }
         }
-        HStack {
-            TextField("Company name or symbol · 삼성전자, 005930, AAPL", text: $symbol)
-                .onSubmit(add)
-            Button(L10n.t("Add symbol"), action: add)
-                .disabled(symbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        if WatchedStock.parse(symbol) == nil {
-            ForEach(KoreanStockDirectory.shared.search(symbol)) { company in
-                Button("\(company.name) · \(company.code) (\(company.market))") {
-                    add(company.code)
+        VStack(alignment: .leading, spacing: 10) {
+            Label(L10n.t("Add symbol"), systemImage: "plus.circle.fill")
+                .font(.headline)
+            HStack {
+                TextField("Company name or symbol · 삼성전자, 005930, AAPL", text: $symbol)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.large)
+                    .onSubmit(add)
+                Button(L10n.t("Add symbol"), action: add)
+                    .buttonStyle(SettingsButtonStyle(kind: .prominent))
+                    .disabled(symbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if WatchedStock.parse(symbol) == nil {
+                ForEach(KoreanStockDirectory.shared.search(symbol)) { company in
+                    Button("\(company.name) · \(company.code) (\(company.market))") {
+                        add(company.code)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.06)))
         ForEach(WatchedStock.parseList(preferences.stockSymbols)) { stock in
             HStack {
                 Text(stock.market == .kr ? "KR \(stock.symbol)" : "US \(stock.symbol)")

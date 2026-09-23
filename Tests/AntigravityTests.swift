@@ -1224,12 +1224,10 @@ final class AppPresenceTests: XCTestCase {
 /// worded here instead.
 @MainActor
 final class UpdateOutcomeTests: XCTestCase {
-    /// The case people actually hit, and the one that most needs reassuring:
-    /// nothing is wrong with their copy of the app.
-    func testAnUnreachableFeedSaysSoWithoutBlamingTheApp() throws {
+    func testAnUnreachableFeedExplainsMissingSignedRelease() throws {
         let message = try XCTUnwrap(Updater.Outcome.unreachable.message)
-        XCTAssertTrue(message.contains("Couldn't reach"))
-        XCTAssertTrue(message.contains("nothing is wrong with this copy"))
+        XCTAssertTrue(message.contains("update feed"))
+        XCTAssertTrue(message.contains("signed release"))
         XCTAssertFalse(message.lowercased().contains("error occurred"))
     }
 

@@ -21,18 +21,17 @@ two never disagree.
 
 ## Download
 
-[![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
+[![Download for macOS](docs/design/download-macos.svg)](../../releases)
 
-That button is the disk image itself, not the page it sits on — the asset is
-named `PenguinNotch.dmg` in every release. A signed release has not been
-published yet; until then, use the [preview build](../../releases/tag/preview)
-or build from source. The [release page](../../releases/latest) lists published versions.
+That button opens Releases. For now, select the preview release and its
+versioned disk image under Assets. A signed and notarized release has not been
+published yet.
 
 To try unreleased `main` without an Xcode install, the [preview
 build](../../releases/tag/preview) is rebuilt from every commit, and the
 Package workflow keeps a per-commit disk image on each of its
 [runs](../../actions/workflows/package.yml). Neither is notarized — they are
-ad-hoc signed, because the Developer ID certificate exists on one machine — so
+ad-hoc signed because CI has no Developer ID certificate — so
 macOS quarantines the download. Clear the flag once, after dragging the app to
 Applications:
 
@@ -450,7 +449,7 @@ make test               # unit tests
 
 No signing identity is required for either. `make release` — which archives,
 notarizes, and produces a signed auto-update feed — needs a Developer ID
-certificate and an App Store Connect notary profile, and is only ever run by
+certificate and a notarytool keychain profile, and is only ever run by
 the maintainer to cut an official release. See
 [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the same unit tests unsigned via
 `make test-ci`.
