@@ -3,24 +3,48 @@
 <head>
 <meta charset="UTF-8">
 <style>
+  /* The palette. Dark is the notch as it has always been drawn; light is the same shapes in the
+     inks Settings already uses, plus the Mac's own light secondary (#6b6b6b, Palette.textSecondary).
+     Which of the two is drawn is Rust's answer to get_theme_resolved, never a guess made here. */
+  :root{
+    --pill:#000; --edge:#2e2e2e; --card:#0a0a0a; --card-line:#242424; --card-rule:#1e1e1e;
+    --bar:#2d2d2d; --track:#303030; --hole:#2a2a2a;
+    --ample:#00FF88; --watch:#F2FF00; --crit:#FF3F00;
+    --ink:#ffffff; --ink-2:#e8e8ea; --ink-3:#c8c8c8; --ink-4:#b0b0b3; --ink-dim:#808080;
+    --btn:#252525; --btn-line:#555; --btn-hover:#383838; --btn-line-hover:#aaa; --link:#8ec8ff;
+    --armed:rgba(0,0,0,.72);
+  }
+  /* Rust resolves the choice — Light, Dark, or what Windows is set to — and the page is told, rather
+     than reading prefers-color-scheme: correcting a live window's theme does not reliably reach
+     WebView2's own scheme, which left a dark page under a light Mica. */
+  :root[data-theme="light"]{
+    --pill:#f5f5f7; --edge:#d2d2d7; --card:#ffffff; --card-line:#e4e4e8; --card-rule:#e8e8ec;
+    --bar:rgba(0,0,0,.15); --track:rgba(0,0,0,.16); --hole:#ffffff;
+    /* Palette.ample and .watch carry a light value of their own; .critical is "already 3.5:1 on
+       white", in its words, so it is the one band that does not change. */
+    --ample:#00A356; --watch:#B08800; --crit:#FF3F00;
+    --ink:#1d1d1f; --ink-2:#1d1d1f; --ink-3:#3c3c43; --ink-4:#4a4a4f; --ink-dim:#6b6b6b;
+    --btn:#ffffff; --btn-line:#c6c6cc; --btn-hover:#f0f0f2; --btn-line-hover:#8e8e93; --link:#005db8;
+    --armed:rgba(255,255,255,.78);
+  }
   .c-auth{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
-  .c-auth button{font:inherit;font-size:11px;color:#fff;background:#252525;border:1px solid #555;border-radius:7px;padding:6px 9px;cursor:pointer}
-  .c-auth button:hover,.c-auth button:focus-visible{background:#383838;border-color:#aaa}
+  .c-auth button{font:inherit;font-size:11px;color:var(--ink);background:var(--btn);border:1px solid var(--btn-line);border-radius:7px;padding:6px 9px;cursor:pointer}
+  .c-auth button:hover,.c-auth button:focus-visible{background:var(--btn-hover);border-color:var(--btn-line-hover)}
   .c-auth button:disabled{opacity:.5;cursor:wait}
-  .c-auth-status{font-size:10px;line-height:1.4;color:#b9b9b9;margin-top:6px;overflow-wrap:anywhere}
+  .c-auth-status{font-size:10px;line-height:1.4;color:var(--ink-3);margin-top:6px;overflow-wrap:anywhere}
   /* Visual reference: upstream docs/specs/2026-08-28-usage-notch-design.md, reproduced for Windows */
   *{box-sizing:border-box} /* content-box padding once pushed the card past the window's left edge */
   html,body{margin:0;padding:0;width:100%;height:100%;background:transparent;overflow:hidden;user-select:none}
-  body{font-family:"Segoe UI",system-ui,sans-serif;color:#fff}
+  body{font-family:"Segoe UI",system-ui,sans-serif;color:var(--ink)}
   #root{position:relative;width:100%;height:100%}
 
   /* The pill on the right edge */
   #pill{
     position:absolute;right:0;top:50%;transform:translateY(-50%);
-    width:70px;padding:18px 0;background:#000;
+    width:70px;padding:18px 0;background:var(--pill);
     border-radius:20px 0 0 20px;
     /* Stays visible on dark wallpapers: a thin stroke plus a faint glow, the only outline when black sits on black */
-    border:1px solid #2e2e2e;border-right:none;
+    border:1px solid var(--edge);border-right:none;
     box-shadow:none;
     display:flex;flex-direction:column;align-items:center;gap:14px;cursor:pointer;
   }
@@ -36,11 +60,11 @@
   #pill{--fillet:38.7px}
   #pill::before{
     top:calc(-1 * var(--fillet)); /* covers the 1 px stroke along the pill's top edge so there is no seam */
-    background:radial-gradient(circle at 0 0, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px));
+    background:radial-gradient(circle at 0 0, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px));
   }
   #pill::after{
     bottom:calc(-1 * var(--fillet));
-    background:radial-gradient(circle at 0 100%, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px));
+    background:radial-gradient(circle at 0 100%, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px));
   }
   .cell{display:flex;flex-direction:column;align-items:center;gap:6px}
   /* The ring takes the Mac's own share of the body, NotchLayout.ringDiameter against sideBodyDepth: 44 in
@@ -53,18 +77,18 @@
   .ringwrap > svg.ring,.ringwrap > svg.reading,.ringwrap > svg.activity{position:absolute;inset:0;overflow:visible} /* pins only the ring itself; an inline logo svg must not match this or it ends up in the top-left corner */
   .glyph{
     position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:calc(20px * var(--k));font-weight:700;color:#e8e8ea;letter-spacing:-.5px;
+    font-size:calc(20px * var(--k));font-weight:700;color:var(--ink-2);letter-spacing:-.5px;
   }
   .glyph.small{font-size:calc(15px * var(--k))}
   /* Glyphs: mark = the provider's own brand mark (monochrome, shown white); appicon = the installed app's icon (colour, rounded and shrunk) */
   .glyph img,.glyph svg{display:block;pointer-events:none;user-select:none}
-  .glyph .mark{display:block;width:calc(26px * var(--k));height:calc(26px * var(--k));color:#e8e8ea}
+  .glyph .mark{display:block;width:calc(26px * var(--k));height:calc(26px * var(--k));color:var(--ink-2)}
   .glyph .mark svg{width:calc(26px * var(--k));height:calc(26px * var(--k));fill:currentColor} /* inline SVG follows currentColor, so it dims together with the cell */
   .glyph img.png{width:calc(26px * var(--k));height:calc(26px * var(--k));object-fit:contain}
   .glyph img.appicon{width:calc(30px * var(--k));height:calc(30px * var(--k));border-radius:calc(8px * var(--k));object-fit:cover}
-  .c-head .mark{display:inline-block;width:16px;height:16px;color:#e8e8ea;margin-right:2px}
+  .c-head .mark{display:inline-block;width:16px;height:16px;color:var(--ink-2);margin-right:2px}
   .c-head .mark svg{width:16px;height:16px;fill:currentColor}
-  .pct{font-size:15px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums}
+  .pct{font-size:15px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
   .dim{opacity:.55}
   /* A stale reading dims the reading only. The track, the week and the glyph are all saying the same
      old thing, but whether an agent is running right now is current either way, so the activity arc
@@ -87,7 +111,7 @@
     /* Anchored on both sides = fluid width: whatever the WebView's real logical width, the card cannot
        extend past the window's left edge (a fixed max-width got clipped when the DPI disagreed).
        The 246 cap matches the upstream spec. */
-    max-width:246px;margin-left:auto;background:#0a0a0a;border-radius:16px;padding:16px;
+    max-width:246px;margin-left:auto;background:var(--card);border-radius:16px;padding:16px;
     overflow-wrap:anywhere;min-width:0;
     max-height:calc(100% - 16px);overflow-x:hidden;overflow-y:auto;scrollbar-width:thin; /* actions stay reachable in a tall card */
     display:none;
@@ -98,27 +122,27 @@
      than ::after, so the card's overflow cannot clip it and it can be reported as hot. It spans the
      whole gap, its tip tucked 1 px under the pill's edge so the two meet. */
   #tail{
-    position:absolute;right:69px;width:32px;height:36px;background:#0a0a0a;display:none;
+    position:absolute;right:69px;width:32px;height:36px;background:var(--card);display:none;
     clip-path:path('M0 0C0 9 18.56 13.68 32 18C18.56 22.32 0 27 0 36Z');
   }
   #card.show + #tail{display:block}
   .c-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
   .c-title{font-size:14px;font-weight:700}
-  .c-sub{font-size:11px;color:#808080;margin-bottom:10px}
+  .c-sub{font-size:11px;color:var(--ink-dim);margin-bottom:10px}
   .win{margin-top:10px}
   .w-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;flex-wrap:wrap;column-gap:8px}
-  .w-label{color:#e8e8ea;font-weight:600;white-space:nowrap}
-  .w-reset{color:#808080;font-size:11px;white-space:nowrap;margin-left:auto} /* wrap as a whole when it does not fit; never break inside a word */
-  .w-track{height:4px;border-radius:2px;background:#2d2d2d;margin:6px 0 4px;overflow:hidden}
+  .w-label{color:var(--ink-2);font-weight:600;white-space:nowrap}
+  .w-reset{color:var(--ink-dim);font-size:11px;white-space:nowrap;margin-left:auto} /* wrap as a whole when it does not fit; never break inside a word */
+  .w-track{height:4px;border-radius:2px;background:var(--bar);margin:6px 0 4px;overflow:hidden}
   .w-fill{height:100%;border-radius:2px}
-  .w-used{font-size:11px;color:#808080}
-  .g-head{font-size:12px;font-weight:700;color:#e8e8ea;margin-top:12px}
-  .g-box{border:1px solid #242424;border-radius:10px;padding:0 10px 8px;margin-top:6px}
-  .c-note{font-size:12px;color:#c8c8c8;line-height:1.5;margin-top:6px}
-  .c-sessions{margin-top:12px;border-top:1px solid #1e1e1e;padding-top:8px}
-  .s-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#b0b0b3;padding:2px 0}
+  .w-used{font-size:11px;color:var(--ink-dim)}
+  .g-head{font-size:12px;font-weight:700;color:var(--ink-2);margin-top:12px}
+  .g-box{border:1px solid var(--card-line);border-radius:10px;padding:0 10px 8px;margin-top:6px}
+  .c-note{font-size:12px;color:var(--ink-3);line-height:1.5;margin-top:6px}
+  .c-sessions{margin-top:12px;border-top:1px solid var(--card-rule);padding-top:8px}
+  .s-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-4);padding:2px 0}
   .s-dot{width:6px;height:6px;border-radius:3px;flex:0 0 auto}
-  .s-more{font-size:11px;color:#808080;padding:2px 0}
+  .s-more{font-size:11px;color:var(--ink-dim);padding:2px 0}
 
   /* ---- The other three edges -------------------------------------------------
      The rules above draw the right-hand edge, the original layout and still the default. Each block
@@ -131,10 +155,10 @@
      is the concave arc between the two. */
 
   /* Left: the right-hand layout mirrored. */
-  body[data-edge="left"] #pill{right:auto;left:0;border-radius:0 20px 20px 0;border-right:1px solid #2e2e2e;border-left:none}
+  body[data-edge="left"] #pill{right:auto;left:0;border-radius:0 20px 20px 0;border-right:1px solid var(--edge);border-left:none}
   body[data-edge="left"] #pill::before,body[data-edge="left"] #pill::after{right:auto;left:0}
-  body[data-edge="left"] #pill::before{background:radial-gradient(circle at 100% 0, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px))}
-  body[data-edge="left"] #pill::after{background:radial-gradient(circle at 100% 100%, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px))}
+  body[data-edge="left"] #pill::before{background:radial-gradient(circle at 100% 0, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
+  body[data-edge="left"] #pill::after{background:radial-gradient(circle at 100% 100%, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
   body[data-edge="left"] #card{left:100px;right:10px;margin-left:0;margin-right:auto}
   body[data-edge="left"] #tail{right:auto;left:69px;clip-path:path('M32 0C32 9 13.44 13.68 0 18C13.44 22.32 32 27 32 36Z')}
 
@@ -147,11 +171,11 @@
   body[data-edge="top"] #pill::before,body[data-edge="top"] #pill::after,
   body[data-edge="bottom"] #pill::before,body[data-edge="bottom"] #pill::after{right:auto;top:auto;bottom:auto}
   body[data-edge="top"] #pill{top:0;border-radius:0 0 20px 20px;border-top:none}
-  body[data-edge="top"] #pill::before{top:0;left:calc(-1 * var(--fillet));background:radial-gradient(circle at 0 100%, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px))}
-  body[data-edge="top"] #pill::after{top:0;right:calc(-1 * var(--fillet));background:radial-gradient(circle at 100% 100%, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px))}
+  body[data-edge="top"] #pill::before{top:0;left:calc(-1 * var(--fillet));background:radial-gradient(circle at 0 100%, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
+  body[data-edge="top"] #pill::after{top:0;right:calc(-1 * var(--fillet));background:radial-gradient(circle at 100% 100%, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
   body[data-edge="bottom"] #pill{bottom:0;border-radius:20px 20px 0 0;border-bottom:none}
-  body[data-edge="bottom"] #pill::before{bottom:0;left:calc(-1 * var(--fillet));background:radial-gradient(circle at 0 0, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px))}
-  body[data-edge="bottom"] #pill::after{bottom:0;right:calc(-1 * var(--fillet));background:radial-gradient(circle at 100% 0, transparent calc(var(--fillet) - 1.5px), #2e2e2e calc(var(--fillet) - 0.5px), #000 calc(var(--fillet) + 0.5px))}
+  body[data-edge="bottom"] #pill::before{bottom:0;left:calc(-1 * var(--fillet));background:radial-gradient(circle at 0 0, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
+  body[data-edge="bottom"] #pill::after{bottom:0;right:calc(-1 * var(--fillet));background:radial-gradient(circle at 100% 0, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
   /* A fixed width here, not the fluid one the upright edges use: `placeCard` measures the card to
      centre it, and a shrink-to-fit width would change as it moves. 246 is the upstream cap either way. */
   body[data-edge="top"] #card,body[data-edge="bottom"] #card{
@@ -176,12 +200,12 @@
   body[data-edge="top"] #pill,body[data-edge="bottom"] #pill{--clip-open:inset(-1px -40px -1px -40px round 0)}
   body[data-edge="top"] #pill{--clip-rest:inset(0 calc(50% - 39.5px) calc(100% - 10px) calc(50% - 39.5px) round 0 0 6px 6px)}
   body[data-edge="bottom"] #pill{--clip-rest:inset(calc(100% - 10px) calc(50% - 39.5px) 0 calc(50% - 39.5px) round 6px 6px 0 0)}
-  #rest{position:absolute;box-sizing:border-box;background:#000;border:1px solid #2e2e2e;pointer-events:none;
+  #rest{position:absolute;box-sizing:border-box;background:var(--pill);border:1px solid var(--edge);pointer-events:none;
     right:0;top:50%;translate:0 -50%;width:10px;height:79px;border-right:none;border-radius:6px 0 0 6px;
     opacity:0;transition:opacity .16s ease}
   body.folded #rest{opacity:1;transition:opacity .2s ease .18s} /* arrives as the clip does */
-  body[data-edge="left"] #rest{right:auto;left:0;border-right:1px solid #2e2e2e;border-left:none;border-radius:0 6px 6px 0}
-  body[data-edge="top"] #rest,body[data-edge="bottom"] #rest{right:auto;left:50%;top:auto;translate:-50% 0;width:79px;height:10px;border:1px solid #2e2e2e}
+  body[data-edge="left"] #rest{right:auto;left:0;border-right:1px solid var(--edge);border-left:none;border-radius:0 6px 6px 0}
+  body[data-edge="top"] #rest,body[data-edge="bottom"] #rest{right:auto;left:50%;top:auto;translate:-50% 0;width:79px;height:10px;border:1px solid var(--edge)}
   body[data-edge="top"] #rest{top:0;border-top:none;border-radius:0 0 6px 6px}
   body[data-edge="bottom"] #rest{bottom:0;border-bottom:none;border-radius:6px 6px 0 0}
   /* The rings leave by fading and sliding a little toward the edge, one after another — the Mac's
@@ -205,14 +229,16 @@
   .handle.hover{cursor:pointer}
   .handle > *{position:absolute;left:50%;top:50%;pointer-events:none;transition:opacity .2s,transform .36s cubic-bezier(.34,1.3,.64,1)}
   .h-rest{width:72px;height:72px;margin:-36px 0 0 -36px;overflow:visible;transform:rotate(var(--arc)) scale(1)}
-  .h-disc{width:46.6px;height:46.6px;margin:-23.3px 0 0 -23.3px;border-radius:50%;background:#000;border:1px solid #2e2e2e;opacity:0;transform:scale(1.1)}
-  .h-glyph{width:21px;height:21px;margin:-10.5px 0 0 -10.5px;fill:#e8e8ea;opacity:0;
+  .h-disc{width:46.6px;height:46.6px;margin:-23.3px 0 0 -23.3px;border-radius:50%;background:var(--pill);border:1px solid var(--edge);opacity:0;transform:scale(1.1)}
+  .h-ring{stroke:var(--edge)}
+  .h-fill{stroke:var(--pill)}
+  .h-glyph{width:21px;height:21px;margin:-10.5px 0 0 -10.5px;fill:var(--ink-2);opacity:0;
     transform:rotate(calc(var(--spins,0) * 360deg - 60deg)) scale(.5);transition:opacity .2s,transform .55s cubic-bezier(.34,1.2,.64,1)}
   .handle.hover .h-rest{opacity:0;transform:rotate(var(--arc)) scale(.86)}
   .handle.hover .h-disc{opacity:1;transform:scale(1)}
   .handle.hover .h-glyph{opacity:1;transform:rotate(calc(var(--spins,0) * 360deg)) scale(1)}
   /* Carrying: the disc goes dashed and the hand stops turning — it is being held now, not offered */
-  #move.armed .h-disc{border:2px dashed #e8e8ea;background:rgba(0,0,0,.72)}
+  #move.armed .h-disc{border:2px dashed var(--ink-2);background:var(--armed)}
   /* The quarter that faces the fillet: up and outward past the far end on the right, and the same two
      directions mirrored along the stack at the near end */
   body[data-edge="left"] #orb,body[data-edge="top"] #orb{--arc:180deg}
@@ -229,8 +255,8 @@
   <div id="tail"></div>
   <div id="move" class="handle">
     <svg class="h-rest" viewBox="-36 -36 72 72" aria-hidden="true">
-      <circle r="28.5" fill="none" stroke="#2e2e2e" stroke-width="8.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
-      <circle r="28.5" fill="none" stroke="#000" stroke-width="6.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
+      <circle class="h-ring" r="28.5" fill="none" stroke-width="8.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
+      <circle class="h-fill" r="28.5" fill="none" stroke-width="6.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
     </svg>
     <div class="h-disc"></div>
     <!-- A hand, as on the Mac: the gesture is a carry, not a nudge, which is what arrows would say -->
@@ -240,8 +266,8 @@
   </div>
   <div id="orb" class="handle">
     <svg class="h-rest" viewBox="-36 -36 72 72" aria-hidden="true">
-      <circle r="28.5" fill="none" stroke="#2e2e2e" stroke-width="8.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
-      <circle r="28.5" fill="none" stroke="#000" stroke-width="6.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
+      <circle class="h-ring" r="28.5" fill="none" stroke-width="8.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
+      <circle class="h-fill" r="28.5" fill="none" stroke-width="6.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
     </svg>
     <div class="h-disc"></div>
     <svg class="h-glyph" viewBox="0 0 12 12" aria-hidden="true"><path fill-rule="evenodd" d="M5.1.6h1.8l.3 1.5 1.1.5 1.3-.8 1.3 1.3-.8 1.3.5 1.1 1.5.3v1.8l-1.5.3-.5 1.1.8 1.3-1.3 1.3-1.3-.8-1.1.5-.3 1.5H5.1l-.3-1.5-1.1-.5-1.3.8-1.3-1.3.8-1.3-.5-1.1L.6 6.9V5.1l1.5-.3.5-1.1-.8-1.3 1.3-1.3 1.3.8 1.1-.5zM6 4.1a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg>
@@ -256,10 +282,30 @@ const invoke = window.__TAURI__.core.invoke;
 const listen = window.__TAURI__.event.listen;
 
 /* Colour ramp (upstream palette values) */
-const AMPLE='#00FF88', WATCH='#F2FF00', CRIT='#FF3F00';
+let AMPLE='#00FF88', WATCH='#F2FF00', CRIT='#FF3F00';
 // The status arc is neutral on purpose: the ring behind it is coloured by how much of the limit
 // is gone, and a green arc inside it reads as part of that scale. Waiting borrows the warning yellow.
-const TRACK='#303030', INK='#ffffff', DIM='#808080';
+let TRACK='#303030', INK='#ffffff', DIM='#808080', HOLE='#2a2a2a';
+// The arcs and the card's dots are drawn into SVG and inline styles, where `var()` does not reach,
+// so the palette is read back out of the page instead of written down twice.
+function readPalette(){
+  const s=getComputedStyle(document.documentElement);
+  const v=(name,fallback)=>s.getPropertyValue(name).trim()||fallback;
+  TRACK=v('--track',TRACK); INK=v('--ink',INK); DIM=v('--ink-dim',DIM); HOLE=v('--hole',HOLE);
+  AMPLE=v('--ample',AMPLE); WATCH=v('--watch',WATCH); CRIT=v('--crit',CRIT);
+}
+readPalette();
+/* The palette switches on this attribute, and what is drawn into SVG is redrawn by hand, since
+   var() does not reach it. `dark` is the default the CSS already holds, so a failed ask changes
+   nothing rather than leaving the page half-painted. */
+function applyTheme(name){
+  document.documentElement.dataset.theme = name === 'light' ? 'light' : 'dark';
+  readPalette();
+  renderRing();
+  if(card&&card.classList.contains('show')) renderCard();
+}
+invoke('get_theme_resolved').then(applyTheme).catch(()=>{});
+listen('theme_resolved',e=>applyTheme(e.payload)).catch(()=>{});
 const tone=f=> f>=0.8?CRIT : f>=0.5?WATCH : AMPLE;
 // Whole percents, except where rounding would read as nothing used or nothing left, as the Mac's Percent does
 function smallPct(v){
@@ -328,6 +374,111 @@ let uiLang='en';
 // words the card writes itself. A language with no table falls back to English rather than
 // showing half a translation, so adding one is only ever data.
 const TEXT={
+  ko:{
+    'Included usage':'포함 사용량',
+    'API usage':'API 사용량',
+    'On demand':'온디맨드',
+    'Usage':'사용량',
+    'Current session':'현재 세션',
+    'Weekly (all models)':'주간 (모든 모델)',
+    'Weekly (Opus)':'주간 (Opus)',
+    'Weekly (model-scoped)':'주간 (모델별)',
+    'Weekly limit':'주간 제한',
+    'Weekly Limit':'주간 제한',
+    '5-Hour Limit':'5시간 제한',
+    '5-hour Limit':'5시간 제한',
+    'Gemini Models':'Gemini 모델',
+    'Claude and GPT models':'Claude 및 GPT 모델',
+    'Monthly limit':'월간 제한',
+    'Monthly Limit':'월간 제한',
+    'Longer window':'장기 사용 기간',
+    'Requests today · no limit published':'오늘 요청 수 · 한도 미공개',
+    'Resetting…':'재설정 중…',
+    'Resets at':'재설정 시각',
+    'Resets':'재설정',
+    'Working':'작업 중',
+    'Waiting':'대기 중',
+    'Streaming (network)':'스트리밍 중 (네트워크)',
+    'Rate limited, retrying in':'요청 제한, 재시도까지',
+    'Rate limited — retrying in':'요청 제한 — 재시도까지',
+    'request today':'오늘 요청',
+    'requests today':'오늘 요청',
+    'no requests today':'오늘 요청 없음',
+    'Waiting for first reading…':'첫 측정값을 기다리는 중…',
+    'Sign in to Claude Code to see usage.':'사용량을 확인하려면 Claude Code에 로그인하십시오.',
+    'Sign in to Cursor to see usage.':'사용량을 확인하려면 Cursor에 로그인하십시오.',
+    'Sign in to Codex to see usage.':'사용량을 확인하려면 Codex에 로그인하십시오.',
+    'Sign in to Antigravity to see usage.':'사용량을 확인하려면 Antigravity에 로그인하십시오.',
+    'needs your input':'응답을 기다리는 중',
+    'Working in':'작업 위치:',
+    'Sign in':'로그인',
+    'Signing in...':'로그인 중…',
+    'Refresh':'새로 고침',
+    'Browser sign-in through Claude Code':'Claude Code를 통한 브라우저 로그인',
+    'Complete sign-in in the browser or terminal window.':'브라우저나 터미널 창에서 로그인을 완료하십시오.',
+    'Sign-in complete. Refreshing usage...':'로그인되었습니다. 사용량을 새로 고치는 중…',
+    'Sign-in cancelled, failed or timed out. Try again.':'로그인이 취소되거나 실패했거나 시간이 초과되었습니다. 다시 시도하십시오.',
+    'Checking usage...':'사용량 확인 중…',
+    'Rate limited. Wait for the retry deadline.':'요청이 제한되었습니다. 재시도 시점까지 기다리십시오.',
+    'Claude Code CLI not found. Install the standalone CLI first.':'Claude Code CLI를 찾을 수 없습니다. 먼저 독립 실행형 CLI를 설치하십시오.',
+    'Claude sign-in or renewal is already running.':'Claude 로그인 또는 갱신이 이미 진행 중입니다.',
+    'Unable to open Claude sign-in window.':'Claude 로그인 창을 열 수 없습니다.',
+    'Claude HTTP 403: access denied. Check network or account access; sign-in may still be valid.':'Claude HTTP 403: 접근이 거부되었습니다. 네트워크나 계정의 접근 권한을 확인하십시오. 로그인은 여전히 유효할 수 있습니다.',
+    'Run grok login to see usage.':'사용량을 확인하려면 grok login을 실행하십시오.',
+  },
+  'pt-BR':{
+    'Included usage':'Uso incluído',
+    'Sign in':'Entrar',
+    'Signing in...':'Entrando...',
+    'Refresh':'Atualizar',
+    'Browser sign-in through Claude Code':'Login pelo navegador via Claude Code',
+    'Complete sign-in in the browser or terminal window.':'Conclua o login no navegador ou na janela do terminal.',
+    'Sign-in complete. Refreshing usage...':'Login concluído. Atualizando uso...',
+    'Sign-in cancelled, failed or timed out. Try again.':'O login foi cancelado, falhou ou expirou. Tente novamente.',
+    'Checking usage...':'Verificando uso...',
+    'Rate limited. Wait for the retry deadline.':'Limite de requisições atingido. Aguarde o prazo para nova tentativa.',
+    'Claude Code CLI not found. Install the standalone CLI first.':'CLI do Claude Code não encontrada. Instale primeiro a CLI independente.',
+    'Claude sign-in or renewal is already running.':'O login ou a renovação do Claude já está em andamento.',
+    'Unable to open Claude sign-in window.':'Não foi possível abrir a janela de login do Claude.',
+    'Claude HTTP 403: access denied. Check network or account access; sign-in may still be valid.':'Claude HTTP 403: acesso negado. Verifique a rede ou o acesso da conta; o login ainda pode ser válido.',
+    'API usage':'Uso da API',
+    'On demand':'Sob demanda',
+    'Usage':'Uso',
+    'Current session':'Sessão atual',
+    'Weekly (all models)':'Semanal (todos os modelos)',
+    'Weekly (Opus)':'Semanal (Opus)',
+    'Weekly (model-scoped)':'Semanal (por modelo)',
+    'Weekly limit':'Limite semanal',
+    'Weekly Limit':'Limite semanal',
+    '5-Hour Limit':'Limite de 5 horas',
+    '5-hour Limit':'Limite de 5 horas',
+    'Gemini Models':'Modelos Gemini',
+    'Claude and GPT models':'Modelos Claude e GPT',
+    'Monthly limit':'Limite mensal',
+    'Monthly Limit':'Limite mensal',
+    'Longer window':'Janela mais longa',
+    'Requests today · no limit published':'Solicitações hoje · nenhum limite publicado',
+    'Updated':'Atualizado',
+    'Resetting…':'Renovando…',
+    'Resets at':'Redefine às',
+    'Resets':'Redefine',
+    'Working':'Trabalhando',
+    'Waiting':'Aguardando',
+    'Streaming (network)':'Transmitindo (rede)',
+    'Rate limited, retrying in':'Limite atingido, nova tentativa em',
+    'Rate limited — retrying in':'Limite atingido — nova tentativa em',
+    'request today':'requisição hoje',
+    'requests today':'requisições hoje',
+    'no requests today':'nenhuma solicitação hoje',
+    'Waiting for first reading…':'Aguardando a primeira leitura…',
+    'Sign in to Claude Code to see usage.':'Entre no Claude Code para ver o uso.',
+    'Sign in to Cursor to see usage.':'Entre no Cursor para ver o uso.',
+    'Sign in to Codex to see usage.':'Entre no Codex para ver o uso.',
+    'Sign in to Antigravity to see usage.':'Entre no Antigravity para ver o uso.',
+    'Run grok login to see usage.':'Execute grok login para ver o uso.',
+    'needs your input':'precisa da sua resposta',
+    'Working in':'Em execução em'
+  },
   uk:{
     'Included usage':'Використання в тарифі',
     'API usage':'Використання API',
@@ -347,7 +498,6 @@ const TEXT={
     'Monthly Limit':'Місячний ліміт',
     'Longer window':'Довше вікно',
     'Requests today · no limit published':'Запитів сьогодні · ліміт не опубліковано',
-    'Updated':'Оновлено',
     'Resetting…':'Скидання…',
     'Resets at':'Скидання о',
     'Resets':'Скидання',
@@ -371,13 +521,10 @@ const TEXT={
     'Included usage':'Включённое использование',
     'Sign in':'Авторизоваться',
     'Signing in...':'Вход…',
-    'Refresh':'Обновить',
     'Browser sign-in through Claude Code':'Вход через браузер с помощью Claude Code',
     'Complete sign-in in the browser or terminal window.':'Подтвердите вход в браузере или окне терминала.',
     'Sign-in complete. Refreshing usage...':'Вход выполнен. Обновляю лимиты…',
     'Sign-in cancelled, failed or timed out. Try again.':'Вход отменён, завершился ошибкой или истекло время ожидания. Попробуйте ещё раз.',
-    'Checking usage...':'Проверяю лимиты…',
-    'Rate limited. Wait for the retry deadline.':'Слишком много запросов. Дождитесь срока повтора.',
     'Claude Code CLI not found. Install the standalone CLI first.':'Claude Code CLI не найден. Установите отдельный CLI.',
     'Claude sign-in or renewal is already running.':'Вход или обновление авторизации Claude уже выполняется.',
     'Unable to open Claude sign-in window.':'Не удалось открыть окно входа Claude.',
@@ -399,7 +546,6 @@ const TEXT={
     'Monthly Limit':'Месячный лимит',
     'Longer window':'Более длительный период',
     'Requests today · no limit published':'Запросы сегодня · лимит не опубликован',
-    'Updated':'Обновлено',
     'Resetting…':'Сброс…',
     'Resets at':'Сброс в',
     'Resets':'Сброс',
@@ -439,7 +585,6 @@ const TEXT={
     'Monthly Limit':'每月限额',
     'Longer window':'更长的周期',
     'Requests today · no limit published':'今日请求数 · 未公布限额',
-    'Updated':'更新于',
     'Resetting…':'正在重置…',
     'Resets at':'重置于',
     'Resets':'重置',
@@ -479,7 +624,6 @@ const TEXT={
     'Monthly Limit':'每月限額',
     'Longer window':'更長的週期',
     'Requests today · no limit published':'今日要求數 · 未公布限額',
-    'Updated':'更新於',
     'Resetting…':'正在重置…',
     'Resets at':'重置於',
     'Resets':'重置',
@@ -504,6 +648,82 @@ const TEXT={
 // Kept as patterns rather than exact keys: each one carries a number, a plan name or an error
 // the provider wrote, so the whole string can never be a dictionary key.
 const PATTERNS={
+  ko:[
+    [/^(\d+)m limit$/,'$1분 제한'],
+    [/^(\d+)h limit$/,'$1시간 제한'],
+    [/^(\d+)d limit$/,'$1일 제한'],
+    [/^Rate limited, retrying in (\d+)s$/,'요청 제한, $1초 후 재시도'],
+    [/^Rate limited — retrying in (\d+)s$/,'요청 제한 — $1초 후 재시도'],
+    [/^Unlimited on the (.+) plan — nothing to meter$/,'$1 요금제는 무제한입니다 — 측정할 사용량이 없습니다'],
+    [/^The (.+) plan has nothing for Cursor to meter yet$/,'$1 요금제에는 아직 Cursor가 측정할 사용량이 없습니다'],
+    [/^(.+) · Google publishes no quota for this account$/,'$1 · Google이 이 계정의 할당량을 공개하지 않습니다'],
+    [/^Live read failed \((.+)\)$/,'실시간 조회 실패 ($1)'],
+    [/Weekly \(all models\)/g,'주간 (모든 모델)'],
+    [/Weekly \(Opus\)/g,'주간 (Opus)'],
+    [/Weekly \(model-scoped\)/g,'주간 (모델별)'],
+    [/Weekly limit/g,'주간 제한'],
+    [/Monthly limit/g,'월간 제한'],
+    [/\bWeekly\b/g,'주간'],
+    [/\bMonthly\b/g,'월간'],
+    [/ · via /g,' · 경유: '],
+    [/needs your input/g,'응답을 기다리는 중'],
+    [/^Working in /,'작업 위치: '],
+    [/via Antigravity CLI/g,'Antigravity CLI 경유'],
+    [/via Antigravity/g,'Antigravity 경유'],
+    [/via Google/g,'Google 경유'],
+    [/No Claude Code credential found/g,'Claude Code 자격 증명을 찾을 수 없습니다'],
+    [/Credential expired — run claude once in a terminal to renew it/g,'자격 증명이 만료되었습니다 — 터미널에서 claude를 한 번 실행해 갱신하십시오'],
+    [/Credential rejected \(switched accounts\?\)/g,'자격 증명이 거부되었습니다 (계정을 전환하셨습니까?)'],
+    [/Codex sign-in expired — open Codex once to refresh it/g,'Codex 로그인이 만료되었습니다 — Codex를 한 번 열어 갱신하십시오'],
+    [/Codex rejected its sign-in — sign in to Codex again/g,'Codex 로그인이 거부되었습니다 — Codex에 다시 로그인하십시오'],
+    [/Codex reported no usage windows/g,'Codex가 사용량 집계 기간을 보고하지 않았습니다'],
+    [/Codex has not recorded a usage snapshot yet/g,'Codex가 아직 사용량 스냅샷을 기록하지 않았습니다'],
+    [/from last Codex run/g,'마지막 Codex 실행 기준'],
+    [/Waiting for Antigravity CLI quota/g,'Antigravity CLI 할당량을 기다리는 중'],
+    [/Open Antigravity to read its quota/g,'할당량을 확인하려면 Antigravity를 여십시오'],
+    [/Antigravity's Google session was rejected — sign in again in Antigravity/g,'Antigravity의 Google 세션이 거부되었습니다 — Antigravity에서 다시 로그인하십시오'],
+    [/Antigravity is closed — last reading kept/g,'Antigravity가 닫혀 있습니다 — 마지막 측정값 유지'],
+    [/Sign in to Cursor \(the editor\) to see usage\./g,'사용량을 확인하려면 Cursor 편집기에 로그인하십시오.'],
+    [/Cursor session was rejected — sign in again in the editor/g,'Cursor 세션이 거부되었습니다 — 편집기에서 다시 로그인하십시오'],
+  ],
+  'pt-BR':[
+    [/^(\d+)m limit$/,'Limite de $1 min'],
+    [/^(\d+)h limit$/,'Limite de $1 h'],
+    [/^(\d+)d limit$/,'Limite de $1 d'],
+    [/^Rate limited, retrying in (\d+)s$/,'Limite atingido, nova tentativa em $1 s'],
+    [/^Rate limited — retrying in (\d+)s$/,'Limite atingido — nova tentativa em $1 s'],
+    [/^Unlimited on the (.+) plan — nothing to meter$/,'Ilimitado no plano $1 — nada para medir'],
+    [/^The (.+) plan has nothing for Cursor to meter yet$/,'O plano $1 ainda não tem uso para o Cursor medir'],
+    [/^(.+) · Google publishes no quota for this account$/,'$1 · Google não publica cota para esta conta'],
+    [/^Live read failed \((.+)\)$/,'Falha na leitura em tempo real ($1)'],
+    [/Weekly \(all models\)/g,'Semanal (todos os modelos)'],
+    [/Weekly \(Opus\)/g,'Semanal (Opus)'],
+    [/Weekly \(model-scoped\)/g,'Semanal (por modelo)'],
+    [/Weekly limit/g,'Limite semanal'],
+    [/Monthly limit/g,'Limite mensal'],
+    [/\bWeekly\b/g,'Semanal'],
+    [/\bMonthly\b/g,'Mensal'],
+    [/ · via /g,' · via '],
+    [/needs your input/g,'precisa da sua resposta'],
+    [/^Working in /,'Em execução em '],
+    [/via Antigravity CLI/g,'via Antigravity CLI'],
+    [/via Antigravity/g,'via Antigravity'],
+    [/via Google/g,'via Google'],
+    [/No Claude Code credential found/g,'Credencial do Claude Code não encontrada'],
+    [/Credential expired — run claude once in a terminal to renew it/g,'A credencial expirou — execute claude uma vez no terminal para renová-la'],
+    [/Credential rejected \(switched accounts\?\)/g,'Credencial rejeitada (você trocou de conta?)'],
+    [/Codex sign-in expired — open Codex once to refresh it/g,'O login do Codex expirou — abra o Codex uma vez para atualizá-lo'],
+    [/Codex rejected its sign-in — sign in to Codex again/g,'O Codex rejeitou o login — entre novamente no Codex'],
+    [/Codex reported no usage windows/g,'O Codex não informou nenhuma janela de uso'],
+    [/Codex has not recorded a usage snapshot yet/g,'O Codex ainda não registrou um retrato de uso'],
+    [/from last Codex run/g,'da última execução do Codex'],
+    [/Waiting for Antigravity CLI quota/g,'Aguardando a cota da CLI do Antigravity'],
+    [/Open Antigravity to read its quota/g,'Abra o Antigravity para ler a cota'],
+    [/Antigravity's Google session was rejected — sign in again in Antigravity/g,'A sessão Google do Antigravity foi rejeitada — entre novamente no Antigravity'],
+    [/Antigravity is closed — last reading kept/g,'O Antigravity está fechado — última leitura mantida'],
+    [/Sign in to Cursor \(the editor\) to see usage\./g,'Entre no Cursor (o editor) para ver o uso.'],
+    [/Cursor session was rejected — sign in again in the editor/g,'A sessão do Cursor foi rejeitada — entre novamente no editor'],
+  ],
   uk:[
     [/^(\d+)m limit$/,'Ліміт $1 хв'],
     [/^(\d+)h limit$/,'Ліміт $1 год'],
@@ -660,26 +880,34 @@ const PATTERNS={
 // Grammar differs enough that a format string would not carry it — Russian puts the verb last,
 // Chinese puts it after the time — so each language writes its own short functions.
 const UI={
+  ko:{locale:'ko-KR',title:n=>n+' 사용량',resetting:'재설정 중…',resetsIn:m=>`${m}분 후 재설정`,
+      resetsAt:t=>`${t}에 재설정`,resetsOn:(d,t)=>`${d} ${t}에 재설정`,resetsDate:d=>`${d}에 재설정`,
+      ago:m=>m<60?`${m}분 전`:`${Math.round(m/60)}시간 전`,
+      usedLeft:(used,left)=>`${used}% 사용 · ${left}% 남음`,andMore:n=>`외 ${n}개`,updated:a=>`${a}에 마지막 업데이트됨`},
+  'pt-BR':{locale:'pt-BR',title:n=>'Uso do '+n,resetting:'Renovando…',resetsIn:m=>`Renova em ${m} min`,
+      resetsAt:t=>`Renova às ${t}`,resetsOn:(d,t)=>`Renova ${d} às ${t}`,resetsDate:d=>`Renova ${d}`,
+      ago:m=>m<60?`há ${m} min`:`há ${Math.round(m/60)} h`,
+      usedLeft:(used,left)=>`${used}% usado · ${left}% restante`,andMore:n=>`e mais ${n}`},
   en:{locale:'en-US',title:n=>n+' Usage',resetting:'Resetting…',resetsIn:m=>`Resets in ${m} min`,
       resetsAt:t=>`Resets at ${t}`,resetsOn:(d,t)=>`Resets ${d} ${t}`,resetsDate:d=>`Resets ${d}`,
       ago:m=>m<60?`${m}m ago`:`${Math.round(m/60)}h ago`,
-      usedLeft:(used,left)=>`${used}% Used · ${left}% left`,andMore:n=>`and ${n} more`},
+      usedLeft:(used,left)=>`${used}% Used · ${left}% left`,andMore:n=>`and ${n} more`,updated:a=>`Updated ${a}`},
   uk:{locale:'uk-UA',title:n=>'Використання '+n,resetting:'Скидання…',resetsIn:m=>`Скидання через ${m} хв`,
       resetsAt:t=>`Скидання о ${t}`,resetsOn:(d,t)=>`Скидання: ${d} ${t}`,resetsDate:d=>`Скидання: ${d}`,
       ago:m=>m<60?`${m} хв тому`:`${Math.round(m/60)} год тому`,
-      usedLeft:(used,left)=>`Використано ${used}% · лишилось ${left}%`,andMore:n=>`і ще ${n}`},
+      usedLeft:(used,left)=>`Використано ${used}% · лишилось ${left}%`,andMore:n=>`і ще ${n}`,updated:a=>`Оновлено ${a}`},
   ru:{locale:'ru-RU',title:n=>'Использование '+n,resetting:'Сброс…',resetsIn:m=>`Сброс через ${m} мин`,
       resetsAt:t=>`Сброс в ${t}`,resetsOn:(d,t)=>`Сброс: ${d} ${t}`,resetsDate:d=>`Сброс: ${d}`,
       ago:m=>m<60?`${m} мин назад`:`${Math.round(m/60)} ч назад`,
-      usedLeft:(used,left)=>`Использовано ${used}% · осталось ${left}%`,andMore:n=>`и ещё ${n}`},
+      usedLeft:(used,left)=>`Использовано ${used}% · осталось ${left}%`,andMore:n=>`и ещё ${n}`,updated:a=>`Обновлено ${a}`},
   zh:{locale:'zh-CN',title:n=>n+' 用量',resetting:'正在重置…',resetsIn:m=>`${m} 分钟后重置`,
       resetsAt:t=>`${t} 重置`,resetsOn:(d,t)=>`${d} ${t} 重置`,resetsDate:d=>`${d} 重置`,
       ago:m=>m<60?`${m} 分钟前`:`${Math.round(m/60)} 小时前`,
-      usedLeft:(used,left)=>`已用 ${used}% · 剩余 ${left}%`,andMore:n=>`另有 ${n} 个`},
+      usedLeft:(used,left)=>`已用 ${used}% · 剩余 ${left}%`,andMore:n=>`另有 ${n} 个`,updated:a=>`更新于 ${a}`},
   'zh-Hant':{locale:'zh-TW',title:n=>n+' 用量',resetting:'正在重置…',resetsIn:m=>`${m} 分鐘後重置`,
       resetsAt:t=>`${t} 重置`,resetsOn:(d,t)=>`${d} ${t} 重置`,resetsDate:d=>`${d} 重置`,
       ago:m=>m<60?`${m} 分鐘前`:`${Math.round(m/60)} 小時前`,
-      usedLeft:(used,left)=>`已用 ${used}% · 剩餘 ${left}%`,andMore:n=>`另有 ${n} 個`},
+      usedLeft:(used,left)=>`已用 ${used}% · 剩餘 ${left}%`,andMore:n=>`另有 ${n} 個`,updated:a=>`更新於 ${a}`},
 };
 function ui(){return UI[uiLang]||UI.en;}
 function textCopy(value){
@@ -852,7 +1080,7 @@ function renderRing(){
     }
     pct.style.color='';
     const h=headlineOf(p.snap,p.base);
-    let inner=`<circle cx="28" cy="28" r="22" fill="#2a2a2a"/><circle cx="28" cy="28" r="25" fill="none" stroke="${TRACK}" stroke-width="5"/>`;
+    let inner=`<circle cx="28" cy="28" r="22" fill="${HOLE}"/><circle cx="28" cy="28" r="25" fill="none" stroke="${TRACK}" stroke-width="5"/>`;
     wrap.classList.toggle('pressed',!!refreshing[p.id]);
     reading.innerHTML=h && h.count==null?svgArc(25,Math.min(h.used,1),tone(h.used),5):'';
     if(weeklyRing!=='off'){ // the week, thinner and at its own radius, in its own colour: a session at 12% beside a week at 91% is the case this exists for
@@ -916,21 +1144,19 @@ let hoverId='claude';
 let claudeAuth={busy:false,message:''};
 let claudeActionMessage='';
 // CLAUDE_AUTH_ACTIONS_START
+// Only while signed out, where the Mac shows its sign-in line; and only on the default account,
+// since the CLI's login runs without CLAUDE_CONFIG_DIR and would sign in ~/.claude whichever card asked
+function offersClaudeSignIn(p){ return p.id==='claude'&&p.snap.status==='needsAuth'; }
 function claudeAuthHtml(auth, message=''){
-  return `<div class="c-auth"><button id="claude-sign-in" ${auth.busy?'disabled':''}>${esc(textCopy(auth.busy?'Signing in...':'Sign in'))}</button><button id="claude-refresh" ${auth.busy?'disabled':''}>${esc(textCopy('Refresh'))}</button></div><div class="c-auth-status" role="status">${esc(textCopy(message||auth.message||'Browser sign-in through Claude Code'))}</div>`;
+  return `<div class="c-auth"><button id="claude-sign-in" ${auth.busy?'disabled':''}>${esc(textCopy(auth.busy?'Signing in...':'Sign in'))}</button></div><div class="c-auth-status" role="status">${esc(textCopy(message||auth.message||'Browser sign-in through Claude Code'))}</div>`;
 }
-async function runClaudeAction(action){
+async function signInClaude(){
   if(claudeAuth.busy) return;
   claudeActionMessage='';
   try{
-    if(action==='sign-in'){
-      claudeAuth={busy:true,message:'Complete sign-in in the browser or terminal window.'};
-      renderCard();
-      await invoke('claude_sign_in');
-    }else{
-      const requested=await invoke('refresh_claude_usage');
-      claudeActionMessage=requested?'Checking usage...':'Rate limited. Wait for the retry deadline.';
-    }
+    claudeAuth={busy:true,message:'Complete sign-in in the browser or terminal window.'};
+    renderCard();
+    await invoke('claude_sign_in');
   }catch(e){
     claudeAuth.busy=false;
     claudeActionMessage=String(e?.message||e);
@@ -948,7 +1174,7 @@ function renderCard(){
   // p.name is no longer a constant: for a second account it is built from the home
   // directory's slug and the subscriptionType read out of .credentials.json.
   let html=`<div class="c-head">${headIcon}<span class="c-title">${esc(ui().title(p.name))}</span></div>`;
-  if(staleOf(snap)&&snap.fetched_at) html+=`<div class="c-sub">${textCopy('Updated')} ${ago(snap.fetched_at)}</div>`;
+  if(staleOf(snap)&&snap.fetched_at) html+=`<div class="c-sub">${ui().updated(ago(snap.fetched_at))}</div>`;
   if(snap.status==='needsAuth'){
     const who={claude:'Sign in to Claude Code to see usage.',cursor:'Sign in to Cursor to see usage.',codex:'Sign in to Codex to see usage.',grok:'Run grok login to see usage.',gemini:'Sign in to Antigravity to see usage.'}[p.base]||'';
     html+=`<div class="c-note">${textCopy(who)}<br>${esc(textCopy(snap.note||''))}</div>`;
@@ -977,7 +1203,7 @@ function renderCard(){
     if(group) html+=`</div>`;
     if(snap.note) html+=`<div class="c-note">${esc(textCopy(snap.note))}</div>`;
   }
-  if(p.base==='claude') html+=claudeAuthHtml(claudeAuth,claudeActionMessage);
+  if(offersClaudeSignIn(p)) html+=claudeAuthHtml(claudeAuth,claudeActionMessage);
   if(p.base==='claude'){ // live sessions (a full list with jump-to-session is a follow-up)
     const act=stateSnap.sessions.filter(s=>s.state!=='idle');
     if(act.length){
@@ -994,15 +1220,14 @@ function renderCard(){
       html+=`<div class="c-sessions">`;
       for(const a of acts.slice(0,SESSION_ROWS)){
         const col=a.state==='waiting'?WATCH:INK;
-        html+=`<div class="s-row"><span class="s-dot" style="background:${col}"></span>${esc(a.name)}<span style="color:#808080;margin-left:auto">${esc(textCopy(a.detail))}</span></div>`;
+        html+=`<div class="s-row"><span class="s-dot" style="background:${col}"></span>${esc(a.name)}<span style="color:var(--ink-dim);margin-left:auto">${esc(textCopy(a.detail))}</span></div>`;
       }
       html+=moreRow(acts.length-SESSION_ROWS)+`</div>`;
     }
   }
   c.innerHTML=html;
-  const signIn=c.querySelector('#claude-sign-in'), refresh=c.querySelector('#claude-refresh');
-  if(signIn) signIn.onclick=e=>{e.stopPropagation();runClaudeAction('sign-in');};
-  if(refresh) refresh.onclick=e=>{e.stopPropagation();runClaudeAction('refresh');};
+  const signIn=c.querySelector('#claude-sign-in');
+  if(signIn) signIn.onclick=e=>{e.stopPropagation();signInClaude();};
   placeCard();
 }
 // The card follows the hovered cell: centred on it along the pill (kept inside the window), tail pointing at it.
@@ -1054,7 +1279,7 @@ function renderMeterCard(c,p){
       if(w.detail) html+=`<div class="w-used">${esc(w.detail)}</div>`;
       html+=`</div>`;
     }
-    if(p.id==='widget-weather' && systemPayload && systemPayload.weatherCity) html+=`<div class="c-note"><button id="wx-refresh" style="font:inherit;color:#8ec8ff;background:none;border:0;padding:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Refresh'))}</button></div>`;
+    if(p.id==='widget-weather' && systemPayload && systemPayload.weatherCity) html+=`<div class="c-note"><button id="wx-refresh" style="font:inherit;color:var(--link);background:none;border:0;padding:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Refresh'))}</button></div>`;
   }
   c.innerHTML=html;
   const refresh=c.querySelector('#wx-refresh');
@@ -1094,7 +1319,7 @@ function calendarCardHtml(){
   const offset=Math.round((dayStart(selected)-dayStart(now))/86400000);
   const iso=selected.getFullYear()+'-'+String(selected.getMonth()+1).padStart(2,'0')+'-'+String(selected.getDate()).padStart(2,'0');
   let html=`<div class="c-sub">${esc(month.start.toLocaleString(undefined,{month:'long',year:'numeric'}))}</div>`;
-  html+=`<div style="display:flex;gap:8px;margin-bottom:6px"><button data-cal="prev" style="font:inherit;color:#8ec8ff;background:none;border:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Previous month'))}</button><button data-cal="next" style="font:inherit;color:#8ec8ff;background:none;border:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Next month'))}</button></div>`;
+  html+=`<div style="display:flex;gap:8px;margin-bottom:6px"><button data-cal="prev" style="font:inherit;color:var(--link);background:none;border:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Previous month'))}</button><button data-cal="next" style="font:inherit;color:var(--link);background:none;border:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Next month'))}</button></div>`;
   html+=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:11px;text-align:center">`;
   for(const date of month.days){
     const inMonth=date.getMonth()===month.start.getMonth();
@@ -1103,7 +1328,7 @@ function calendarCardHtml(){
     html+=`<button data-cal="pick" data-iso="${key}" style="font:inherit;color:${on?'#fff':'#ddd'};background:${on?'#36a8eb':'transparent'};border:0;border-radius:99px;opacity:${inMonth?1:0.35};cursor:pointer">${date.getDate()}</button>`;
   }
   html+=`</div><div class="c-note">${esc(PenguinNotchWidgets.t(uiLang, PenguinNotchWidgets.dayDistance(offset)))}</div>`;
-  html+=`<button id="cal-copy" data-iso="${iso}" style="font:inherit;color:#8ec8ff;background:none;border:0;padding:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Copy date'))}</button>`;
+  html+=`<button id="cal-copy" data-iso="${iso}" style="font:inherit;color:var(--link);background:none;border:0;padding:0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Copy date'))}</button>`;
   return html;
 }
 function todoCardHtml(meter){
@@ -1111,9 +1336,9 @@ function todoCardHtml(meter){
   let html=`<div class="c-sub">${esc(items.filter(item=>item.done).length+'/'+items.length)}</div>`;
   if(!items.length) html+=`<div class="c-note">${esc(PenguinNotchWidgets.t(uiLang,'Add your first task for today.'))}</div>`;
   for(const item of items){
-    html+=`<div class="s-row"><button data-todo="toggle" data-id="${esc(item.id)}" style="font:inherit;color:#8ec8ff;background:none;border:0;cursor:pointer">${item.done?'☑':'☐'}</button><span style="${item.done?'text-decoration:line-through;color:#888':''}">${esc(item.title)}</span><button data-todo="remove" data-id="${esc(item.id)}" style="margin-left:auto;font:inherit;color:#888;background:none;border:0;cursor:pointer">✕</button></div>`;
+    html+=`<div class="s-row"><button data-todo="toggle" data-id="${esc(item.id)}" style="font:inherit;color:var(--link);background:none;border:0;cursor:pointer">${item.done?'☑':'☐'}</button><span style="${item.done?'text-decoration:line-through;color:var(--ink-dim)':''}">${esc(item.title)}</span><button data-todo="remove" data-id="${esc(item.id)}" style="margin-left:auto;font:inherit;color:var(--ink-dim);background:none;border:0;cursor:pointer">✕</button></div>`;
   }
-  html+=`<button data-todo="add" style="font:inherit;color:#8ec8ff;background:none;border:0;padding:6px 0 0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Add to-do'))}</button>`;
+  html+=`<button data-todo="add" style="font:inherit;color:var(--link);background:none;border:0;padding:6px 0 0;cursor:pointer">${esc(PenguinNotchWidgets.t(uiLang,'Add to-do'))}</button>`;
   html+=`<div class="c-note">${esc(PenguinNotchWidgets.t(uiLang,'Unfinished tasks carry over · Saved on this PC'))}</div>`;
   return html;
 }
@@ -1167,9 +1392,10 @@ function armWatchdog(){
 // page is as wide as the design, so if the CSS viewport is not that wide the WebView's DPR disagrees
 // with the monitor; CSS zoom pulls the layout back to the design size.
 // The design width is the window's, and the window is not the same shape on every edge — see
-// `notch_window_size` in main.rs: NOTCH_W upright, NOTCH_H lying flat. Dividing by 360 on a flat edge
-// read the wider window as a DPR error and zoomed the whole notch by 520/360.
-const DESIGN_W_UPRIGHT=360, DESIGN_W_FLAT=520;
+// `notch_window_size` in main.rs: NOTCH_W upright, NOTCH_LONG lying flat. Dividing by 360 on a
+// flat edge read the wider window as a DPR error and zoomed the whole notch by 520/360. Either number
+// left behind when the window changes width does the same thing, so a test in main.rs pins both.
+const DESIGN_W_UPRIGHT=360, DESIGN_W_FLAT=650;
 function designWidth(){ return edgeIsVertical()?DESIGN_W_UPRIGHT:DESIGN_W_FLAT; }
 function fitZoom(){
   const z=innerWidth/designWidth();

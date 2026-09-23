@@ -32,6 +32,18 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.0",
+                headline: "Upstream usage and interface improvements",
+                changes: [
+                    ReleaseNote.Change(title: "Amp usage and clearer account names",
+                                       detail: "Read Amp CLI usage, show each Codex conversation, and name Claude rings after their accounts."),
+                    ReleaseNote.Change(title: "Quieter alerts and more menu bar detail",
+                                       detail: "Treat the first reading as a baseline and show weekly usage in the menu bar."),
+                    ReleaseNote.Change(title: "More language and Windows options",
+                                       detail: "Add Korean and Uzbek translations, a light Windows theme and an on-screen move handle.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.17.1",
                 headline: "Clearer stock entry and PenguinNotch Keychain names",
                 changes: [

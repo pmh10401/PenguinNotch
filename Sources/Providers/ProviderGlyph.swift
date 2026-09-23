@@ -30,6 +30,7 @@ enum ProviderGlyph: String, Codable, Equatable {
     case copilot
     case kimi
     case kiro
+    case amp
     case minimax
     case ollama
     case ollamaLocal = "ollama-local"
@@ -102,6 +103,7 @@ enum ProviderGlyph: String, Codable, Equatable {
         case .copilot: return 0.96
         case .kimi:   return 0.95
         case .kiro:   return 0.95
+        case .amp:    return 1.0
         case .minimax: return 0.95
         case .ollama: return 0.95
         case .third:  return 1.0
@@ -133,7 +135,8 @@ enum ProviderGlyph: String, Codable, Equatable {
         case .devin, .qwen, .gemma, .meta, .deepseek, .mistral, .lmstudio,
              .qianwenAI, .systemCPU, .systemRAM, .systemGPU, .systemDisk, .systemNetwork,
              .systemBattery, .systemPower, .calendar, .todo, .stock, .weatherSun, .weatherMoon,
-             .weatherPartlyCloudy, .weatherPartlyCloudyNight, .weatherCloud, .weatherFog, .weatherRain, .weatherSnow, .weatherStorm: return []
+             .weatherPartlyCloudy, .weatherPartlyCloudyNight, .weatherCloud, .weatherFog, .weatherRain, .weatherSnow, .weatherStorm,
+             .amp: return []
         case .grok:   return GlyphOutline.grok
         case .opencode: return GlyphOutline.opencode
         case .commandcode: return GlyphOutline.commandcode

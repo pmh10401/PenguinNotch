@@ -42,6 +42,9 @@ fn language_from_windows_locale(name: &str) -> Option<&'static str> {
     if name.starts_with("ko") {
         return Some("ko");
     }
+    if name.starts_with("pt-br") {
+        return Some("pt-BR");
+    }
     if name.starts_with("ru") {
         return Some("ru");
     }
@@ -101,6 +104,22 @@ fn is_24h_pattern(pattern: &str) -> bool {
 pub fn tr(lang: &str, key: &str) -> &'static str {
     let l = if lang == "auto" { resolve_auto() } else { lang };
     match (l, key) {
+        ("pt-BR", "open_data") => "Abrir pasta de dados (logs / ícones)",
+        ("pt-BR", "install") => "Instalar hooks do Claude Code",
+        ("pt-BR", "uninstall") => "Desinstalar hooks",
+        ("pt-BR", "language") => "Idioma",
+        ("pt-BR", "lang_auto") => "Seguir o sistema",
+        ("pt-BR", "reset_pos") => "Redefinir posição da barra",
+        ("pt-BR", "quit") => "Sair",
+        ("pt-BR", "hooks_missing") => "Hooks não instalados: clique com o botão direito no ícone da bandeja → Instalar hooks do Claude Code (o aplicativo desktop usa fallback automático)",
+        ("pt-BR", "autostart") => "Iniciar com o Windows",
+        ("pt-BR", "refresh_all") => "Atualizar tudo",
+        ("pt-BR", "waiting") => "Aguardando a primeira leitura…",
+        ("pt-BR", "quit_app") => "Encerrar o PenguinNotch",
+        ("pt-BR", "settings") => "Ajustes…",
+        ("pt-BR", "refresh_now") => "Atualizar agora",
+        ("pt-BR", "open_host") => "Abrir o %@",
+        ("pt-BR", "keep_open") => "Manter aberto",
         ("zh", "install") => "安装 Claude Code 钩子",
         ("zh-Hant", "install") => "安裝 Claude Code 鉤子",
         ("zh", "uninstall") => "卸载钩子",
@@ -175,7 +194,7 @@ pub fn tr(lang: &str, key: &str) -> &'static str {
         ("zh", "waiting") => "正在等待首次读数…",
         ("zh-Hant", "waiting") => "正在等待首次讀數…",
         ("ja", "waiting") => "最初の読み取りを待っています…",
-        ("ko", "waiting") => "첫 번째 읽기를 기다리는 중…",
+        ("ko", "waiting") => "첫 측정값을 기다리는 중…",
         ("ru", "waiting") => "Ожидание первых данных…",
         ("uk", "waiting") => "Очікування першого показника…",
         (_, "waiting") => "Waiting for the first reading…",
@@ -199,14 +218,15 @@ pub fn tr(lang: &str, key: &str) -> &'static str {
         ("ja", "refresh_now") => "今すぐ更新",
         ("ru", "refresh_now") => "Обновить сейчас",
         ("uk", "refresh_now") => "Оновити зараз",
+        ("ko", "refresh_now") => "지금 새로 고침",
         (_, "refresh_now") => "Refresh now",
         ("zh", "open_host") => "打开 %@",
         ("zh-Hant", "open_host") => "開啟 %@",
         ("ja", "open_host") => "%@ を開く",
         ("ru", "open_host") => "Открыть %@",
         ("uk", "open_host") => "Відкрити %@",
+        ("ko", "open_host") => "%@ 열기",
         (_, "open_host") => "Open %@",
-        // The Mac's own catalog, but for Korean, which it does not have
         ("zh", "keep_open") => "保持展开",
         ("zh-Hant", "keep_open") => "保持展開",
         ("ja", "keep_open") => "開いたままにする",
@@ -327,6 +347,57 @@ mod tests {
         assert_eq!(language_from_windows_locale("zh-Hans-CN"), Some("zh"));
         assert_eq!(language_from_windows_locale("zh-SG"), Some("zh"));
         assert_eq!(language_from_windows_locale("zh"), Some("zh"));
+    }
+
+    const BRAZILIAN_PORTUGUESE_KEYS: &[(&str, &str)] = &[
+        ("settings", "Ajustes…"),
+        ("refresh_all", "Atualizar tudo"),
+        ("waiting", "Aguardando a primeira leitura…"),
+        ("quit_app", "Encerrar o PenguinNotch"),
+        ("refresh_now", "Atualizar agora"),
+        ("open_host", "Abrir o %@"),
+        ("keep_open", "Manter aberto"),
+        ("quit", "Sair"),
+        ("install", "Instalar hooks do Claude Code"),
+        ("uninstall", "Desinstalar hooks"),
+        ("language", "Idioma"),
+        ("lang_auto", "Seguir o sistema"),
+        ("reset_pos", "Redefinir posição da barra"),
+        ("autostart", "Iniciar com o Windows"),
+        ("open_data", "Abrir pasta de dados (logs / ícones)"),
+    ];
+
+    #[test]
+    fn brazilian_portuguese_translates_every_known_key() {
+        for (key, value) in BRAZILIAN_PORTUGUESE_KEYS {
+            assert_eq!(tr("pt-BR", key), *value, "missing Brazilian Portuguese translation for {key}");
+            assert_ne!(tr("pt-BR", key), "?", "unknown Brazilian Portuguese key {key}");
+        }
+    }
+
+    #[test]
+    fn brazilian_portuguese_locale_resolves() {
+        use super::language_from_windows_locale;
+        assert_eq!(language_from_windows_locale("pt-BR"), Some("pt-BR"));
+        assert_eq!(language_from_windows_locale("pt-br"), Some("pt-BR"));
+        assert_eq!(language_from_windows_locale("pt-PT"), None);
+    }
+
+    #[test]
+    fn korean_locale_and_tray_copy() {
+        assert_eq!(super::language_from_windows_locale("ko-KR"), Some("ko"));
+        assert_eq!(super::language_from_windows_locale("ko"), Some("ko"));
+        for (key, expected) in [
+            ("settings", "설정…"),
+            ("refresh_all", "모두 새로 고침"),
+            ("refresh_now", "지금 새로 고침"),
+            ("open_host", "%@ 열기"),
+            ("waiting", "첫 측정값을 기다리는 중…"),
+            ("keep_open", "열어 두기"),
+            ("install", "Claude Code 후크 설치"),
+        ] {
+            assert_eq!(tr("ko", key), expected);
+        }
     }
 
     #[test]

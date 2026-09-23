@@ -37,13 +37,16 @@ use tauri::{AppHandle, Emitter, Manager};
 /// and its tail on the left. `fitZoom` in ui/notch.html divides by the same width.
 pub const NOTCH_W: f64 = 360.0;
 /// Hand-bumped build tag, written to run.log at startup so a log can always be matched to the exe that wrote it.
-pub const BUILD: &str = "r31";
-pub const NOTCH_H: f64 = 520.0; // 300 clipped the card once it held three window blocks plus the session list; 460 clipped Antigravity's two model groups once the reading was stale and an agent was working
-/// Height of the upright window. Five cells make a 447 px pill; its fillets add 38.7 px at each end
-/// and the settings orb reaches 28.5 px past the far one, so 520 cut both fillets and hid the orb.
-/// Tall enough for the account rings plus the system meters. A shorter window
-/// clipped the pill once calendar, weather and the to-do list joined them.
+pub const BUILD: &str = "r32";
+/// The upright notch also holds system meters, calendar, weather and to-do cells.
 pub const NOTCH_UPRIGHT_H: f64 = 980.0;
+/// The flat notch needs this much width for its rings and height for its card.
+///
+/// Five cells make a 447 px pill; its fillets add 38.7 px at each end and the settings orb reaches
+/// 28.5 px past the far one, so 520 cut both fillets and hid the orb. The card wants the same room:
+/// 300 clipped it once it held three window blocks plus the session list, and 460 clipped
+/// Antigravity's two model groups once the reading was stale and an agent was working.
+pub const NOTCH_LONG: f64 = 650.0;
 
 pub struct AppState {
     pub store: Mutex<state::Store>,
@@ -278,15 +281,16 @@ static NOTCH_INSETS: Mutex<[f64; 4]> = Mutex::new([0.0; 4]);
 /// The notch window's logical size for an edge.
 ///
 /// Upright on the left and right, the pill is a column and 360 wide is plenty; its length is what
-/// needs room, hence `NOTCH_UPRIGHT_H`. Lying flat on the top and bottom it is a row: six 44 px
-/// rings, their gaps, the padding, both fillets and the settings orb come to about 504 px, so a
-/// 360 px window clipped the pill once a fifth provider was on. The flat window keeps the full
-/// height too, for the hover card that opens below or above the pill.
+/// needs room, hence `NOTCH_LONG`. Lying flat on the top and bottom it is a row: six 44 px rings,
+/// their gaps, the padding, both fillets and the settings orb come to about 504 px, so a 360 px
+/// window clipped the pill once a fifth provider was on. It is square, because the card opens above
+/// or below the pill there instead of beside it, and so needs the pill's own depth on top of its
+/// height — at 520 a stale Antigravity card scrolled.
 pub fn notch_window_size(edge: &str) -> (f64, f64) {
     if config::edge_is_vertical(edge) {
         (NOTCH_W, NOTCH_UPRIGHT_H)
     } else {
-        (NOTCH_UPRIGHT_H, NOTCH_H)
+        (NOTCH_LONG, NOTCH_LONG)
     }
 }
 
@@ -375,11 +379,18 @@ const WORK_AREA_POLL_MS: u64 = 1000;
 fn start_work_area_watch(app: AppHandle) {
     std::thread::spawn(move || {
         let mut last = target_screen(&app).map(|s| s.work);
+        let mut last_theme = resolved_theme(&app);
         loop {
             std::thread::sleep(std::time::Duration::from_millis(WORK_AREA_POLL_MS));
             // Mid-drag the notch is following the pointer, and placing it again would fight that.
             if DRAGGING.load(std::sync::atomic::Ordering::SeqCst) {
                 continue;
+            }
+            let system = resolved_theme(&app);
+            if system != last_theme {
+                applog(&format!("appearance changed: {last_theme} -> {system}"));
+                last_theme = system;
+                apply_theme(&app);
             }
             let now = target_screen(&app).map(|s| s.work);
             if now == last {
@@ -660,9 +671,6 @@ fn claude_sign_in() -> Result<(), String> { claude_auth::start_login() }
 
 #[tauri::command]
 fn get_claude_auth() -> claude_auth::AuthState { claude_auth::state() }
-
-#[tauri::command]
-fn refresh_claude_usage(app: AppHandle) -> bool { refresh_provider(&app, "claude") }
 
 /// Asks one provider to read again, and says whether a reading is on its way. Claude's rate-limit
 /// wait stands, as on the Mac: asking early spends a request and can double the wait.
@@ -1062,6 +1070,90 @@ fn set_scale(app: AppHandle, scale: f64) -> f64 {
         c.scale
     };
     place_notch(&app);
+    value
+}
+
+/// The saved choice as a window theme. `None` is "follow Windows", which is also what an
+/// unreadable value falls back to, and what a window gets when it is built without asking.
+pub fn theme_choice(app: &AppHandle) -> Option<tauri::Theme> {
+    let st = app.state::<AppState>();
+    let c = st.cfg.lock().unwrap();
+    match c.theme.as_str() {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    }
+}
+
+/// Sets the appearance on the document before the page's own scripts run, so a window built for one
+/// carry, or opened on a dark Windows under a light choice, never paints the other one first. The
+/// element may not exist yet when this runs, which is the point of the retry.
+pub fn theme_script(theme: &str) -> String {
+    format!(
+        "window.__CN_THEME__={theme:?};(function a(){{const d=document.documentElement;if(d){{d.dataset.theme=window.__CN_THEME__;}}else{{document.addEventListener('readystatechange',a,{{once:true}});}}}})();"
+    )
+}
+
+/// Which of the two appearances is actually on: the choice, or what Windows is set to when it is
+/// "system". Read from the notch window, whose theme tao keeps in step with Windows.
+pub fn resolved_theme(app: &AppHandle) -> &'static str {
+    match theme_choice(app) {
+        Some(tauri::Theme::Light) => "light",
+        Some(tauri::Theme::Dark) => "dark",
+        _ => match app.get_webview_window("notch").and_then(|w| w.theme().ok()) {
+            Some(tauri::Theme::Light) => "light",
+            _ => "dark",
+        },
+    }
+}
+
+/// The pages switch their palette on this, rather than on `prefers-color-scheme`: correcting a live
+/// window's theme does not reliably reach WebView2's own scheme, which left a dark Settings page
+/// under light Mica, unreadable. Told plainly instead.
+#[tauri::command]
+fn get_theme_resolved(app: AppHandle) -> String {
+    resolved_theme(&app).to_string()
+}
+
+/// Light, Dark, or whatever Windows is set to.
+///
+/// One call does both pages: WebView2 turns a window's theme into `prefers-color-scheme`, which is
+/// what the pages' palettes are written against. `None` hands the choice back to Windows. Settings
+/// also sits on Mica, which follows the system on its own, so it is asked for the matching variant
+/// rather than left dark under a light page.
+pub fn apply_theme(app: &AppHandle) {
+    let theme = theme_choice(app);
+    for label in ["notch", "settings", dropzones::LABEL] {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.set_theme(theme);
+        }
+    }
+    settings_window::follow_theme(app, theme);
+    let _ = app.emit("theme_resolved", resolved_theme(app));
+}
+
+/// Which appearance the pages draw in.
+#[tauri::command]
+fn get_theme(app: AppHandle) -> String {
+    let st = app.state::<AppState>();
+    let c = st.cfg.lock().unwrap();
+    c.theme.clone()
+}
+
+/// Unknown values are refused rather than stored, as the other rows do.
+#[tauri::command]
+fn set_theme(app: AppHandle, theme: String) -> String {
+    let value = {
+        let st = app.state::<AppState>();
+        let mut c = st.cfg.lock().unwrap();
+        if ["system", "light", "dark"].contains(&theme.as_str()) {
+            c.theme = theme;
+            config::save(&c);
+        }
+        c.theme.clone()
+    };
+    apply_theme(&app);
+    let _ = app.emit("theme", &value);
     value
 }
 
@@ -1702,7 +1794,6 @@ fn main() {
             get_usage,
             claude_sign_in,
             get_claude_auth,
-            refresh_claude_usage,
             updater::get_update_state,
             updater::check_for_update,
             updater::install_update,
@@ -1728,6 +1819,9 @@ fn main() {
             set_scale,
             get_weekly_ring,
             set_weekly_ring,
+            get_theme,
+            set_theme,
+            get_theme_resolved,
             get_tray_options,
             get_notch_slots,
             set_notch_slots,
@@ -1767,6 +1861,9 @@ fn main() {
         .setup(move |app| {
             let handle = app.handle().clone();
             place_notch(&handle);
+            // Before the notch is shown: a window shown on the system appearance and corrected
+            // after paints the wrong one for a frame, which is a black flash under a light choice
+            apply_theme(&handle);
             if let Some(w) = handle.get_webview_window("notch") {
                 let _ = w.show();
             }
@@ -1831,7 +1928,7 @@ fn main() {
 mod tests {
     use super::{
         cursor_in_hot, notch_window_size, provider_page, ring_window, work_insets, Screen, HOT_PAD,
-        NOTCH_H, NOTCH_W, TRAY_PROVIDER_IDS,
+        NOTCH_W, TRAY_PROVIDER_IDS,
     };
     use crate::usage::LimitWindow;
 
@@ -1903,11 +2000,85 @@ mod tests {
         for edge in ["top", "bottom"] {
             let (w, h) = notch_window_size(edge);
             assert!(w >= pill, "{edge}: {w} px cannot hold a {pill} px pill");
-            assert_eq!(h, NOTCH_H, "{edge}: the hover card still needs the full height");
+            // `#card`'s max-height on a flat edge is the window less 150 px for the pill, the 30 px
+            // gap and the margins, and the tallest card the page has measured is 400 px.
+            assert!(h - 150.0 >= 400.0, "{edge}: {h} px leaves the card too little room");
         }
         for edge in ["left", "right"] {
             assert_eq!(notch_window_size(edge), (NOTCH_W, super::NOTCH_UPRIGHT_H));
         }
+    }
+
+    /// `fitZoom` treats a window wider than the page's design width as a DPI disagreement and zooms
+    /// the layout to close the gap, so a design width left behind when the window is widened zooms
+    /// the whole notch instead — and `placeCard`, which writes unzoomed styles from zoomed rects,
+    /// then puts the card at the wrong place entirely.
+    #[test]
+    fn the_pages_design_widths_are_the_window_widths() {
+        let page = include_str!("../ui/notch.html");
+        let line = page
+            .lines()
+            .find(|l| l.trim_start().starts_with("const DESIGN_W_UPRIGHT"))
+            .expect("notch.html declares its design widths on one line");
+        let width_of = |key: &str| -> f64 {
+            let after = line.split(key).nth(1).unwrap_or_else(|| panic!("{key} missing"));
+            after
+                .trim_start_matches('=')
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == '.')
+                .collect::<String>()
+                .parse()
+                .unwrap_or_else(|_| panic!("{key} is not a number"))
+        };
+        assert_eq!(width_of("DESIGN_W_UPRIGHT"), notch_window_size("right").0);
+        assert_eq!(width_of("DESIGN_W_FLAT"), notch_window_size("top").0);
+    }
+
+    /// A name declared in one palette and not the other keeps its dark value under a light page —
+    /// black ink on a black surface, and nothing in the build would say so, since nothing reads the
+    /// page. The two blocks are found by the ink they declare; `notch.html`'s third `:root` holds
+    /// ring metrics rather than colours.
+    #[test]
+    fn both_palettes_declare_the_same_names() {
+        let page = include_str!("../ui/notch.html");
+        let mut palettes: Vec<Vec<String>> = Vec::new();
+        let mut rest = page;
+        while let Some(at) = rest.find(":root") {
+            let after = &rest[at..];
+            let Some(open) = after.find('{') else { break };
+            let body = &after[open + 1..];
+            let end = body.find('}').expect("a :root block closes");
+            // Comments first: a `;` inside one splits a declaration in half and loses the name
+            // after it, which fails this test for a palette that is perfectly fine.
+            let mut declarations = String::new();
+            let mut left = &body[..end];
+            while let Some(open) = left.find("/*") {
+                declarations.push_str(&left[..open]);
+                match left[open..].find("*/") {
+                    Some(close) => left = &left[open + close + 2..],
+                    None => {
+                        left = "";
+                        break;
+                    }
+                }
+            }
+            declarations.push_str(left);
+            let mut names: Vec<String> = declarations
+                .split(';')
+                .filter_map(|decl| decl.split(':').next())
+                .map(str::trim)
+                .filter(|name| name.starts_with("--"))
+                .map(str::to_string)
+                .collect();
+            names.sort_unstable();
+            if names.iter().any(|name| name == "--ink") {
+                palettes.push(names);
+            }
+            rest = &body[end..];
+        }
+        assert_eq!(palettes.len(), 2, "one palette per appearance, dark and light");
+        assert_eq!(palettes[0], palettes[1], "the two palettes declare different names");
+        assert!(palettes[0].len() >= 15, "{:?} is too short to be the palette", palettes[0]);
     }
 
     /// Four triangles about the centre, so every point on the screen belongs to exactly one edge.

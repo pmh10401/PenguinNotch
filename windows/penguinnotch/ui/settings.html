@@ -17,21 +17,21 @@
     --btn:rgba(255,255,255,.10); --btn-hover:rgba(255,255,255,.16);
     --danger-bg:rgba(255,99,99,.14); --danger:#ff8a8a;
   }
-  @media (prefers-color-scheme: light){
-    :root{
+  /* Rust says which appearance this is (get_theme_resolved), so a forced Light or Dark lands here
+     whatever Windows is set to — WebView2's own scheme does not follow a live theme change. */
+  :root[data-theme="light"]{
       --text:#1d1d1f; --text2:rgba(60,60,67,.70); --text3:rgba(60,60,67,.45);
       --pane:rgba(255,255,255,.50); --side:rgba(0,0,0,.06); --group:rgba(255,255,255,.72);
       --line:rgba(0,0,0,.07); --hi:rgba(255,255,255,.80); --sep:rgba(0,0,0,.07);
       --seg-bg:rgba(0,0,0,.06); --hover:rgba(0,0,0,.04); --sel-soft:rgba(0,0,0,.05);
       --btn:rgba(0,0,0,.05); --btn-hover:rgba(0,0,0,.09);
       --danger-bg:rgba(196,43,28,.10); --danger:#c42b1c;
-    }
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:transparent;overflow:hidden;user-select:none}
   body{font:13.5px/1.35 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:var(--text)}
   body.solid{--pane:#3d3d40;--side:#1f2022;--group:#48484b;--hi:transparent;background:#2b2b2e}
-  @media (prefers-color-scheme: light){ body.solid{--pane:#f0f0f2;--side:#e2e2e6;--group:#ffffff;background:#f0f0f2} }
+  :root[data-theme="light"] body.solid{--pane:#f0f0f2;--side:#e2e2e6;--group:#ffffff;background:#f0f0f2}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   button{font:inherit;color:inherit}
   html[lang="ko"] body{word-break:keep-all}
@@ -157,6 +157,8 @@
           <div class="item cap" id="cap-show" data-dynamic></div>
           <div class="item"><span>Size</span><span class="seg" id="seg-size"><button data-v="0.8">Small</button><button data-v="1">Medium</button><button data-v="1.25">Large</button></span></div>
           <div class="item cap" id="cap-size" data-dynamic></div>
+          <div class="item"><span>Theme</span><span class="seg" id="seg-theme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></span></div>
+          <div class="item cap" id="cap-theme" data-dynamic></div>
           <div class="item"><span>Weekly ring</span><span class="seg" id="seg-weekly"><button data-v="off">Off</button><button data-v="inside">Inside</button><button data-v="outside">Outside</button></span></div>
           <div class="item cap" id="cap-weekly" data-dynamic></div>
           <div class="item"><span>Edge</span><span class="seg" id="seg-edge"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="top">Top</button><button data-v="bottom">Bottom</button></span></div>
@@ -180,6 +182,7 @@
             <select id="lang" aria-label="Language">
               <option value="auto">Follow system</option>
               <option value="en">English</option>
+              <option value="pt-BR">Português (Brasil)</option>
               <option value="zh">简体中文</option>
               <option value="zh-Hant">繁體中文</option>
               <option value="ja">&#26085;&#26412;&#35486;</option>
@@ -243,7 +246,112 @@ function esc(s){
    Strings shared with the Mac take the Mac catalog's translations; strings kept from the previous
    Windows page keep the Russian #141 gave them. `applyStaticUi()` matches a text node exactly, so
    rewording any string here means changing its key in every table. */
+const PT_BR_STATIC = {
+  'Theme':'Tema',
+  'System':'Do sistema',
+  'Light':'Clara',
+  'Dark':'Escura',
+  'The notch and this window follow the Windows app colour.':'A cápsula e esta janela seguem a cor dos aplicativos do Windows.',
+  'A light notch and card, whatever Windows is set to.':'Cápsula e cartão claros, independentemente da configuração do Windows.',
+  'The dark notch, whatever Windows is set to.':'A cápsula escura, independentemente da configuração do Windows.',
+  'Updates':'Atualizações',
+  'Check for updates':'Verificar atualizações',
+  'Update':'Atualizar',
+  'Checking…':'Verificando…',
+  'Installing…':'Instalando…',
+  'Up to date':'Atualizado',
+  'Could not check for updates':'Não foi possível verificar atualizações',
+  'PenguinNotch looks for a new version shortly after it starts, and can install it for you. The download comes from GitHub, and its signature is checked before anything is run.':'O PenguinNotch procura uma nova versão pouco depois de iniciar e pode instalá-la para você. O download vem do GitHub e a assinatura é verificada antes de qualquer execução.',
+  'Settings sections':'Seções das configurações',
+  'Close':'Fechar',
+  'Accounts':'Contas',
+  'Appearance':'Aparência',
+  'General':'Geral',
+  'Quit PenguinNotch':'Encerrar o PenguinNotch',
+  'Connected':'Conectado',
+  'Not connected':'Não conectado',
+  'These have no ring to place. Switch one on and it joins the end of the list above.':'Estes não têm anel para posicionar. Ative um e ele entra no fim da lista acima.',
+  'One provider always stays ticked, so the pill is never empty.':'Pelo menos um provedor permanece selecionado para que a cápsula nunca fique vazia.',
+  'At least one provider stays on the notch':'Pelo menos um provedor deve permanecer no notch',
+  'Notch reads':'Leitura do notch',
+  'Model data':'Dados do modelo',
+  'Automatic':'Automático',
+  '5-Hour Limit':'Limite de 5 horas',
+  'Weekly Limit':'Limite semanal',
+  'Gemini Models':'Modelos Gemini',
+  'Claude and GPT models':'Modelos Claude e GPT',
+  'Let Claude Code notify PenguinNotch':'Permitir que o Claude Code notifique o PenguinNotch',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends PenguinNotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'Ao ativar esta opção, algumas linhas são adicionadas ao arquivo de configurações do Claude Code para que ele envie uma mensagem curta ao PenguinNotch quando uma sessão começa, quando está trabalhando, quando aguarda sua resposta e quando termina. Isso faz o anel girar e o anel âmbar pulsar.',
+  'Notch':'Notch',
+  'Show':'Exibição',
+  'Always show':'Sempre exibir',
+  'Hide':'Ocultar',
+  'Size':'Tamanho',
+  'Small':'Pequeno',
+  'Medium':'Médio',
+  'Large':'Grande',
+  'Takes the least room on the edge. Readable, but not from across the desk.':'Ocupa o mínimo de espaço na borda. Legível, mas não do outro lado da mesa.',
+  'The size the notch was drawn at.':'O tamanho com que o notch foi desenhado.',
+  'Easier to read at a glance, and harder to ignore.':'Mais fácil de ler de relance, e mais difícil de ignorar.',
+  'Weekly ring':'Anel semanal',
+  'Off':'Desativado',
+  'Inside':'Dentro',
+  'Outside':'Fora',
+  'One ring per provider, showing the headline limit. The weekly allowance stays in the hover card.':'Um anel por provedor, mostrando o limite principal. A cota semanal permanece no cartão ao passar o cursor.',
+  'A thinner ring for the weekly limit, drawn inside the main one. It shares the gap with the working indicator.':'Um anel mais fino para o limite semanal, desenhado dentro do principal. Ele compartilha o espaço com o indicador de atividade.',
+  'A thinner ring for the weekly limit, drawn around the main one, in the margin between the ring and the notch edge.':'Um anel mais fino para o limite semanal, desenhado ao redor do principal, no espaço entre o anel e a borda do notch.',
+  'Show on hover':'Exibir ao passar o cursor',
+  'A small pill at the screen edge that opens when you reach it.':'Uma pequena cápsula na borda da tela que abre quando você chega nela.',
+  'The notch stays open with every reading visible.':'O notch fica aberto com todas as leituras visíveis.',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; PenguinNotch keeps counting your usage either way.':'A cápsula preta na borda direita da tela, com um anel para cada ferramenta. Ao desativá-la, a cápsula desaparece; o PenguinNotch continua contabilizando seu uso de qualquer forma.',
+  'Recentre':'Recentralizar',
+  'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'Segure Alt e arraste o notch para movê-lo ao longo da borda. Cada borda lembra onde você o deixou. Recentralizar o coloca novamente no meio da borda atual ou na borda direita da tela principal se a tela anterior tiver sido desconectada.',
+  'Edge':'Borda',
+  'Left':'Esquerda',
+  'Right':'Direita',
+  'Top':'Superior',
+  'Bottom':'Inferior',
+  'Stands upright on the left-hand edge, with the card opening to its right.':'Fica na vertical na borda esquerda, com o cartão abrindo para a direita.',
+  'Stands upright on the right-hand edge, the side it was drawn for.':'Fica na vertical na borda direita, para a qual foi projetado.',
+  'Lies flat along the top edge, with the card opening below it.':'Fica na horizontal na borda superior, com o cartão abrindo abaixo.',
+  'Lies flat along the bottom edge, with the card opening above it.':'Fica na horizontal na borda inferior, com o cartão abrindo acima.',
+  'Screen':'Tela',
+  'Main':'Principal',
+  'Which screen the notch lives on.':'Em qual tela o notch será exibido.',
+  'this screen cannot be remembered by name':'esta tela não pode ser lembrada pelo nome',
+  'Show move handle':'Mostrar alça de movimento',
+  'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'O arco acima do notch. Segure-o para levar o notch a outra borda — a opção Borda acima faz o mesmo.',
+  'The notch is back in the middle':'O notch voltou para o centro',
+  'App':'App',
+  'App icon':'Ícone do app',
+  'System tray':'Bandeja do sistema',
+  'Neither':'Nenhum',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits PenguinNotch.':'O pequeno ícone próximo ao relógio. Clique com o botão direito para abrir esta janela, atualizar as leituras ou sair do PenguinNotch.',
+  'No icon in the system tray. Open PenguinNotch again from the Start menu to bring these settings back.':'Nenhum ícone na bandeja do sistema. Abra o PenguinNotch novamente pelo menu Iniciar para acessar estas configurações.',
+  'Held on: the notch is hidden, so this icon is the only way left to reach PenguinNotch. Switch the notch back on first if you want to hide it.':'Mantido ativado: o notch está oculto, então este ícone é a única forma de acessar o PenguinNotch. Ative o notch primeiro se quiser ocultar o ícone.',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit PenguinNotch, so PenguinNotch will not let both of them be switched off at the same time.':'O ícone da barra de tarefas foi mantido ativado. Com o notch oculto, ele é a única forma de abrir esta janela ou sair do PenguinNotch; por isso, os dois não podem ser desativados ao mesmo tempo.',
+  'Language':'Idioma',
+  'Follow system':'Seguir o sistema',
+  'English':'English',
+  'Русский':'Русский',
+  'Sets the language used by PenguinNotch. “Follow system” uses the language Windows itself is set to.':'Define o idioma usado pelo PenguinNotch. “Seguir o sistema” usa o idioma configurado no próprio Windows.',
+  'Open PenguinNotch at login':'Abrir o PenguinNotch ao iniciar a sessão',
+  'PenguinNotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open PenguinNotch yourself.':'O PenguinNotch abre automaticamente sempre que você entra neste computador e permanece em segundo plano até uma sessão de programação começar. Se desativar esta opção, será necessário abrir o PenguinNotch manualmente.',
+  'Version':'Versão',
+  'Data folder':'Pasta de dados',
+  'Open folder':'Abrir pasta',
+  'Everything PenguinNotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Tudo o que o PenguinNotch armazena fica em uma única pasta: suas configurações, o arquivo de log e a pasta "glyphs", onde você pode colocar seus próprios ícones. Abre no Explorador de Arquivos.',
+  'App designed and developed by':'App projetado e desenvolvido por',
+  'Saved':'Salvo'
+};
 const RU_STATIC = {
+  'Theme':'Тема',
+  'System':'Системная',
+  'Light':'Светлая',
+  'Dark':'Тёмная',
+  'The notch and this window follow the Windows app colour.':'Панель и это окно следуют цвету приложений Windows.',
+  'A light notch and card, whatever Windows is set to.':'Светлая панель и карточка, независимо от настроек Windows.',
+  'The dark notch, whatever Windows is set to.':'Тёмная панель, независимо от настроек Windows.',
   'Updates':'Обновления',
   'Check for updates':'Проверить обновления',
   'Update':'Обновить',
@@ -300,6 +408,13 @@ const RU_STATIC = {
   'App designed and developed by':'Приложение разработал', 'Saved':'Сохранено'
 };
 const ZH_STATIC = {
+  'Theme':'主题',
+  'System':'跟随系统',
+  'Light':'浅色',
+  'Dark':'深色',
+  'The notch and this window follow the Windows app colour.':'刘海和此窗口跟随 Windows 的应用颜色。',
+  'A light notch and card, whatever Windows is set to.':'浅色的刘海和卡片，无论 Windows 如何设置。',
+  'The dark notch, whatever Windows is set to.':'深色的刘海，无论 Windows 如何设置。',
   'Updates':'更新',
   'Check for updates':'检查更新',
   'Update':'更新',
@@ -387,6 +502,13 @@ const ZH_STATIC = {
   'this screen cannot be remembered by name':'这块屏幕无法按名称记住'
 };
 const ZH_HANT_STATIC = {
+  'Theme':'主題',
+  'System':'跟隨系統',
+  'Light':'淺色',
+  'Dark':'深色',
+  'The notch and this window follow the Windows app colour.':'瀏海和此視窗跟隨 Windows 的應用程式色彩。',
+  'A light notch and card, whatever Windows is set to.':'淺色的瀏海和卡片，無論 Windows 如何設定。',
+  'The dark notch, whatever Windows is set to.':'深色的瀏海，無論 Windows 如何設定。',
   'Updates':'更新',
   'Check for updates':'檢查更新',
   'Update':'更新',
@@ -474,6 +596,13 @@ const ZH_HANT_STATIC = {
   'this screen cannot be remembered by name':'這塊螢幕無法按名稱記住'
 };
 const JA_STATIC = {
+  'Theme':'テーマ',
+  'System':'システムに合わせる',
+  'Light':'ライト',
+  'Dark':'ダーク',
+  'The notch and this window follow the Windows app colour.':'ノッチとこのウィンドウは Windows のアプリの色に従います。',
+  'A light notch and card, whatever Windows is set to.':'Windows の設定にかかわらず、ライトのノッチとカードになります。',
+  'The dark notch, whatever Windows is set to.':'Windows の設定にかかわらず、ダークのノッチになります。',
   'Updates':'アップデート',
   'Check for updates':'アップデートを確認',
   'Update':'アップデート',
@@ -548,6 +677,13 @@ const JA_STATIC = {
   'Model data':'モデルのデータ'
 };
 const KO_STATIC = {
+  'Theme':'테마',
+  'System':'시스템 따르기',
+  'Light':'라이트',
+  'Dark':'다크',
+  'The notch and this window follow the Windows app colour.':'노치와 이 창이 Windows 앱 색상을 따릅니다.',
+  'A light notch and card, whatever Windows is set to.':'Windows 설정과 관계없이 라이트 노치와 카드를 사용합니다.',
+  'The dark notch, whatever Windows is set to.':'Windows 설정과 관계없이 다크 노치를 사용합니다.',
   'Updates':'업데이트',
   'Check for updates':'업데이트 확인',
   'Update':'업데이트',
@@ -579,21 +715,21 @@ const KO_STATIC = {
   'Hide':'숨기기',
   'Size':'크기',
   'Small':'작게',
-  'Medium':'보통',
+  'Medium':'중간',
   'Large':'크게',
-  'Takes the least room on the edge. Readable, but not from across the desk.':'가장자리에 차지하는 공간이 가장 적습니다. 읽을 수는 있지만 책상 반대편에서는 보이지 않습니다.',
-  'The size the notch was drawn at.':'노치가 처음 디자인된 기본 크기입니다.',
-  'Easier to read at a glance, and harder to ignore.':'한눈에 읽기 쉽고, 무시하고 지나치기 어렵습니다.',
+  'Takes the least room on the edge. Readable, but not from across the desk.':'가장자리에서 차지하는 공간이 가장 작습니다. 가까이에서는 읽기 쉽지만 멀리서는 잘 보이지 않습니다.',
+  'The size the notch was drawn at.':'노치의 원래 디자인 크기입니다.',
+  'Easier to read at a glance, and harder to ignore.':'한눈에 읽기 쉽고 눈에 잘 띕니다.',
   'Weekly ring':'주간 링',
-  'Off':'꺼짐',
+  'Off':'끄기',
   'Inside':'안쪽',
   'Outside':'바깥쪽',
-  'One ring per provider, showing the headline limit. The weekly allowance stays in the hover card.':'제공자당 하나의 링으로, 주요 제한을 표시합니다. 주간 허용량은 호버 카드에 유지됩니다.',
-  'A thinner ring for the weekly limit, drawn inside the main one. It shares the gap with the working indicator.':'주간 제한을 나타내는 더 얇은 링으로, 메인 링 안쪽에 그려집니다. 작동 표시기와 간격을 공유합니다.',
-  'A thinner ring for the weekly limit, drawn around the main one, in the margin between the ring and the notch edge.':'주간 제한을 나타내는 더 얇은 링으로, 메인 링 주위에 그려지며 링과 노치 가장자리 사이의 여백에 위치합니다.',
+  'One ring per provider, showing the headline limit. The weekly allowance stays in the hover card.':'제공자당 하나의 링으로 주요 한도를 표시합니다. 주간 할당량은 호버 카드에 표시합니다.',
+  'A thinner ring for the weekly limit, drawn inside the main one. It shares the gap with the working indicator.':'기본 링 안쪽에 주간 한도를 얇은 링으로 표시합니다. 작업 중 표시와 같은 간격을 사용합니다.',
+  'A thinner ring for the weekly limit, drawn around the main one, in the margin between the ring and the notch edge.':'기본 링과 노치 가장자리 사이의 여백에 주간 한도를 얇은 링으로 표시합니다.',
   'Show on hover':'마우스를 올리면 표시',
-  'A small pill at the screen edge that opens when you reach it.':'화면 가장자리의 작은 필로, 포인터를 가져가면 열립니다.',
-  'The notch stays open with every reading visible.':'노치가 열려 있고 모든 읽기 값이 표시됩니다.',
+  'A small pill at the screen edge that opens when you reach it.':'화면 가장자리의 작은 필에 포인터를 가져가면 펼쳐집니다.',
+  'The notch stays open with every reading visible.':'노치를 열어 두고 모든 측정값을 표시합니다.',
   'Edge':'가장자리',
   'Left':'왼쪽',
   'Right':'오른쪽',
@@ -631,9 +767,20 @@ const KO_STATIC = {
   'System tray':'시스템 트레이',
   'Close':'닫기',
   'No icon in the system tray. Open PenguinNotch again from the Start menu to bring these settings back.':'시스템 트레이에 아이콘이 없습니다. 이 설정을 다시 가져오려면 시작 메뉴에서 PenguinNotch를 다시 여세요.',
-  'Model data':'모델 데이터'
+  'Model data':'모델 데이터',
+  'English':'English',
+  'Show move handle':'이동 핸들 표시',
+  'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'노치 위의 호입니다. 길게 누르면 노치를 다른 가장자리로 옮길 수 있습니다. 위의 ‘가장자리’ 설정으로도 같은 작업을 할 수 있습니다.',
+  'Русский':'Русский'
 };
 const UK_STATIC = {
+  'Theme':'Тема',
+  'System':'Системна',
+  'Light':'Світла',
+  'Dark':'Темна',
+  'The notch and this window follow the Windows app colour.':'Виріз і це вікно слідують кольору застосунків Windows.',
+  'A light notch and card, whatever Windows is set to.':'Світлий виріз і картка, незалежно від налаштувань Windows.',
+  'The dark notch, whatever Windows is set to.':'Темний виріз, незалежно від налаштувань Windows.',
   'Updates':'Оновлення',
   'Check for updates':'Перевірити оновлення',
   'Update':'Оновити',
@@ -692,10 +839,11 @@ const UK_STATIC = {
   'Lies flat along the bottom edge, with the card opening above it.':'Лежить уздовж нижнього краю, картка відкривається над ним.',
   'Which screen the notch lives on.':'На якому екрані живе виріз.',
   'this screen cannot be remembered by name':'цей екран неможливо запамʼятати за назвою',
+  'Show move handle':'Показувати маркер переміщення',
+  'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'Дуга над вирізом. Утримуйте її, щоб перенести виріз на інший край — те саме робить «Край» вище.',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'Утримуйте Alt і перетягніть виріз, щоб посунути його вздовж краю. Кожен край памʼятає останнє положення. Кнопка «Центрувати» повертає його на середину поточного краю або на правий край основного екрана, якщо екран, на якому він був, відʼєднано.',
   'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; PenguinNotch keeps counting your usage either way.':'Чорна панель біля правого краю екрана, по кільцю на кожен інструмент. Якщо вимкнути, панель зникне — але використання PenguinNotch рахує в будь-якому разі.',
   'Recentre':'Центрувати',
-  'The pill can be dragged up and down the right-hand edge. If it has ended up somewhere you cannot see it — off the bottom of a screen you have unplugged, say — this drops it back into the middle of the edge.':'Панель можна перетягувати вгору й вниз уздовж правого краю. Якщо вона опинилась там, де ви її не бачите (скажімо, нижче за край екрана, який ви відʼєднали), ця кнопка повертає її на середину краю.',
   'The notch is back in the middle':'Виріз повернувся в центр',
   'App':'Застосунок',
   'App icon':'Значок застосунку',
@@ -719,14 +867,15 @@ const UK_STATIC = {
   'No icon in the system tray. Open PenguinNotch again from the Start menu to bring these settings back.':'Значка в області сповіщень немає. Відкрийте PenguinNotch знову з меню «Пуск», щоб повернути ці налаштування.',
   'Model data':'Дані моделі'
 };
-const STATIC_TEXT = { ru: RU_STATIC, zh: ZH_STATIC, 'zh-Hant': ZH_HANT_STATIC, ja: JA_STATIC, ko: KO_STATIC, uk: UK_STATIC };
+const STATIC_TEXT = { 'pt-BR': PT_BR_STATIC, ru: RU_STATIC, zh: ZH_STATIC, 'zh-Hant': ZH_HANT_STATIC, ja: JA_STATIC, ko: KO_STATIC, uk: UK_STATIC };
 const STATUS_TEXT = {
   en:{ ok:'', stale:'last reading is old', needsAuth:'not signed in', absent:'not installed', none:'nothing to report', error:'not reachable' },
+  'pt-BR':{ ok:'', stale:'última leitura desatualizada', needsAuth:'não autenticado', absent:'não instalado', none:'nada para exibir', error:'indisponível' },
   ru:{ ok:'', stale:'данные устарели', needsAuth:'не выполнен вход', absent:'не установлен', none:'нет данных', error:'недоступен' },
   zh:{ ok:'', stale:'上次读数已过期', needsAuth:'未登录', absent:'未安装', none:'暂无报告', error:'无法连接' },
   'zh-Hant':{ ok:'', stale:'上次讀數已過期', needsAuth:'未登入', absent:'未安裝', none:'暫無報告', error:'無法連線' },
   ja:{ ok:'', stale:'最後の読み取りが古いです', needsAuth:'サインインしていません', absent:'インストールされていません', none:'報告するものがありません', error:'到達できません' },
-  ko:{ ok:'', stale:'마지막 읽기가 오래되었습니다', needsAuth:'로그인되지 않음', absent:'설치되지 않음', none:'보고할 내용 없음', error:'연결할 수 없음' },
+  ko:{ ok:'', stale:'마지막 측정값이 오래되었습니다', needsAuth:'로그인되지 않음', absent:'설치되지 않음', none:'보고할 내용 없음', error:'연결할 수 없음' },
   uk:{ ok:'', stale:'останній показник застарів', needsAuth:'не виконано вхід', absent:'не встановлено', none:'немає даних', error:'недоступний' }
 };
 let uiLang = 'en';
@@ -759,9 +908,12 @@ function setUiLanguage(lang){
   let pick = lang || '';
   if (pick === 'auto') {
     const nav = (navigator.language || '').toLowerCase();
-    if (nav.startsWith('zh-tw') || nav.startsWith('zh-hant') || nav.startsWith('zh-hk') || nav.startsWith('zh-mo')) pick = 'zh-Hant';
+    if (nav.startsWith('pt-br')) pick = 'pt-BR';
+    else if (nav.startsWith('zh-tw') || nav.startsWith('zh-hant') || nav.startsWith('zh-hk') || nav.startsWith('zh-mo')) pick = 'zh-Hant';
     else if (nav.startsWith('zh')) pick = 'zh';
     else pick = nav.slice(0, 2);
+  } else if (pick.toLowerCase() === 'pt-br') {
+    pick = 'pt-BR';
   } else if (pick.toLowerCase() === 'zh-hant') {
     pick = 'zh-Hant';
   }
@@ -797,13 +949,19 @@ function toast(msg){
    used the way Windows 11's own controls use it: Accent Light 2 with black text in dark mode, Accent
    Dark 1 with white text in light mode. Both are asked for again whenever the window comes forward,
    so an accent changed in Settings shows up without reopening this one. */
-const dark = matchMedia('(prefers-color-scheme: dark)');
+/* Which appearance is on: the attribute Rust's answer sets, not the system scheme, so a forced
+   Light on a dark Windows picks the accent that belongs with the page it is drawn on. */
+const isDark = () => document.documentElement.dataset.theme !== 'light';
+function applyTheme(name){
+  document.documentElement.dataset.theme = name === 'light' ? 'light' : 'dark';
+  applyAccent();
+}
 let palette = null;
 function applyAccent(){
   const root = document.documentElement.style;
   if(!palette){ root.removeProperty('--accent'); root.removeProperty('--on-accent'); return; }
-  root.setProperty('--accent', dark.matches ? palette[1] : palette[4]);
-  root.setProperty('--on-accent', dark.matches ? '#000000' : '#ffffff');
+  root.setProperty('--accent', isDark() ? palette[1] : palette[4]);
+  root.setProperty('--on-accent', isDark() ? '#000000' : '#ffffff');
 }
 function loadLook(){
   call('get_system_look', undefined, null).then(look => {
@@ -813,7 +971,7 @@ function loadLook(){
     applyAccent();
   });
 }
-dark.addEventListener('change', applyAccent);
+try { window.__TAURI__.event.listen('theme_resolved', e => { if(e.payload) applyTheme(e.payload); }); } catch(e) { /* asked for again below */ }
 
 /* ---- the sidebar -------------------------------------------------------- */
 const TABS = ['accounts', 'appearance', 'general'];
@@ -1187,6 +1345,39 @@ function refreshScreens(){
   });
 }
 
+/* ---- Appearance: theme ----------------------------------------------------- */
+const THEME_WHY = {
+  system: 'The notch and this window follow the Windows app colour.',
+  light: 'A light notch and card, whatever Windows is set to.',
+  dark: 'The dark notch, whatever Windows is set to.'
+};
+let theme = 'system', themeBusy = false;
+function renderTheme(){
+  for(const b of document.querySelectorAll('#seg-theme button')){
+    const on = b.dataset.v === theme;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.disabled = themeBusy;
+  }
+  const why = THEME_WHY[theme] || '';
+  document.getElementById('cap-theme').textContent = ui(why, why);
+}
+document.getElementById('seg-theme').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if(!b || b.disabled || b.dataset.v === theme) return;
+  const want = b.dataset.v;
+  themeBusy = true;
+  theme = want;
+  renderTheme();
+  invoke('set_theme', { theme: want })
+    .then(v => { theme = typeof v === 'string' ? v : want; toast(); })
+    .catch(err => {
+      strip('set_theme failed: ' + errText(err));
+      return call('get_theme', undefined, null).then(v => { if(typeof v === 'string') theme = v; });
+    })
+    .then(() => { themeBusy = false; renderTheme(); });
+});
+
 /* ---- Appearance: the weekly ring ------------------------------------------- */
 const WEEKLY_WHY = {
   off: 'One ring per provider, showing the headline limit. The weekly allowance stays in the hover card.',
@@ -1378,7 +1569,9 @@ document.getElementById('btn-recentre').addEventListener('click', () => {
 });
 
 /* ---- Appearance: language ------------------------------------------------ */
-const LANGS = ['auto', 'en', 'zh', 'zh-Hant', 'ja', 'ko', 'ru', 'uk'];
+// Must list every <option> in the picker above: a value missing here is
+// discarded on save and read back as 'auto', so the language is unreachable.
+const LANGS = ['auto', 'en', 'pt-BR', 'zh', 'zh-Hant', 'ja', 'ko', 'ru', 'uk'];
 document.getElementById('lang').addEventListener('change', e => {
   const previous = e.target.dataset.previous || 'auto';
   const v = LANGS.indexOf(e.target.value) >= 0 ? e.target.value : 'auto';
@@ -1462,6 +1655,8 @@ function boot(){
   refreshScreens();
   call('get_weekly_ring', undefined, null).then(v => { if(typeof v === 'string') weeklyRing = v; renderWeekly(); });
   call('get_widget_prefs', undefined, null).then(renderFromPayload);
+  call('get_theme', undefined, null).then(v => { if(typeof v === 'string') theme = v; renderTheme(); });
+  call('get_theme_resolved', undefined, null).then(v => { if(typeof v === 'string') applyTheme(v); });
   call('get_ui_flags', undefined, null).then(v => { if(v && typeof v === 'object') flags = readFlags(v); renderFlags(); });
   Promise.all([call('get_lang', undefined, 'auto'), call('get_lang_resolved', undefined, 'en')]).then(([raw, resolved]) => {
     const l = (typeof raw === 'string' && LANGS.indexOf(raw) >= 0) ? raw : 'auto';
