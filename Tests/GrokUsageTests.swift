@@ -2,9 +2,22 @@ import XCTest
 @testable import PenguinNotch
 
 /// Pinned to a response recorded from a live SuperGrok CLI session. Credits
-/// is the weekly Grok Build allowance — the one number this account's own
-/// endpoint actually states.
+/// is the shared weekly allowance; product percentages are its breakdown.
 final class GrokUsageTests: XCTestCase {
+    func testSharedWeeklyUsageDoesNotMislabelTotalAsGrokBuild() throws {
+        let payload = """
+        {"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY",\
+        "start":"2026-09-05T08:00:00Z","end":"2026-09-12T08:00:00Z"},\
+        "creditUsagePercent":47.0,\
+        "productUsage":[{"product":"GrokBuild","usagePercent":35.0},\
+        {"product":"GrokAppBuilder","usagePercent":12.0}]}}
+        """
+        let windows = try GrokUsage.windows(creditsJSON: payload)
+        XCTAssertEqual(windows.map(\.id), ["credits", "GrokBuild", "GrokAppBuilder"])
+        XCTAssertEqual(windows.map(\.label), [L10n.t("Weekly limit"), "Grok Build", "Grok App Builder"])
+        XCTAssertEqual(windows.map(\.usedFraction), [0.47, 0.35, 0.12])
+    }
+
     private let credits = """
     {"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY",\
     "start":"2026-09-05T08:21:18.802818+00:00",\
@@ -25,7 +38,7 @@ final class GrokUsageTests: XCTestCase {
     func testTheRingIsTheCreditsPercentage() throws {
         let credits = try XCTUnwrap(windows().first { $0.id == "credits" })
         XCTAssertEqual(credits.duration, 7 * 86400)
-        XCTAssertEqual(credits.label, "Grok Build")
+        XCTAssertEqual(credits.label, L10n.t("Weekly limit"))
         XCTAssertEqual(credits.usedFraction ?? -1, 0.08, accuracy: 0.0001)
     }
 

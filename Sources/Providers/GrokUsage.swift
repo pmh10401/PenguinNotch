@@ -14,7 +14,7 @@ import Foundation
 ///     "billingPeriodEnd":   "2026-09-12T08:21:18.802818+00:00" } }
 /// ```
 ///
-/// The credits payload is the ring: a weekly Grok Build allowance. Grok's own
+/// The credits payload is a shared weekly pool with a product breakdown. Grok's own
 /// account charge date is not in this response — the unformatted `/billing`
 /// payload's `billingPeriodEnd` is a calendar-month usage ledger, not a bill,
 /// and nothing here says which day of the month an account is actually
@@ -38,12 +38,13 @@ enum GrokUsage {
         if let fraction = percent(credits["creditUsagePercent"]) {
             windows.append(LimitWindow(
                 id: "credits",
-                label: productLabel(credits) ?? L10n.t("Grok Build"),
+                label: L10n.t("Weekly limit"),
                 usedFraction: fraction,
                 resetsAt: creditsReset,
                 duration: duration
             ))
-        } else if let products = credits["productUsage"] as? [[String: Any]] {
+        }
+        if let products = credits["productUsage"] as? [[String: Any]] {
             for product in products {
                 guard let fraction = percent(product["usagePercent"]) else { continue }
                 let name = (product["product"] as? String).map(humanize) ?? L10n.t("Usage")
@@ -81,13 +82,6 @@ enum GrokUsage {
             throw UsageProviderError.nothingMetered(L10n.t("Grok has nothing metered on this account yet"))
         }
         return windows
-    }
-
-    private static func productLabel(_ credits: [String: Any]) -> String? {
-        guard let products = credits["productUsage"] as? [[String: Any]],
-              let name = products.first?["product"] as? String
-        else { return nil }
-        return humanize(name)
     }
 
     /// "GrokBuild" → "Grok Build". The wire name is one word; the usage modal

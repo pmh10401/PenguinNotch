@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.4",
+                headline: "Accurate Grok usage labels",
+                changes: [
+                    ReleaseNote.Change(title: "Separate the weekly limit from product usage",
+                                       detail: "Show Grok's shared weekly percentage and each product's contribution as distinct readings.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.3",
                 headline: "Clearer stock candlestick charts on macOS",
                 changes: [

@@ -15,8 +15,8 @@
 //!                    "productUsage": [{ "product": "GrokBuild", "usagePercent": 8.0 }],
 //!                    "billingPeriodStart": …, "billingPeriodEnd": … } }
 //!      ```
-//!      The credits payload is the ring: a weekly Grok Build allowance, and the only number this
-//!      endpoint actually states. Grok's own charge date is not in it — `billingPeriodEnd` is a
+//!      The credits payload reports a shared weekly pool and each product's share of it.
+//!      Grok's own charge date is not in it — `billingPeriodEnd` is a
 //!      calendar-month usage ledger, not a bill — so none is shown rather than guessed at.
 //!
 //! Only a session minted by xAI itself is used. The file can also hold a customer IdP's token,
@@ -189,21 +189,16 @@ pub fn parse_credits(v: &serde_json::Value) -> (Vec<LimitWindow>, String) {
 
     let mut out: Vec<LimitWindow> = Vec::new();
     let products = config.get("productUsage").and_then(|x| x.as_array());
-    let headline_label = products
-        .and_then(|p| p.first())
-        .and_then(|p| p.get("product"))
-        .and_then(|x| x.as_str())
-        .map(humanize);
-
     if let Some(used) = pct(config.get("creditUsagePercent")) {
         out.push(LimitWindow {
             id: "credits".into(),
-            label: headline_label.unwrap_or_else(|| "Grok Build".into()),
+            label: "Weekly limit".into(),
             used,
             resets_at,
             ..Default::default()
         });
-    } else if let Some(products) = products {
+    }
+    if let Some(products) = products {
         for product in products {
             let Some(used) = pct(product.get("usagePercent")) else { continue };
             let wire = product.get("product").and_then(|x| x.as_str());
@@ -393,6 +388,23 @@ mod tests {
     }
 
     #[test]
+    fn shared_weekly_usage_keeps_total_and_product_breakdown_separate() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{ "config": { "currentPeriod": { "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                                                  "end": "2026-09-12T08:00:00Z" },
+                             "creditUsagePercent": 47.0,
+                             "productUsage": [{ "product": "GrokBuild", "usagePercent": 35.0 },
+                                              { "product": "GrokAppBuilder", "usagePercent": 12.0 }] } }"#,
+        )
+        .unwrap();
+        let (w, note) = parse_credits(&v);
+        assert!(note.is_empty());
+        assert_eq!(w.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), ["credits", "GrokBuild", "GrokAppBuilder"]);
+        assert_eq!(w.iter().map(|x| x.label.as_str()).collect::<Vec<_>>(), ["Weekly limit", "Grok Build", "Grok App Builder"]);
+        assert_eq!(w.iter().map(|x| x.used).collect::<Vec<_>>(), [0.47, 0.35, 0.12]);
+    }
+
+    #[test]
     fn credits_percent_becomes_the_headline_window() {
         let v: serde_json::Value = serde_json::from_str(
             r#"{ "config": { "currentPeriod": { "type": "USAGE_PERIOD_TYPE_WEEKLY",
@@ -403,9 +415,9 @@ mod tests {
         .unwrap();
         let (w, note) = parse_credits(&v);
         assert!(note.is_empty());
-        assert_eq!(w.len(), 1);
+        assert_eq!(w.len(), 2);
         assert_eq!(w[0].id, "credits");
-        assert_eq!(w[0].label, "Grok Build");
+        assert_eq!(w[0].label, "Weekly limit");
         assert!((w[0].used - 0.08).abs() < 1e-9);
         assert!(w[0].resets_at.is_some());
     }

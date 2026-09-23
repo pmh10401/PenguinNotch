@@ -1,11 +1,11 @@
 import Foundation
 import os
 
-/// Reads Grok Build usage from the same billing endpoint the CLI's `/usage` uses.
+/// Reads Grok's shared weekly usage and product breakdown from the CLI billing endpoint.
 ///
 /// The credential is Grok's own `~/.grok/auth.json` session — the CLI's job to
-/// refresh, not this app's. Credits (`?format=credits`) is the weekly Grok
-/// Build allowance, and the only number this endpoint actually states.
+/// refresh, not this app's. Credits (`?format=credits`) reports the weekly
+/// pool and each product's share of it.
 actor GrokLocalProvider: UsageProvider {
     nonisolated let id = "grok"
     nonisolated let displayName = "Grok"
