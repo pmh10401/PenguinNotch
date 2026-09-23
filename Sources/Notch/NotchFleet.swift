@@ -27,6 +27,32 @@ final class NotchFleet {
     private var visibility: NotchVisibility = .onHover
 
     private var snapshots: [ProviderSnapshot] = []
+    private var systemSnapshots: [ProviderSnapshot] = []
+    private var widgetSnapshots: [ProviderSnapshot] = []
+    var todoPreferences: Preferences? {
+        didSet { for model in models { model.todoPreferences = todoPreferences } }
+    }
+    private var order: [String] = []
+    private var hiddenItems: Set<String> = []
+
+    func apply(hiddenItems: Set<String>) {
+        self.hiddenItems = hiddenItems
+        publishSnapshots()
+    }
+
+    func apply(order: [String]) {
+        self.order = order
+        for model in models { model.apply(order: order) }
+    }
+
+    func setWidgetSnapshots(_ snapshots: [ProviderSnapshot], colors: [String: AccentColorChoice]) {
+        widgetSnapshots = snapshots.map {
+            var snapshot = $0
+            snapshot.systemColor = colors[snapshot.id]
+            return snapshot
+        }
+        publishSnapshots()
+    }
     private(set) var thinkingModels: [String: Date] = [:]
     /// Per source, the way the view model keeps them: the Ollama relay and
     /// the LM Studio log each replace their own readings wholesale.
@@ -56,6 +82,7 @@ final class NotchFleet {
     private var criticalLimit: Double = 0.70
     /// One choice for the whole fleet, like the edge and the size: a weekly
     /// ring on one display and not another would read as a bug.
+    private var notchMeterStyle: NotchMeterStyle = .ring
     private var weeklyRing: WeeklyRing = .off
     private var weeklyRingDashed: Bool = false
     private var showsMoveHandle = true
@@ -186,6 +213,13 @@ final class NotchFleet {
         }
     }
 
+    func apply(notchMeterStyle: NotchMeterStyle) {
+        self.notchMeterStyle = notchMeterStyle
+        for controller in controllers.values {
+            controller.apply(notchMeterStyle: notchMeterStyle)
+        }
+    }
+
     func apply(weeklyRing: WeeklyRing) {
         self.weeklyRing = weeklyRing
         for controller in controllers.values {
@@ -251,9 +285,22 @@ final class NotchFleet {
 
     func setSnapshots(_ snapshots: [ProviderSnapshot]) {
         self.snapshots = snapshots
+        publishSnapshots()
+    }
+
+    func setSystemSnapshots(_ snapshots: [ProviderSnapshot], colors: [String: AccentColorChoice] = [:]) {
+        systemSnapshots = snapshots.map {
+            var snapshot = $0
+            snapshot.systemColor = colors[snapshot.id]
+            return snapshot
+        }
+        publishSnapshots()
+    }
+
+    private func publishSnapshots() {
         let now = Date()
         for model in models {
-            model.updateSnapshots(snapshots)
+            model.updateSnapshots(snapshots + systemSnapshots + widgetSnapshots, hiding: hiddenItems)
             model.now = now
         }
     }
@@ -421,6 +468,7 @@ final class NotchFleet {
         controller.model.accentColor = accentColor
         controller.model.watchLimit = watchLimit
         controller.model.criticalLimit = criticalLimit
+        controller.model.notchMeterStyle = notchMeterStyle
         controller.model.weeklyRing = weeklyRing
         controller.model.weeklyRingDashed = weeklyRingDashed
         controller.model.showsMoveHandle = showsMoveHandle
@@ -433,10 +481,12 @@ final class NotchFleet {
         controller.onOpenSettings = onOpenSettings
         controller.model.onOpenSettings = onOpenSettings
         controller.model.onFocusSession = onFocusSession
+        controller.model.todoPreferences = todoPreferences
         controller.onReposition = onReposition
         controller.onMoveToEdge = onMoveToEdge
         controller.signInItems = signInItems
-        controller.model.updateSnapshots(snapshots)
+        controller.model.apply(order: order)
+        controller.model.updateSnapshots(snapshots + systemSnapshots + widgetSnapshots, hiding: hiddenItems)
         controller.model.thinkingModels = thinkingModels
         controller.model.localActivities = localActivities
         controller.model.setLocalMetricsEnabled(localMetricsEnabled)

@@ -3,6 +3,8 @@ import Foundation
 enum ProviderKind: Equatable {
     case usage
     case localRuntime
+    case system
+    case calendar, weather, todo, stocks
 }
 
 /// One source of usage numbers. Each adapter declares how trustworthy it is,

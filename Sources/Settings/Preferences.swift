@@ -87,6 +87,42 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(providerOrder, forKey: Keys.order) }
     }
 
+    @Published var hiddenNotchItems: Set<String> {
+        didSet { defaults.set(hiddenNotchItems.sorted(), forKey: "hiddenNotchItems") }
+    }
+
+    func isNotchItemVisible(_ id: String) -> Bool {
+        switch id {
+        case "widget-calendar": return showsCalendar
+        case "widget-weather": return showsWeather
+        case "widget-todo": return showsTodo
+        case "widget-stocks": return showsStocks && !hiddenNotchItems.contains(id)
+        case let id where id.hasPrefix("widget-stock:"): return showsStocks && !hiddenNotchItems.contains(id)
+        default: return !hiddenNotchItems.contains(id)
+        }
+    }
+
+    func setNotchItemVisible(_ visible: Bool, id: String) {
+        switch id {
+        case "widget-calendar": showsCalendar = visible
+        case "widget-weather": showsWeather = visible
+        case "widget-todo": showsTodo = visible
+        case "widget-stocks":
+            showsStocks = visible
+            if visible { hiddenNotchItems.remove(id) }
+        case let id where id.hasPrefix("widget-stock:"):
+            if visible {
+                showsStocks = true
+                hiddenNotchItems.remove(id)
+            } else {
+                hiddenNotchItems.insert(id)
+            }
+        default:
+            if visible { hiddenNotchItems.remove(id) }
+            else { hiddenNotchItems.insert(id) }
+        }
+    }
+
     /// How much of itself the notch shows at rest.
     @Published var notchVisibility: NotchVisibility {
         didSet { defaults.set(notchVisibility.rawValue, forKey: Keys.visibility) }
@@ -245,6 +281,73 @@ final class Preferences: ObservableObject {
     /// Whether the move handle's arc is drawn above the notch.
     @Published var showsMoveHandle: Bool {
         didSet { defaults.set(showsMoveHandle, forKey: Keys.showsMoveHandle) }
+    }
+
+    @Published var showsSystemUsage: Bool {
+        didSet { defaults.set(showsSystemUsage, forKey: Keys.showsSystemUsage) }
+    }
+
+    @Published var showsCalendar: Bool {
+        didSet { defaults.set(showsCalendar, forKey: "showsCalendar") }
+    }
+    @Published var showsTodo: Bool {
+        didSet { defaults.set(showsTodo, forKey: "showsTodo") }
+    }
+    @Published var todoItems: [TodoItem] {
+        didSet {
+            if let data = try? JSONEncoder().encode(todoItems) { defaults.set(data, forKey: "todoItems") }
+        }
+    }
+    @Published var showsWeather: Bool {
+        didSet { defaults.set(showsWeather, forKey: "showsWeather") }
+    }
+    /// Off until the user turns the cell on. A quote feed needs their own API
+    /// keys, so it does not appear on a fresh install the way the calendar does.
+    @Published var showsStocks: Bool {
+        didSet { defaults.set(showsStocks, forKey: "showsStocks") }
+    }
+    /// Circles are the notch's ordinary cells. Bars draw the same readings as
+    /// filled meters, including every account, system meter and stock.
+    @Published var notchMeterStyle: NotchMeterStyle {
+        didSet { defaults.set(notchMeterStyle.rawValue, forKey: "notchMeterStyle") }
+    }
+    /// Canonical ids, `kr:005930` and `us:AAPL`. At most thirty.
+    @Published var stockSymbols: [String] {
+        didSet {
+            let normalized = WatchedStock.parseList(stockSymbols).map(\.id)
+            if normalized != stockSymbols {
+                stockSymbols = normalized
+                return
+            }
+            defaults.set(normalized, forKey: "stockSymbols")
+        }
+    }
+
+    /// Returns false when the text is not a Korean code or a US ticker, or when
+    /// the list is already full.
+    @discardableResult
+    func addStockSymbol(_ raw: String) -> Bool {
+        guard let stock = WatchedStock.parse(raw) else { return false }
+        var next = WatchedStock.parseList(stockSymbols)
+        guard !next.contains(stock) else { return true }
+        guard next.count < 30 else { return false }
+        next.append(stock)
+        stockSymbols = next.map(\.id)
+        return true
+    }
+
+    func removeStockSymbol(_ id: String) {
+        stockSymbols = stockSymbols.filter { $0 != id }
+    }
+    /// Bumped when the Keychain credentials change. Not persisted: the secret
+    /// itself is not a preference.
+    @Published var stockSettingsRevision = 0
+    @Published var weatherLocation: WeatherLocation? {
+        didSet { defaults.set(weatherLocation.flatMap { try? JSONEncoder().encode($0) }, forKey: "weatherLocation") }
+    }
+
+    @Published var systemUsageColors: [String: AccentColorChoice] {
+        didSet { defaults.set(systemUsageColors.mapValues(\.rawValue), forKey: Keys.systemUsageColors) }
     }
 
     /// The colour used for positive usage and active-work indicators.
@@ -475,6 +578,8 @@ final class Preferences: ObservableObject {
         static let weeklyRingDashed = "weeklyRingDashed"
         static let claudeDailyPaceRing = "claudeDailyPaceRing"
         static let showsMoveHandle = "showsMoveHandle"
+        static let showsSystemUsage = "showsSystemUsage"
+        static let systemUsageColors = "systemUsageColors"
         static let notchSurfaceStyle = "notchSurfaceStyle"
         static let watchLimit = "watchLimit"
         static let criticalLimit = "criticalLimit"
@@ -790,6 +895,20 @@ final class Preferences: ObservableObject {
         // On unless turned off: it is how the notch is carried to another edge,
         // and a control that is missing by default is one nobody finds.
         self.showsMoveHandle = defaults.object(forKey: Keys.showsMoveHandle) as? Bool ?? true
+        self.showsSystemUsage = defaults.object(forKey: Keys.showsSystemUsage) as? Bool ?? true
+        self.showsCalendar = defaults.object(forKey: "showsCalendar") as? Bool ?? true
+        self.showsTodo = defaults.object(forKey: "showsTodo") as? Bool ?? true
+        self.todoItems = defaults.data(forKey: "todoItems")
+            .flatMap { try? JSONDecoder().decode([TodoItem].self, from: $0) } ?? []
+        self.showsWeather = defaults.object(forKey: "showsWeather") as? Bool ?? true
+        self.showsStocks = defaults.object(forKey: "showsStocks") as? Bool ?? false
+        self.notchMeterStyle = NotchMeterStyle(rawValue: defaults.string(forKey: "notchMeterStyle") ?? "") ?? .ring
+        self.stockSymbols = defaults.stringArray(forKey: "stockSymbols") ?? []
+        self.weatherLocation = defaults.data(forKey: "weatherLocation")
+            .flatMap { try? JSONDecoder().decode(WeatherLocation.self, from: $0) }
+            .flatMap { $0.isValid ? $0 : nil }
+        self.systemUsageColors = (defaults.dictionary(forKey: Keys.systemUsageColors) ?? [:])
+            .compactMapValues { ($0 as? String).flatMap(AccentColorChoice.init(rawValue:)) }
         self.accentColor = defaults.string(forKey: Keys.accentColor)
             .flatMap(AccentColorChoice.init(rawValue:)) ?? .system
         self.notchSurfaceStyle = defaults.string(forKey: Keys.notchSurfaceStyle)
@@ -810,6 +929,7 @@ final class Preferences: ObservableObject {
         // Absent means never chosen, so the rings keep the order the app ships
         // with until someone drags one.
         self.providerOrder = defaults.stringArray(forKey: Keys.order) ?? []
+        self.hiddenNotchItems = Set(defaults.stringArray(forKey: "hiddenNotchItems") ?? [])
         // Both default to on, so `bool(forKey:)` — which answers false for a
         // key that was never written — cannot stand in for the default.
         self.announceSessionEnd = defaults.object(forKey: Keys.announceSessionEnd) as? Bool ?? true
@@ -998,7 +1118,7 @@ final class Preferences: ObservableObject {
     /// its directory was moved away — and put it back at the end when it
     /// returned, for something the user never did.
     func setProviderOrder(_ ids: [String]) {
-        providerOrder = ProviderOrder.remember(ids, keeping: providerOrder)
+        providerOrder = ProviderOrder.replacingSubset(ids, in: providerOrder)
     }
 
     /// Forget everything this app has stored and quit.

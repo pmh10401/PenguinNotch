@@ -158,7 +158,7 @@ struct TooltipSilhouette: Shape {
 
 /// The card chrome every tooltip shares: fixed width, the frame's padding and
 /// corner, and the tail welded on so there is no seam between them.
-private struct TooltipShell<Content: View>: View {
+struct TooltipShell<Content: View>: View {
     /// Given explicitly rather than left to the contents.
     ///
     /// Sized by its contents, the card's height changes the instant they do —
@@ -426,6 +426,7 @@ private struct LimitWindowRow: View {
     let now: Date
     let resetTimeFormat: ResetTimeFormat
     let showsUsagePace: Bool
+    var colorOverride: Color? = nil
     @Environment(\.codenotchAccentColor) private var accentColor
     @Environment(\.usageWatchLimit) private var watchLimit
     @Environment(\.usageCriticalLimit) private var criticalLimit
@@ -474,7 +475,7 @@ private struct LimitWindowRow: View {
                 if window.usedFraction != nil {
                     ZStack(alignment: .leading) {
                         Capsule().fill(Palette.barTrack)
-                        Capsule().fill(band.color(accent: accentColor)).frame(width: fillWidth)
+                        Capsule().fill(colorOverride ?? band.color(accent: accentColor)).frame(width: fillWidth)
                     }
                     .frame(width: trackWidth, height: NotchLayout.barHeight)
                     .padding(.top, NotchLayout.labelToBar)
@@ -555,6 +556,60 @@ private struct MoneyStat: View {
     }
 }
 
+private struct CPUCoreLoads: View {
+    let cores: [SystemUsageReading.CoreLoad]
+    let colorOverride: Color?
+    @Environment(\.codenotchAccentColor) private var accentColor
+    @Environment(\.usageWatchLimit) private var watchLimit
+    @Environment(\.usageCriticalLimit) private var criticalLimit
+    @Environment(\.tooltipSecondaryInk) private var secondaryInk
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NotchLayout.sessionRowGap) {
+            Text(L10n.t("Load by logical core"))
+                .font(Typography.cardBody).fontWeight(.semibold)
+                .foregroundStyle(Palette.textPrimary)
+                .frame(height: NotchLayout.cardBodyLineHeight)
+            ScrollView(.vertical) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: NotchLayout.blockSpacing) {
+                    ForEach(cores) { core in
+                        let label = L10n.t("Core \(core.id + 1)")
+                        let value = core.fraction.map { "\(Percent.text(for: $0))%" } ?? "—"
+                        VStack(alignment: .leading, spacing: NotchLayout.labelToBar) {
+                            HStack(spacing: 4) {
+                                Text(label)
+                                Spacer(minLength: 0)
+                                Text(value).foregroundStyle(secondaryInk).monospacedDigit()
+                            }
+                            .font(Typography.cardBody)
+                            .foregroundStyle(Palette.textPrimary)
+                            .lineLimit(1)
+                            .frame(height: NotchLayout.cardBodyLineHeight)
+                            GeometryReader { proxy in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Palette.barTrack)
+                                    if let fraction = core.fraction {
+                                        Capsule()
+                                            .fill(colorOverride ?? UsageBand.band(for: fraction, watchLimit: watchLimit,
+                                                                                 criticalLimit: criticalLimit).color(accent: accentColor))
+                                            .frame(width: proxy.size.width * min(max(fraction, 0), 1))
+                                    }
+                                }
+                            }
+                            .frame(height: NotchLayout.barHeight)
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(label)
+                        .accessibilityValue(core.fraction == nil ? L10n.t("No reading") : value)
+                    }
+                }
+            }
+            .frame(height: NotchLayout.cpuCoreGridHeight(cores.count))
+        }
+        .padding(.top, NotchLayout.blockSpacing)
+    }
+}
+
 private struct ProviderTooltip: View {
     /// What a local model is doing right now, for the header's note.
     var activityNote: String?
@@ -595,11 +650,11 @@ private struct ProviderTooltip: View {
         VStack(alignment: .leading, spacing: 0) {
             TooltipHeader(title: snapshot.kind == .localRuntime
                           ? L10n.t("\(snapshot.localModel?.brand?.displayName ?? snapshot.displayName) · Local")
-                          : L10n.t("\(snapshot.displayName) Usage"),
+                          : snapshot.kind == .weather || snapshot.kind == .stocks || snapshot.kind == .system ? snapshot.displayName : L10n.t("\(snapshot.displayName) Usage"),
                           subtitle: snapshot.plan,
                           note: activityNote ?? (snapshot.localModel?.brand != nil ? snapshot.displayName : readingAge)) {
                 ProviderGlyphView(glyph: snapshot.glyph, customIconFilename: snapshot.customIconFilename)
-                    .foregroundStyle(Palette.textPrimary)
+                    .foregroundStyle(snapshot.systemColor?.color ?? Palette.textPrimary)
             }
 
             if let block = snapshot.block {
@@ -630,7 +685,7 @@ private struct ProviderTooltip: View {
 
                                 VStack(alignment: .leading, spacing: NotchLayout.blockSpacing) {
                                     ForEach(Array(group.windows.enumerated()), id: \.element.id) { windowIndex, window in
-                                        LimitWindowRow(window: window, inset: 2 * Design.px(16), fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace)
+                                        LimitWindowRow(window: window, inset: 2 * Design.px(16), fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace, colorOverride: snapshot.systemColor?.color)
                                             .padding(.top, windowIndex == 0 ? 0 : NotchLayout.blockSpacing)
                                     }
                                 }
@@ -643,7 +698,7 @@ private struct ProviderTooltip: View {
                             .padding(.top, groupIndex == 0 ? NotchLayout.headerToBlock : Design.px(28))
                         } else {
                             ForEach(Array(group.windows.enumerated()), id: \.element.id) { windowIndex, window in
-                                LimitWindowRow(window: window, fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace)
+                                LimitWindowRow(window: window, fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace, colorOverride: snapshot.systemColor?.color)
                                     .padding(.top, (groupIndex == 0 && windowIndex == 0) ? NotchLayout.headerToBlock : NotchLayout.blockSpacing)
                             }
                         }
@@ -1103,7 +1158,9 @@ struct TooltipCard: View {
             showsLocalPerformance: snapshot.showsLocalPerformance,
                 localLedgerRows: snapshot.localLedgerRowCount,
             compactRowCount: snapshot.compactRowCount,
-            showsDeepSeekPricing: deepSeekPricingEnabled
+            showsDeepSeekPricing: deepSeekPricingEnabled,
+            hasNetworkSettings: snapshot.id == "system-network",
+            cpuCoreCount: snapshot.cpuCores.count
         )
     }
 
@@ -1117,6 +1174,9 @@ struct TooltipCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ProviderTooltip(activityNote: localActivityNote, snapshot: snapshot, now: now, resetTimeFormat: resetTimeFormat,
                                     showUsagePace: showUsagePace)
+                    if !snapshot.cpuCores.isEmpty {
+                        CPUCoreLoads(cores: snapshot.cpuCores, colorOverride: snapshot.systemColor?.color)
+                    }
                     if let resetCredits = snapshot.resetCredits,
                        snapshot.hasAvailableResetCredits {
                         CodexResetCreditsSection(credits: resetCredits, now: now)
@@ -1132,6 +1192,20 @@ struct TooltipCard: View {
                     if let activity, snapshot.localModel == nil {
                         SessionList(summary: activity, now: now, cap: sessionCap,
                                     onFocus: onFocusSession)
+                    }
+                    if snapshot.id == "system-network" {
+                        Button {
+                            NSWorkspace.shared.open(SystemNetworkLink.wifiSettingsURL)
+                        } label: {
+                            Label(L10n.t("Wi-Fi settings…"), systemImage: "wifi")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .font(Typography.cardBody)
+                        .foregroundStyle(snapshot.systemColor?.color ?? Palette.textPrimary)
+                        .frame(height: NotchLayout.cardBodyLineHeight)
+                        .padding(.top, NotchLayout.blockSpacing)
+                        .help(L10n.t("Open macOS Wi-Fi settings to choose a network or manage connections."))
                     }
                 }
                 // An identity, so one provider's rows are never interpolated

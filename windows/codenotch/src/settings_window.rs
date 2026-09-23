@@ -40,7 +40,10 @@ fn open_now(app: &AppHandle) {
         .center();
     // Without Mica the window stays opaque and the page draws solid surfaces instead
     if has_mica() {
-        builder = builder.transparent(true).effects(EffectsBuilder::new().effect(Effect::Mica).build());
+        #[cfg(windows)]
+        {
+            builder = builder.transparent(true).effects(EffectsBuilder::new().effect(Effect::Mica).build());
+        }
     }
     match builder.build() {
         // Raised again once it exists: a window created while the app is not in front can come up behind

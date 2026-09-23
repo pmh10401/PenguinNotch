@@ -7,6 +7,26 @@ import Foundation
 /// so an id can appear on a Mac that has never seen it and vanish from one that
 /// has. A stored order is a preference to reconcile, never an authority.
 enum ProviderOrder {
+    /// Reorder visible notch cells without moving a temporarily hidden cell's slot.
+    static func keepingHiddenSlots(_ visible: [String], in remembered: [String]) -> [String] {
+        var remaining = visible.makeIterator()
+        let replaced = remembered.map { id in
+            visible.contains(id) ? (remaining.next() ?? id) : id
+        }
+        return replaced + Array(remaining)
+    }
+
+    /// Account-only reordering must leave calendar, weather and metric slots in place.
+    static func replacingSubset(_ ids: [String], in remembered: [String]) -> [String] {
+        func isWidget(_ id: String) -> Bool { id.hasPrefix("system-") || id.hasPrefix("widget-") }
+        var remaining = remember(ids, keeping: remembered.filter { !isWidget($0) })
+        let slots = remembered.filter { isWidget($0) || ids.contains($0) }
+        let replaced = slots.map { id -> String in
+            guard !isWidget(id), !remaining.isEmpty else { return id }
+            return remaining.removeFirst()
+        }
+        return replaced + remaining
+    }
     /// A runtime's inventory can arrive alphabetically on every poll. Keep its
     /// existing cells in place and append newly loaded models.
     static func cells(from snapshots: [ProviderSnapshot],

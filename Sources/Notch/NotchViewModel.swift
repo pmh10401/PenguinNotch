@@ -4,6 +4,13 @@ import Combine
 @MainActor
 final class NotchViewModel: ObservableObject {
     @Published var snapshots: [ProviderSnapshot] = []
+    var todoPreferences: Preferences?
+    private var order: [String] = []
+
+    func apply(order: [String]) {
+        self.order = order
+        updateSnapshots(snapshots)
+    }
     /// Per runtime, so Ollama's relay switching off clears its own readings
     /// and nobody else's.
     private var performances: [String: [String: LocalModelPerformance]] = [:]
@@ -19,9 +26,11 @@ final class NotchViewModel: ObservableObject {
         snapshots = snapshots.map(decorated)
     }
 
-    func updateSnapshots(_ providerSnapshots: [ProviderSnapshot]) {
+    func updateSnapshots(_ providerSnapshots: [ProviderSnapshot], hiding hidden: Set<String> = []) {
         let hoveredID = hoveredSnapshot?.id
-        let next = ProviderOrder.cells(from: providerSnapshots, keeping: snapshots).map(decorated)
+        let cells = ProviderOrder.cells(from: providerSnapshots, keeping: snapshots)
+        let next = ProviderOrder.arrange(cells, by: order, id: \.id)
+            .filter { !hidden.contains($0.id) }.map(decorated)
         let nextHoveredIndex = hoveredID.flatMap { id in next.firstIndex { $0.id == id } }
         if hoveredIndex != nextHoveredIndex { hoveredIndex = nextHoveredIndex }
         snapshots = next
@@ -182,6 +191,7 @@ final class NotchViewModel: ObservableObject {
     /// Whether a provider's weekly limit gets a ring of its own, and where.
     /// Mirrored here for the same reason `accentColor` is: the notch is a
     /// separate window, and it has to redraw the moment Settings changes this.
+    @Published var notchMeterStyle: NotchMeterStyle = .ring
     @Published var weeklyRing: WeeklyRing = .off
     @Published var weeklyRingDashed: Bool = false
     @Published var watchLimit: Double = 0.50
@@ -480,7 +490,8 @@ final class NotchViewModel: ObservableObject {
     /// The straight part of the shape, flares excluded.
     var bodyLength: CGFloat {
         NotchLayout.bodyLength(
-            cellCount: snapshots.count, edge: edge, spacing: cellSpacing
+            cellCount: snapshots.count, edge: edge, spacing: cellSpacing,
+            meterStyle: notchMeterStyle
         ) + 2 * endSpread
     }
 
@@ -488,15 +499,16 @@ final class NotchViewModel: ObservableObject {
     /// included so the readings stay in the middle of the bar.
     func ringCenter(index: Int) -> CGFloat {
         NotchLayout.ringCenter(index: index, edge: edge, flare: flare,
-                              spacing: cellSpacing) + endSpread
+                              spacing: cellSpacing, meterStyle: notchMeterStyle) + endSpread
     }
 
     var cellSpacing: CGFloat { cellSpacing(cellCount: snapshots.count) }
-    var cellPitch: CGFloat { NotchLayout.cellAlong(for: edge) + cellSpacing }
+    var cellPitch: CGFloat { NotchLayout.cellAlong(for: edge, meterStyle: notchMeterStyle) + cellSpacing }
 
     private func cellSpacing(cellCount: Int) -> CGFloat {
+        let preferred = notchMeterStyle == .bar ? NotchLayout.barCellSpacing : NotchLayout.cellSpacing
         guard edge.isVertical, screenSize.height > 0, cellCount > 1 else {
-            return NotchLayout.cellSpacing
+            return preferred
         }
         // Extra model cells spend the gaps first. Reserve the cards actually
         // present; assuming four quota windows for every local model overflows laptops.
@@ -505,8 +517,9 @@ final class NotchViewModel: ObservableObject {
                 : contentCardHeight(sessionCap: 0),
             notchScale: sizeScale)
         let packed = NotchLayout.shapeLength(cellCount: cellCount, edge: edge,
-                                             flare: flare, spacing: 0)
-        return min(NotchLayout.cellSpacing,
+                                             flare: flare, spacing: 0,
+                                             meterStyle: notchMeterStyle)
+        return min(preferred,
                    max(0, ((screenSize.height - 2 * slack) / sizeScale - packed) / CGFloat(cellCount - 1)))
     }
 
@@ -574,25 +587,34 @@ final class NotchViewModel: ObservableObject {
                                            hasResetCredits: hasResetCredits)
     }
 
+    func cardHeight(for snapshot: ProviderSnapshot, sessionCap: Int? = nil,
+                    reservingSessions: Bool = false) -> CGFloat {
+        if snapshot.kind == .calendar { return NotchLayout.calendarCardHeight }
+        if snapshot.kind == .todo { return NotchLayout.todoCardHeight }
+        let cap = sessionCap ?? self.sessionCap
+        return NotchLayout.cardHeight(windowCount: snapshot.windows.count,
+            groupCount: snapshot.windowGroupCount,
+            moneyWindowCount: snapshot.windows.filter { $0.money != nil }.count,
+            usageDetailGroupCount: snapshot.usageDetail?.visibleGroups.count ?? 0,
+            sessionCount: snapshot.localModel == nil
+                ? (reservingSessions ? cap + 1 : activity(for: snapshot.id)?.sessions.count ?? 0) : 0,
+            sessionCap: cap,
+            statusMessage: snapshot.statusMessage,
+            blockMessage: snapshot.block?.summary(now: now),
+            hasTokenUsage: snapshot.tokenUsage != nil,
+            hasPlan: snapshot.plan != nil,
+            hasResetCredits: snapshot.hasAvailableResetCredits,
+            localModelName: snapshot.localModel?.name,
+            showsLocalPerformance: snapshot.showsLocalPerformance,
+            localLedgerRows: snapshot.localLedgerRowCount,
+            compactRowCount: snapshot.compactRowCount,
+            showsDeepSeekPricing: deepSeekPricingEnabled,
+            hasNetworkSettings: snapshot.id == "system-network",
+            cpuCoreCount: snapshot.cpuCores.count)
+    }
+
     private func contentCardHeight(sessionCap: Int) -> CGFloat {
-        snapshots.map { snapshot in
-            NotchLayout.cardHeight(windowCount: snapshot.windows.count,
-                groupCount: Set(snapshot.windows.compactMap(\.group)).count,
-                moneyWindowCount: snapshot.windows.filter { $0.money != nil }.count,
-                usageDetailGroupCount: snapshot.usageDetail?.visibleGroups.count ?? 0,
-                sessionCount: snapshot.localModel == nil ? sessionCap + 1 : 0,
-                sessionCap: sessionCap,
-                statusMessage: snapshot.statusMessage,
-                blockMessage: snapshot.block?.summary(now: now),
-                hasTokenUsage: snapshot.tokenUsage != nil,
-                hasPlan: snapshot.plan != nil,
-                hasResetCredits: snapshot.hasAvailableResetCredits,
-                localModelName: snapshot.localModel?.name,
-                showsLocalPerformance: snapshot.showsLocalPerformance,
-                localLedgerRows: snapshot.localLedgerRowCount,
-                compactRowCount: snapshot.compactRowCount,
-                showsDeepSeekPricing: deepSeekPricingEnabled)
-        }.max() ?? 0
+        snapshots.map { cardHeight(for: $0, sessionCap: sessionCap, reservingSessions: true) }.max() ?? 0
     }
 
     func maxCardHeight(cellCount: Int) -> CGFloat {
@@ -687,7 +709,8 @@ final class NotchViewModel: ObservableObject {
     func shapeLength(cellCount: Int) -> CGFloat {
         NotchLayout.shapeLength(cellCount: cellCount,
                                 edge: edge, flare: flare,
-                                spacing: cellSpacing(cellCount: cellCount))
+                                spacing: cellSpacing(cellCount: cellCount),
+                                meterStyle: notchMeterStyle)
             + 2 * endSpread(cellCount: cellCount)
     }
 

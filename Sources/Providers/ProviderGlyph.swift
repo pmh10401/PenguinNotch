@@ -38,6 +38,40 @@ enum ProviderGlyph: String, Codable, Equatable {
     /// from the local Qwen model brand in `.qwen` — a ring wearing this one is
     /// the platform account, not a model.
     case qianwenAI = "qianwenai"
+    case systemCPU, systemRAM, systemGPU, systemDisk, systemNetwork, systemBattery, systemPower
+    case calendar, weatherSun, weatherMoon, weatherPartlyCloudy, weatherCloud, weatherFog, weatherRain, weatherSnow, weatherStorm
+    case weatherPartlyCloudyNight, todo, stock
+
+    var symbolName: String? {
+        switch self {
+        case .todo: return "checklist"
+        case .stock: return "chart.line.uptrend.xyaxis"
+        case .calendar: return "calendar"
+        case .weatherSun: return "sun.max.fill"
+        case .weatherMoon: return "moon.stars.fill"
+        case .weatherPartlyCloudy: return "cloud.sun.fill"
+        case .weatherPartlyCloudyNight: return "cloud.moon.fill"
+        case .weatherCloud: return "cloud.fill"
+        case .weatherFog: return "cloud.fog.fill"
+        case .weatherRain: return "cloud.rain.fill"
+        case .weatherSnow: return "cloud.snow.fill"
+        case .weatherStorm: return "cloud.bolt.rain.fill"
+        default: return nil
+        }
+    }
+
+    var systemLabel: String? {
+        switch self {
+        case .systemCPU: return "CPU"
+        case .systemRAM: return "RAM"
+        case .systemGPU: return "GPU"
+        case .systemDisk: return "DISK"
+        case .systemNetwork: return "NET"
+        case .systemBattery: return "BAT"
+        case .systemPower: return "PWR"
+        default: return nil
+        }
+    }
 
     /// If an asset with this name is in the bundle it wins over the traced
     /// outline — drop a PDF/SVG export from Figma in and it is picked up.
@@ -78,7 +112,10 @@ enum ProviderGlyph: String, Codable, Equatable {
         // with `rsvg-convert -w 512`. Claude's outline fills 0.997 at 0.97, so
         // the same scale brings this ink to the same extent.
         case .qianwenAI: return 0.97
-        case .devin, .qwen, .gemma, .meta, .deepseek, .mistral: return 1.0
+        case .devin, .qwen, .gemma, .meta, .deepseek, .mistral,
+             .systemCPU, .systemRAM, .systemGPU, .systemDisk, .systemNetwork,
+             .systemBattery, .systemPower, .calendar, .todo, .stock, .weatherSun, .weatherMoon,
+             .weatherPartlyCloudy, .weatherPartlyCloudyNight, .weatherCloud, .weatherFog, .weatherRain, .weatherSnow, .weatherStorm: return 1.0
         }
     }
 
@@ -94,7 +131,9 @@ enum ProviderGlyph: String, Codable, Equatable {
         // glyph-kimi in the asset catalogue are drawn instead.
         case .glm:    return GlyphOutline.glm
         case .devin, .qwen, .gemma, .meta, .deepseek, .mistral, .lmstudio,
-             .qianwenAI: return []
+             .qianwenAI, .systemCPU, .systemRAM, .systemGPU, .systemDisk, .systemNetwork,
+             .systemBattery, .systemPower, .calendar, .todo, .stock, .weatherSun, .weatherMoon,
+             .weatherPartlyCloudy, .weatherPartlyCloudyNight, .weatherCloud, .weatherFog, .weatherRain, .weatherSnow, .weatherStorm: return []
         case .grok:   return GlyphOutline.grok
         case .opencode: return GlyphOutline.opencode
         case .commandcode: return GlyphOutline.commandcode
@@ -136,7 +175,14 @@ struct ProviderGlyphView: View {
 
     var body: some View {
         Group {
-            if let customIconFilename,
+            if let symbol = glyph.symbolName {
+                Image(systemName: symbol).resizable().scaledToFit()
+            } else if let label = glyph.systemLabel {
+                Text(label)
+                    .font(.system(size: size * 0.6, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            } else if let customIconFilename,
                let image = CustomIconStore.loadIcon(filename: customIconFilename) {
                 Image(nsImage: image)
                     .resizable()

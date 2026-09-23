@@ -250,6 +250,7 @@
   <div id="rest"></div><!-- after the pill, so its outline is drawn over the clipped pill -->
   <div id="notice"></div>
 </div>
+<script src="widgets.js"></script>
 <script>
 const invoke = window.__TAURI__.core.invoke;
 const listen = window.__TAURI__.event.listen;
@@ -317,6 +318,7 @@ function applyEdge(e){
   if(card&&card.classList.contains('show')) placeCard();
   reportHot();
 }
+let systemPayload=null;
 let uiLang='en';
 // The tray menu already speaks four languages: i18n.rs resolves the user's locale to zh, ja, ko
 // or ru, and main.rs hands the result to this page as `lang_resolved`. The card understood only
@@ -757,7 +759,11 @@ function providers(){
     const picked=list.filter(p=>!!slotFor(p.base));
     // Never leave the notch with nothing in it: an empty result means the choice no longer matches
     // any available provider, so fall back to showing everything rather than an empty pill.
-    if(picked.length) return picked;
+    if(picked.length) list=picked;
+  }
+  // Meters and widgets are not account slots. They join after the filter, then the saved order mixes them.
+  if(window.CodenotchWidgets&&systemPayload){
+    list=CodenotchWidgets.arrange(list.concat(CodenotchWidgets.extraCells(systemPayload, uiLang)), systemPayload.order||[]);
   }
   return list;
 }
@@ -835,6 +841,19 @@ function renderRing(){
   for(const p of ps){
     const cell=pill.querySelector(`.cell[data-p="${p.id}"]`); if(!cell) continue;
     const svg=cell.querySelector('svg.ring'), reading=cell.querySelector('svg.reading'), activity=cell.querySelector('svg.activity'), pct=cell.querySelector('.pct'), glyph=cell.querySelector('.glyph'), wrap=cell.querySelector('.ringwrap');
+    if(p.meter){
+      const used=p.meter.fraction==null?null:(p.meter.invert?1-p.meter.fraction:p.meter.fraction);
+      const col=p.meter.color||(p.meter.steady?AMPLE:(used==null?'#8e8e93':tone(used)));
+      svg.innerHTML=`<circle cx="28" cy="28" r="22" fill="#2a2a2a"/><circle cx="28" cy="28" r="25" fill="none" stroke="${TRACK}" stroke-width="5"/>`;
+      reading.innerHTML=p.meter.fraction==null?'':svgArc(25,Math.min(Math.max(p.meter.fraction,0),1),col,5);
+      activity.innerHTML='';
+      pct.textContent=p.meter.text;
+      pct.style.color=p.meter.color||'';
+      wrap.classList.toggle('stale',!!p.meter.stale);
+      wrap.classList.remove('pressed');
+      continue;
+    }
+    pct.style.color='';
     const h=headlineOf(p.snap,p.base);
     let inner=`<circle cx="28" cy="28" r="22" fill="#2a2a2a"/><circle cx="28" cy="28" r="25" fill="none" stroke="${TRACK}" stroke-width="5"/>`;
     wrap.classList.toggle('pressed',!!refreshing[p.id]);
@@ -925,6 +944,8 @@ async function runClaudeAction(action){
 function renderCard(){
   const c=document.getElementById('card');
   const p=providers().find(x=>x.id===hoverId)||providers()[0];
+  if(!p){ c.innerHTML=''; return; }
+  if(p.meter){ renderMeterCard(c,p); return; }
   const snap=p.snap;
   const headIcon=glyphHtml(p,true);
   // p.name is no longer a constant: for a second account it is built from the home
@@ -1019,6 +1040,86 @@ function placeCard(){
   }
 }
 
+function renderMeterCard(c,p){
+  const meter=p.meter;
+  const title=CodenotchWidgets.t(uiLang, p.name==='TODO'?"Today's to-do":p.name);
+  let html=`<div class="c-head"><span class="c-title">${esc(p.glyph==='CAL'||p.glyph==='WX'||p.glyph.length>4?title:p.name)}</span></div>`;
+  if(meter.kind==='calendar') html+=calendarCardHtml();
+  else if(meter.kind==='todo') html+=todoCardHtml(meter);
+  else {
+    for(const w of meter.rows){
+      html+=`<div class="win"><div class="w-row"><span class="w-label">${esc(w.label)}</span></div>`;
+      if(w.fraction!=null){
+        const used=meter.invert?1-w.fraction:w.fraction;
+        const col=meter.color||(meter.steady?AMPLE:tone(used));
+        html+=`<div class="w-track"><div class="w-fill" style="width:${(Math.min(Math.max(w.fraction,0),1)*100).toFixed(0)}%;background:${col}"></div></div>`;
+      }
+      if(w.detail) html+=`<div class="w-used">${esc(w.detail)}</div>`;
+      html+=`</div>`;
+    }
+    if(p.id==='widget-weather' && systemPayload && systemPayload.weatherCity) html+=`<div class="c-note"><button id="wx-refresh" style="font:inherit;color:#8ec8ff;background:none;border:0;padding:0;cursor:pointer">${esc(CodenotchWidgets.t(uiLang,'Refresh'))}</button></div>`;
+  }
+  c.innerHTML=html;
+  const refresh=c.querySelector('#wx-refresh');
+  if(refresh) refresh.onclick=e=>{
+    e.stopPropagation();
+    const city=systemPayload&&systemPayload.weatherCity;
+    if(!city) return;
+    invoke('set_weather_city',{city:city}).catch(()=>{});
+  };
+  c.querySelectorAll('[data-cal]').forEach(button=>button.onclick=e=>{
+    e.stopPropagation();
+    const act=button.dataset.cal;
+    if(act==='prev') calendarOffset-=1;
+    else if(act==='next') calendarOffset+=1;
+    else if(act==='pick') calendarSelected=button.dataset.iso;
+    else { calendarOffset=0; calendarSelected=null; }
+    renderCard();
+  });
+  const copy=c.querySelector('#cal-copy');
+  if(copy) copy.onclick=e=>{ e.stopPropagation(); navigator.clipboard.writeText(copy.dataset.iso).then(()=>{ copy.textContent=CodenotchWidgets.t(uiLang,'Copied'); }).catch(()=>{}); };
+  c.querySelectorAll('[data-todo]').forEach(button=>button.onclick=e=>{
+    e.stopPropagation();
+    const id=button.dataset.id, act=button.dataset.todo;
+    const cmd=act==='toggle'?'toggle_todo':act==='remove'?'remove_todo':'add_todo';
+    const args=act==='add'?{title:prompt(CodenotchWidgets.t(uiLang,'Add to-do'))||''}:{id:id};
+    if(act==='add'&&!args.title) return;
+    invoke(cmd,args).catch(()=>{});
+  });
+  placeCard();
+}
+let calendarOffset=0, calendarSelected=null;
+function calendarCardHtml(){
+  const now=new Date();
+  const month=CodenotchWidgets.calendarMonth(now, calendarOffset, 0);
+  const selected=(()=>{ if(!calendarSelected) return now; const parts=calendarSelected.split('-').map(Number); return new Date(parts[0], parts[1], parts[2]); })();
+  const dayStart=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  const offset=Math.round((dayStart(selected)-dayStart(now))/86400000);
+  const iso=selected.getFullYear()+'-'+String(selected.getMonth()+1).padStart(2,'0')+'-'+String(selected.getDate()).padStart(2,'0');
+  let html=`<div class="c-sub">${esc(month.start.toLocaleString(undefined,{month:'long',year:'numeric'}))}</div>`;
+  html+=`<div style="display:flex;gap:8px;margin-bottom:6px"><button data-cal="prev" style="font:inherit;color:#8ec8ff;background:none;border:0;cursor:pointer">${esc(CodenotchWidgets.t(uiLang,'Previous month'))}</button><button data-cal="next" style="font:inherit;color:#8ec8ff;background:none;border:0;cursor:pointer">${esc(CodenotchWidgets.t(uiLang,'Next month'))}</button></div>`;
+  html+=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:11px;text-align:center">`;
+  for(const date of month.days){
+    const inMonth=date.getMonth()===month.start.getMonth();
+    const key=date.getFullYear()+'-'+date.getMonth()+'-'+date.getDate();
+    const on=calendarSelected?calendarSelected===key:dayStart(date)===dayStart(now);
+    html+=`<button data-cal="pick" data-iso="${key}" style="font:inherit;color:${on?'#fff':'#ddd'};background:${on?'#36a8eb':'transparent'};border:0;border-radius:99px;opacity:${inMonth?1:0.35};cursor:pointer">${date.getDate()}</button>`;
+  }
+  html+=`</div><div class="c-note">${esc(CodenotchWidgets.t(uiLang, CodenotchWidgets.dayDistance(offset)))}</div>`;
+  html+=`<button id="cal-copy" data-iso="${iso}" style="font:inherit;color:#8ec8ff;background:none;border:0;padding:0;cursor:pointer">${esc(CodenotchWidgets.t(uiLang,'Copy date'))}</button>`;
+  return html;
+}
+function todoCardHtml(meter){
+  const items=meter.items||[];
+  let html=`<div class="c-sub">${esc(items.filter(item=>item.done).length+'/'+items.length)}</div>`;
+  if(!items.length) html+=`<div class="c-note">${esc(CodenotchWidgets.t(uiLang,'Add your first task for today.'))}</div>`;
+  for(const item of items){
+    html+=`<div class="s-row"><button data-todo="toggle" data-id="${esc(item.id)}" style="font:inherit;color:#8ec8ff;background:none;border:0;cursor:pointer">${item.done?'☑':'☐'}</button><span style="${item.done?'text-decoration:line-through;color:#888':''}">${esc(item.title)}</span><button data-todo="remove" data-id="${esc(item.id)}" style="margin-left:auto;font:inherit;color:#888;background:none;border:0;cursor:pointer">✕</button></div>`;
+  }
+  html+=`<button data-todo="add" style="font:inherit;color:#8ec8ff;background:none;border:0;padding:6px 0 0;cursor:pointer">${esc(CodenotchWidgets.t(uiLang,'Add to-do'))}</button>`;
+  html+=`<div class="c-note">${esc(CodenotchWidgets.t(uiLang,'Unfinished tasks carry over · Saved on this PC'))}</div>`;
+  return html;
+}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 
 /* Hover: stays expanded while either the pill or the card is under the cursor; collapses after a 250 ms grace period (upstream motion rule) */
@@ -1334,6 +1435,8 @@ listen('weekly_ring',e=>{if(typeof e.payload==='string'){weeklyRing=e.payload;re
 listen('antigravity_prefs',e=>{if(e.payload){agPrefs=e.payload;renderRing();}}).catch(()=>{});
 listen('glyphs',e=>{glyphs=e.payload||glyphs;renderRing();if(card.classList.contains('show'))renderCard();}).catch(()=>{});
 listen('activity',e=>{activity=e.payload||activity;renderRing();if(card.classList.contains('show'))renderCard();}).catch(()=>{});
+listen('system-usage',e=>{systemPayload=e.payload||systemPayload;renderRing();if(card.classList.contains('show'))renderCard();}).catch(()=>{});
+invoke('get_widget_prefs').then(v=>{ if(v){ systemPayload=v; renderRing(); } }).catch(()=>{});
 invoke('get_activity').then(a=>{activity=a||activity;renderRing();}).catch(()=>{});
 invoke('get_glyphs').then(g=>{glyphs=g||glyphs;renderRing();}).catch(()=>{});
 // The edge: pushed on every placement (a drag that snapped elsewhere, or Settings), and asked for once

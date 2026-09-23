@@ -98,6 +98,28 @@ pub struct Config {
     /// false = no arc above the notch to carry it by. Nothing is lost: Appearance → Edge moves it too.
     #[serde(default = "yes")]
     pub show_move_handle: bool,
+    /// CPU, memory, disk, network, battery and power. Off stops sampling.
+    #[serde(default = "yes")]
+    pub shows_system_usage: bool,
+    #[serde(default = "yes")]
+    pub shows_calendar: bool,
+    #[serde(default = "yes")]
+    pub shows_weather: bool,
+    #[serde(default = "yes")]
+    pub shows_todo: bool,
+    /// Cell ids removed from the notch without forgetting their order or color.
+    #[serde(default)]
+    pub hidden_notch_items: Vec<String>,
+    /// Full notch order, accounts and meters together. Empty keeps the built-in order.
+    #[serde(default)]
+    pub cell_order: Vec<String>,
+    /// Per-cell color as the macOS palette key (`36a8eb`), not a usage band.
+    #[serde(default)]
+    pub notch_colors: BTreeMap<String, String>,
+    #[serde(default)]
+    pub todos: Vec<crate::widgets::TodoItem>,
+    #[serde(default)]
+    pub weather_location: Option<crate::widgets::WeatherLocation>,
 }
 
 fn default_notch_y() -> f64 {
@@ -214,6 +236,15 @@ impl Default for Config {
             notch_on_hover: true,
             tray_visible: true,
             show_move_handle: true,
+            shows_system_usage: true,
+            shows_calendar: true,
+            shows_weather: true,
+            shows_todo: true,
+            hidden_notch_items: Vec::new(),
+            cell_order: Vec::new(),
+            notch_colors: BTreeMap::new(),
+            todos: Vec::new(),
+            weather_location: None,
         }
     }
 }

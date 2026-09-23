@@ -32,6 +32,9 @@ struct ProviderRing: View {
     /// Where the user asked for it, if at all.
     var weeklyRing: WeeklyRing = .off
     var bandOverride: UsageBand? = nil
+    var colorOverride: Color? = nil
+    /// Replaces the glyph when a cell has to name itself inside the circle.
+    var centerText: String? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.codenotchReduceTransparency) private var reduceTransparency
@@ -40,6 +43,10 @@ struct ProviderRing: View {
     @Environment(\.codenotchAccentColor) private var accentColor
     @Environment(\.weeklyRingDashed) private var weeklyRingDashed
     @State private var spin: Double = 0
+
+    /// A stock circle is green or red in itself. The gray track stays only for
+    /// the part of the ring the move has not reached.
+    private var trackColor: Color { Palette.ringTrack }
 
     private var band: UsageBand {
         guard !isBlocked else { return .exhausted }
@@ -54,10 +61,6 @@ struct ProviderRing: View {
         guard let contextFraction else { return 1 }
         return max(NotchLayout.localArcMinimumSweep, CGFloat(min(max(contextFraction, 0), 1)))
     }
-    private var primaryColor: Color {
-        isStale ? Palette.textSecondary : band.color(accent: accentColor)
-    }
-
     private var weeklyBand: UsageBand {
         isBlocked ? .exhausted : UsageBand.band(for: weeklyFraction ?? 0, watchLimit: watchLimit, criticalLimit: criticalLimit)
     }
@@ -79,7 +82,14 @@ struct ProviderRing: View {
             // even when the percentage behind it has gone stale.
             ZStack {
                 Circle()
-                    .strokeBorder(Palette.ringTrack, lineWidth: NotchLayout.trackStroke)
+                    .strokeBorder(trackColor, lineWidth: NotchLayout.trackStroke)
+
+                if centerText != nil, let colorOverride, (usedFraction ?? 0) > 0 {
+                    StockChangePie(fraction: sweep)
+                        .fill(colorOverride)
+                        .padding(NotchLayout.trackStroke * 0.35)
+                        .animation(NotchMotion.reading, value: sweep)
+                }
 
                 if localPerformance != nil || localContextFraction != nil {
                     // Two facts on one ring: the arc is the context filling up,
@@ -104,8 +114,9 @@ struct ProviderRing: View {
                         .inset(by: NotchLayout.trackStroke / 2)
                         .trim(from: 0, to: sweep)
                         .stroke(
-                            band.color(accent: accentColor),
-                            style: StrokeStyle(lineWidth: NotchLayout.progressStroke, lineCap: .round)
+                            colorOverride ?? band.color(accent: accentColor),
+                            style: StrokeStyle(lineWidth: centerText == nil ? NotchLayout.progressStroke : NotchLayout.trackStroke,
+                                               lineCap: .round)
                         )
                         // Refreshing spins the reading itself rather than
                         // overlaying a separate spinner: the thing being
@@ -158,11 +169,22 @@ struct ProviderRing: View {
                         .animation(NotchMotion.reading, value: weeklyBand)
                 }
 
-                ProviderGlyphView(glyph: glyph, customIconFilename: customIconFilename)
-                    .foregroundStyle(Palette.textPrimary)
-                    // A spent limit dims its glyph so the ring reads as "waiting".
-                    // Under reduce-transparency, boost opacity so it stays legible without low alpha.
-                    .opacity(band == .exhausted ? (reduceTransparency ? 0.7 : 0.35) : 1)
+                Group {
+                    if let centerText {
+                        Text(centerText)
+                            .font(.system(size: Design.px(13), weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.4)
+                            .frame(width: NotchLayout.ringDiameter * 0.72)
+                            .foregroundStyle(Palette.textPrimary)
+                    } else {
+                        ProviderGlyphView(glyph: glyph, customIconFilename: customIconFilename)
+                            .foregroundStyle(colorOverride ?? Palette.textPrimary)
+                    }
+                }
+                // A spent limit dims its glyph so the ring reads as "waiting".
+                // Under reduce-transparency, boost opacity so it stays legible without low alpha.
+                .opacity(band == .exhausted && colorOverride == nil ? (reduceTransparency ? 0.7 : 0.35) : 1)
             }
             .opacity(isStale ? (reduceTransparency ? 0.75 : 0.45) : 1)
 
@@ -193,6 +215,31 @@ struct ProviderRing: View {
                 spin += 360
             }
         }
+    }
+}
+
+/// A wedge that starts at 12 o'clock and grows clockwise. A fraction of 1 is
+/// a full disk, which a stock uses for a 30 percent move.
+private struct StockChangePie: Shape {
+    var fraction: CGFloat
+    var animatableData: CGFloat {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let amount = min(max(fraction, 0), 1)
+        guard amount > 0 else { return path }
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        path.move(to: center)
+        path.addArc(center: center, radius: radius,
+                    startAngle: .degrees(-90),
+                    endAngle: .degrees(-90 + 360 * amount),
+                    clockwise: false)
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -260,19 +307,84 @@ private struct ActivityArc: View {
     }
 }
 
+/// The same reading as a ring, drawn as a horizontal meter. It fills from
+/// the leading end. Thirty percent still fills a stock meter.
+private struct NotchMeterBar: View {
+    var fraction: CGFloat
+    var color: Color
+    var name: String
+
+    private var trackWidth: CGFloat { NotchLayout.ringDiameter * 0.92 }
+
+    var body: some View {
+        VStack(spacing: Design.px(6)) {
+            Text(name)
+                .font(Typography.percent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(width: trackWidth, height: NotchLayout.percentLineHeight)
+                .foregroundStyle(Palette.textPrimary)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.ringTrack)
+                Capsule()
+                    .fill(color)
+                    .frame(width: max(fraction > 0 ? Design.px(4) : 0, trackWidth * min(max(fraction, 0), 1)))
+            }
+            .frame(width: trackWidth, height: Design.px(14))
+            .animation(NotchMotion.reading, value: fraction)
+        }
+        .frame(width: NotchLayout.ringDiameter, height: NotchLayout.barMeterHeight)
+    }
+}
+
 struct ProviderCell: View {
     let snapshot: ProviderSnapshot
     var activity: ActivitySummary?
     var isRefreshing: Bool = false
     var weeklyRing: WeeklyRing = .off
+    var meterStyle: NotchMeterStyle = .ring
 
     /// A dash, not "0%": nothing read is not the same as nothing used.
     private var readingText: String {
         snapshot.hasReading ? snapshot.headlineText : "—"
     }
 
+    private var fitsColumn: Bool { snapshot.localModel != nil || snapshot.kind != .usage }
+
+    private var meterName: String {
+        if snapshot.glyph == .antigravity { return "AGY" }
+        return snapshot.localModel?.name ?? snapshot.ringLabel ?? snapshot.displayName
+    }
+
+    /// Stock direction wins over a picked accent: above the previous close the
+    /// circle is green, below it the circle is red.
+    /// The bar uses the same colour the circle would: green or red for a
+    /// stock, and the usage band for every other cell.
+    private var meterColor: Color {
+        if snapshot.kind == .stocks, let ringColor { return ringColor }
+        if let chosen = snapshot.systemColor?.color { return chosen }
+        let band = snapshot.bandOverride ?? UsageBand.band(for: snapshot.ringFraction ?? 0)
+        return band.color(accent: accentColor)
+    }
+
+    @Environment(\.codenotchAccentColor) private var accentColor
+
+    private var ringColor: Color? {
+        guard snapshot.kind == .stocks else { return snapshot.systemColor?.color }
+        switch snapshot.bandOverride {
+        case .ample: return Palette.ample
+        case .critical: return Palette.generationSlow
+        default: return nil
+        }
+    }
+
     var body: some View {
-        VStack(spacing: NotchLayout.ringLabelGap) {
+        VStack(spacing: meterStyle == .bar ? NotchLayout.barLabelGap : NotchLayout.ringLabelGap) {
+            if meterStyle == .bar {
+                NotchMeterBar(fraction: CGFloat(snapshot.ringFraction ?? 0),
+                              color: meterColor,
+                              name: meterName)
+            } else {
             ProviderRing(
                 usedFraction: snapshot.localModel == nil && snapshot.hasReading ? snapshot.ringFraction : nil,
                 glyph: snapshot.glyph,
@@ -285,23 +397,26 @@ struct ProviderCell: View {
                 localContextFraction: snapshot.localContextFraction,
                 weeklyFraction: snapshot.hasReading ? snapshot.weeklyFraction : nil,
                 weeklyRing: weeklyRing,
-                bandOverride: snapshot.bandOverride
+                bandOverride: snapshot.bandOverride,
+                colorOverride: ringColor,
+                centerText: snapshot.ringLabel
             )
+            }
             Text(readingText)
                 .font(Typography.percent)
                 .foregroundStyle(snapshot.showsLocalPerformance && snapshot.localPerformance == nil
-                                 ? Palette.textSecondary : Palette.textPrimary)
+                                 ? Palette.textSecondary : ringColor ?? Palette.textPrimary)
                 // Keep local speeds inside the ring's column so longer units
                 // cannot consume the notch's existing side margins.
                 .lineLimit(1)
-                .minimumScaleFactor(snapshot.localModel == nil ? 1 : 0.5)
-                .fixedSize(horizontal: snapshot.localModel == nil, vertical: false)
-                .frame(width: snapshot.localModel == nil ? nil : NotchLayout.ringDiameter,
+                .minimumScaleFactor(fitsColumn ? 0.5 : 1)
+                .fixedSize(horizontal: !fitsColumn, vertical: false)
+                .frame(width: fitsColumn ? NotchLayout.ringDiameter : nil,
                        height: NotchLayout.percentLineHeight)
                 .contentTransition(.numericText())
                 .animation(NotchMotion.reading, value: readingText)
         }
-        .frame(height: NotchLayout.cellExtent)
+        .frame(height: meterStyle == .bar ? NotchLayout.barCellExtent : NotchLayout.cellExtent)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }

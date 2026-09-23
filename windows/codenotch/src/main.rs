@@ -27,6 +27,8 @@ mod dropzones;
 mod watcher;
 mod settings_window;
 mod updater;
+mod widgets;
+mod system_usage;
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -39,7 +41,9 @@ pub const BUILD: &str = "r31";
 pub const NOTCH_H: f64 = 520.0; // 300 clipped the card once it held three window blocks plus the session list; 460 clipped Antigravity's two model groups once the reading was stale and an agent was working
 /// Height of the upright window. Five cells make a 447 px pill; its fillets add 38.7 px at each end
 /// and the settings orb reaches 28.5 px past the far one, so 520 cut both fillets and hid the orb.
-pub const NOTCH_UPRIGHT_H: f64 = 650.0;
+/// Tall enough for the account rings plus the system meters. A shorter window
+/// clipped the pill once calendar, weather and the to-do list joined them.
+pub const NOTCH_UPRIGHT_H: f64 = 980.0;
 
 pub struct AppState {
     pub store: Mutex<state::Store>,
@@ -1750,7 +1754,14 @@ fn main() {
             dropzones::get_zones,
             settings_window::get_system_look,
             settings_window::quit_app,
-            settings_window::open_author_page
+            settings_window::open_author_page,
+            system_usage::get_widget_prefs,
+            system_usage::set_widget_prefs,
+            system_usage::search_weather_cities,
+            system_usage::set_weather_city,
+            system_usage::add_todo,
+            system_usage::toggle_todo,
+            system_usage::remove_todo
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -1773,6 +1784,7 @@ fn main() {
             antigravity::start(handle.clone());
             glm::start(handle.clone());
             activity::start(handle.clone());
+            system_usage::start(handle.clone());
             // Collecting glyphs may read icon resources out of a few executables; do it off the main thread and push when done
             let gh = handle.clone();
             std::thread::spawn(move || reload_glyphs(&gh));

@@ -667,6 +667,24 @@ final class SingleCellBalanceTests: XCTestCase {
 /// the frame already puts there. Which is what made the top and bottom bars
 /// read as far too spread out.
 final class CellPitchTests: XCTestCase {
+    func testBarCellsUseCompactPitchAndMatchingCentres() {
+        for edge in NotchEdge.allCases {
+            let extent = NotchLayout.cellAlong(for: edge, meterStyle: .bar)
+            let pitch = extent + NotchLayout.barCellSpacing
+            XCTAssertLessThan(pitch, NotchLayout.cellPitch(for: edge))
+            let first = NotchLayout.ringCenter(index: 0, edge: edge,
+                spacing: NotchLayout.barCellSpacing, meterStyle: .bar)
+            let second = NotchLayout.ringCenter(index: 1, edge: edge,
+                spacing: NotchLayout.barCellSpacing, meterStyle: .bar)
+            XCTAssertEqual(second - first, pitch, accuracy: 0.001, "\(edge)")
+            XCTAssertEqual(NotchLayout.shapeLength(cellCount: 2, edge: edge,
+                spacing: NotchLayout.barCellSpacing, meterStyle: .bar)
+                - NotchLayout.shapeLength(cellCount: 1, edge: edge,
+                    spacing: NotchLayout.barCellSpacing, meterStyle: .bar),
+                pitch, accuracy: 0.001, "\(edge)")
+        }
+    }
+
     func testACellIsTheRingAndItsLabelDownASideEdge() {
         XCTAssertEqual(NotchLayout.cellAlong(for: .right), NotchLayout.cellExtent, accuracy: 0.001)
         XCTAssertEqual(NotchLayout.cellAlong(for: .left), NotchLayout.cellExtent, accuracy: 0.001)

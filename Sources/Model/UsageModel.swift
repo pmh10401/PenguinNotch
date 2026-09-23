@@ -296,6 +296,9 @@ struct ProviderSnapshot: Identifiable, Equatable {
     /// windows: it is not a measurement, it is a door being shut.
     var block: UsageBlock?
     var kind: ProviderKind = .usage
+    /// An explicit system-meter colour; nil keeps the automatic usage colours.
+    var systemColor: AccentColorChoice? = nil
+    var cpuCores: [SystemUsageReading.CoreLoad] = []
     var localRuntime: LocalRuntimeReading?
     var localModel: LocalRuntimeReading.Model?
     var localPerformance: LocalModelPerformance?
@@ -315,6 +318,9 @@ struct ProviderSnapshot: Identifiable, Equatable {
     /// runtime that supplied it.
     var sourceProviderID: String?
     var customIconFilename: String?
+    /// Short text drawn inside the ring instead of the glyph. Stock cells use
+    /// the ticker so neighbouring circles stay distinguishable.
+    var ringLabel: String? = nil
 
     var providerID: String { sourceProviderID ?? id }
 

@@ -21,6 +21,20 @@ documented behaviour and the wire formats.
 
 Providers that are not installed simply do not get a cell.
 
+The same notch also shows **CPU, RAM, GPU, DISK, NET, BAT and PWR**, plus a calendar,
+weather and a to-do list. CPU, memory, disk, network and battery use documented
+Win32 calls. GPU utilization has no public per-process-free reading here, so that
+cell stays `—` rather than a fabricated zero. Power is the battery discharge
+reported by `CallNtPowerInformation` / `SystemBatteryState` while unplugged and
+discharging. The rate is a signed value (negative means discharging); it is
+labelled as an estimate and is not added to the watt-hour total. On AC, or when
+the reading is missing, the cell stays empty. A failed network or CPU read keeps
+the last good counters, and a gap longer than ten seconds is not billed. Weather
+is Celsius from Open-Meteo and is fetched off the sampling thread. Refresh asks
+again for the saved city and does not clear it. Order, hide and per-cell color
+are in Settings → System. Hiding one meter does not stop the others; turning off
+system monitoring does.
+
 ### Codex quota recovery
 
 The direct usage endpoint remains the first choice. If it fails, Codenotch can

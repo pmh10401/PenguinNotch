@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var activityCoordinator: ActivityCoordinator?
     private var ollamaRelay: OllamaActivityRelay?
     private var lmstudioMetrics: LMStudioMetrics?
+    private var systemUsage: SystemUsageMonitor?
+    private var widgets: NotchWidgetsMonitor?
+    private var stocks: StockQuotesMonitor?
     private var preferences: Preferences?
     private var settings: SettingsWindowController?
     private var whatsNew: WhatsNewWindowController?
@@ -99,6 +102,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // notch would already have flashed on the default edge.
         let fleet = NotchFleet(scope: preferences.notchScope, edge: preferences.notchEdge)
         self.notchFleet = fleet
+        fleet.todoPreferences = preferences
+
+        preferences.$providerOrder
+            .sink { [weak fleet] in fleet?.apply(order: $0) }
+            .store(in: &cancellables)
+        preferences.$hiddenNotchItems
+            .sink { [weak fleet] in fleet?.apply(hiddenItems: $0) }
+            .store(in: &cancellables)
+        let widgets = NotchWidgetsMonitor(preferences: preferences)
+        self.widgets = widgets
+        let stocks = StockQuotesMonitor(preferences: preferences)
+        self.stocks = stocks
+        widgets.$snapshots.combineLatest(stocks.$snapshots, preferences.$systemUsageColors)
+            .sink { [weak fleet] widgets, quotes, colors in
+                fleet?.setWidgetSnapshots(widgets + quotes, colors: colors)
+            }
+            .store(in: &cancellables)
+
+        let systemUsage = SystemUsageMonitor()
+        self.systemUsage = systemUsage
+        systemUsage.$snapshots
+            .combineLatest(preferences.$systemUsageColors)
+            .sink { [weak fleet] snapshots, colors in
+                fleet?.setSystemSnapshots(snapshots, colors: colors)
+            }
+            .store(in: &cancellables)
+        preferences.$showsSystemUsage
+            .removeDuplicates()
+            .sink { [weak systemUsage] in systemUsage?.setEnabled($0) }
+            .store(in: &cancellables)
 
         // `CODENOTCH_DEMO=1` puts the design frame's three providers on screen
         // with its numbers, for screenshots and for eyeballing the layout.
@@ -558,6 +591,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .sink { [weak fleet] in fleet?.apply(weeklyRing: $0) }
                 .store(in: &cancellables)
 
+            preferences.$notchMeterStyle
+                .receive(on: RunLoop.main)
+                .sink { [weak fleet] in fleet?.apply(notchMeterStyle: $0) }
+                .store(in: &cancellables)
+
             preferences.$showsMoveHandle
                 .receive(on: RunLoop.main)
                 .sink { [weak fleet] in fleet?.apply(showsMoveHandle: $0) }
@@ -665,9 +703,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 .store(in: &cancellables)
             store.start()
-            fleet.onRefresh = { [weak store] in store?.refreshNow() }
-            fleet.onRefreshProvider = { [weak store] id in
-                await store?.refresh(providerID: id)?.value
+            fleet.onRefresh = { [weak store, weak widgets, weak stocks] in
+                store?.refreshNow()
+                widgets?.refreshWeather()
+                stocks?.refresh()
+            }
+            fleet.onRefreshProvider = { [weak store, weak widgets, weak stocks] id in
+                if id == "widget-weather" { widgets?.refreshWeather() }
+                else if id == "widget-stocks" || id.hasPrefix("widget-stock:") { stocks?.refresh() }
+                else { await store?.refresh(providerID: id)?.value }
             }
             store.$refreshing
                 .receive(on: RunLoop.main)
@@ -810,6 +854,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fleet.apply(resetTimeFormat: preferences.resetTimeFormat)
         fleet.apply(accentColor: preferences.accentColor)
         fleet.apply(watchLimit: preferences.watchLimit, criticalLimit: preferences.criticalLimit)
+        fleet.apply(notchMeterStyle: preferences.notchMeterStyle)
         fleet.apply(weeklyRing: preferences.weeklyRing)
         fleet.apply(weeklyRingDashed: preferences.weeklyRingDashed)
         fleet.apply(showsMoveHandle: preferences.showsMoveHandle)
@@ -974,6 +1019,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        systemUsage?.setEnabled(false)
+        widgets?.stop()
         ollamaRelay?.configure(enabled: false, endpoint: OllamaEndpoint.defaultAddress)
         lmstudioMetrics?.stop()
         tokenRefresher?.stop()

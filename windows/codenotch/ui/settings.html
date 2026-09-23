@@ -162,6 +162,8 @@
           <div class="item cap" id="cap-screen" data-dynamic hidden></div>
           <div class="item"><span class="hint">Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen's right-hand edge if the screen it was on has been unplugged.</span><button class="btn" id="btn-recentre">Recentre</button></div>
         </div>
+        <div class="sec" id="sec-widgets">System</div>
+        <div class="group" id="widget-box" data-dynamic></div>
         <div class="sec">App</div>
         <div class="group">
           <div class="item"><span>App icon</span><span class="seg" id="seg-tray"><button data-v="tray">System tray</button><button data-v="none">Neither</button></span></div>
@@ -1228,6 +1230,143 @@ document.getElementById('seg-weekly').addEventListener('click', e => {
     .then(() => { weeklyBusy = false; renderWeekly(); });
 });
 
+/* ---- System meters, calendar, weather, to-dos ---------------------------- */
+const WIDGET_UI = {
+  ko: {
+    'System':'시스템',
+    'Enable system monitoring':'시스템 모니터링 사용',
+    'Meters refresh about once a second. Hiding one does not stop the others.':'미터는 약 1초마다 갱신됩니다. 하나만 숨겨도 나머지는 계속 측정합니다.',
+    'Calendar':'달력', 'Weather':'날씨', 'To-do':'할 일',
+    'Show':'표시', 'Up':'위로', 'Down':'아래로',
+    'Search city':'도시 검색', 'Search':'검색',
+    'No matching city.':'일치하는 도시가 없습니다.',
+    'City search failed.':'도시 검색에 실패했습니다.',
+    'Celsius, from Open-Meteo. Refreshes every 15 minutes.':'섭씨, Open-Meteo. 15분마다 갱신합니다.',
+    'Add to-do':'할 일 추가',
+    'Hidden items keep their color and place.':'숨긴 항목은 색과 위치를 유지합니다.'
+  },
+  ja: {
+    'System':'システム', 'Enable system monitoring':'システム監視を有効にする',
+    'Calendar':'カレンダー', 'Weather':'天気', 'To-do':'タスク', 'Show':'表示',
+    'Search city':'都市を検索', 'Search':'検索', 'Add to-do':'タスクを追加'
+  },
+  zh: {
+    'System':'系统', 'Enable system monitoring':'启用系统监控',
+    'Calendar':'日历', 'Weather':'天气', 'To-do':'待办', 'Show':'显示',
+    'Search city':'搜索城市', 'Search':'搜索', 'Add to-do':'添加待办'
+  },
+  'zh-Hant': {
+    'System':'系統', 'Enable system monitoring':'啟用系統監控',
+    'Calendar':'日曆', 'Weather':'天氣', 'To-do':'待辦', 'Show':'顯示',
+    'Search city':'搜尋城市', 'Search':'搜尋', 'Add to-do':'新增待辦'
+  },
+  ru: {
+    'System':'Система', 'Enable system monitoring':'Следить за системой',
+    'Calendar':'Календарь', 'Weather':'Погода', 'To-do':'Дела', 'Show':'Показать',
+    'Search city':'Найти город', 'Search':'Найти', 'Add to-do':'Добавить дело'
+  },
+  uk: {
+    'System':'Система', 'Enable system monitoring':'Стежити за системою',
+    'Calendar':'Календар', 'Weather':'Погода', 'To-do':'Справи', 'Show':'Показати',
+    'Search city':'Знайти місто', 'Search':'Знайти', 'Add to-do':'Додати справу'
+  }
+};
+function wui(key){ const table=WIDGET_UI[uiLang]; return (table&&table[key])||key; }
+const METER_ROWS=[
+  ['system-cpu','CPU'],['system-memory','RAM'],['system-gpu','GPU'],['system-disk','DISK'],
+  ['system-network','NET'],['system-battery','BAT'],['system-power','PWR'],
+  ['widget-calendar','Calendar'],['widget-weather','Weather'],['widget-todo','To-do']
+];
+const PALETTE=['ff33e1','eb4236','eb8436','ffd400','00ff88','00e5cc','36a8eb','6c5ce7','b026ff','f7f6f5'];
+let widgetPrefs=null;
+function renderWidgets(){
+  const box=document.getElementById('widget-box');
+  const sec=document.getElementById('sec-widgets');
+  if(!box||!widgetPrefs) return;
+  sec.textContent=wui('System');
+  const p=widgetPrefs;
+  const hidden=new Set(p.hidden||[]);
+  const order=(p.order&&p.order.length)?p.order.slice():METER_ROWS.map(row=>row[0]);
+  METER_ROWS.forEach(row=>{ if(order.indexOf(row[0])<0) order.push(row[0]); });
+  const name=id=>wui((METER_ROWS.find(row=>row[0]===id)||[id,id])[1]);
+  let html=`<div class="item"><span>${esc(wui('Enable system monitoring'))}</span><button class="switch" id="sw-system" role="switch" aria-checked="${p.system?'true':'false'}"></button></div>`;
+  html+=`<div class="item cap">${esc(wui('Meters refresh about once a second. Hiding one does not stop the others.'))}</div>`;
+  html+=`<div class="item"><span>${esc(wui('Calendar'))}</span><button class="switch" id="sw-cal" role="switch" aria-checked="${p.calendar?'true':'false'}"></button></div>`;
+  html+=`<div class="item"><span>${esc(wui('Weather'))}</span><button class="switch" id="sw-wx" role="switch" aria-checked="${p.weather?'true':'false'}"></button></div>`;
+  html+=`<div class="item"><span>${esc(wui('To-do'))}</span><button class="switch" id="sw-todo" role="switch" aria-checked="${p.todo?'true':'false'}"></button></div>`;
+  html+=`<div class="item cap">${esc(wui('Hidden items keep their color and place.'))}</div>`;
+  order.forEach((id,index)=>{
+    const on=!hidden.has(id);
+    const color=p.colors&&p.colors[id];
+    html+=`<div class="item"><span>${esc(name(id))}</span><span>
+      <button data-move="${id}" data-dir="-1" ${index===0?'disabled':''}>${esc(wui('Up'))}</button>
+      <button data-move="${id}" data-dir="1" ${index===order.length-1?'disabled':''}>${esc(wui('Down'))}</button>
+      <button class="switch" data-hide="${id}" role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(wui('Show'))}"></button>
+      <button data-color="${id}" title="${esc(color||'auto')}" style="width:16px;height:16px;border-radius:99px;border:0;background:${color?'#'+color:'#888'}"></button>
+    </span></div>`;
+  });
+  const city=p.weatherCity&&p.weatherCity.name||'';
+  html+=`<div class="item"><span>${esc(wui('Search city'))}</span><span><input id="wx-q" value="" placeholder="${esc(city)}" style="width:120px"><button id="wx-go">${esc(wui('Search'))}</button></span></div>`;
+  html+=`<div class="item cap" id="wx-msg">${esc(wui('Celsius, from Open-Meteo. Refreshes every 15 minutes.'))}</div>`;
+  html+=`<div id="wx-results"></div>`;
+  box.innerHTML=html;
+  const save=next=>invoke('set_widget_prefs',{prefs:next}).then(renderFromPayload).catch(e=>strip('set_widget_prefs failed: '+errText(e)));
+  const current=()=>({
+    system:p.system, calendar:p.calendar, weather:p.weather, todo:p.todo,
+    hidden:p.hidden||[], order:order, colors:p.colors||{}
+  });
+  box.querySelector('#sw-system').onclick=()=>save(Object.assign(current(),{system:!p.system}));
+  box.querySelector('#sw-cal').onclick=()=>save(Object.assign(current(),{calendar:!p.calendar}));
+  box.querySelector('#sw-wx').onclick=()=>save(Object.assign(current(),{weather:!p.weather}));
+  box.querySelector('#sw-todo').onclick=()=>save(Object.assign(current(),{todo:!p.todo}));
+  box.querySelectorAll('[data-hide]').forEach(button=>button.onclick=()=>{
+    const id=button.dataset.hide;
+    const hidden=new Set(p.hidden||[]);
+    if(hidden.has(id)) hidden.delete(id); else hidden.add(id);
+    save(Object.assign(current(),{hidden:[...hidden]}));
+  });
+  box.querySelectorAll('[data-move]').forEach(button=>button.onclick=()=>{
+    const ids=order.slice();
+    const from=ids.indexOf(button.dataset.move);
+    const to=from+Number(button.dataset.dir);
+    if(from<0||to<0||to>=ids.length) return;
+    const moved=ids.splice(from,1)[0];
+    ids.splice(to,0,moved);
+    save(Object.assign(current(),{order:ids}));
+  });
+  box.querySelectorAll('[data-color]').forEach(button=>button.onclick=()=>{
+    const id=button.dataset.color;
+    const colors=Object.assign({}, p.colors||{});
+    const now=colors[id];
+    const next=PALETTE[(PALETTE.indexOf(now)+1)%PALETTE.length];
+    if(now&&PALETTE.indexOf(now)===PALETTE.length-1) delete colors[id];
+    else colors[id]=next;
+    save(Object.assign(current(),{colors:colors}));
+  });
+  box.querySelector('#wx-go').onclick=()=>{
+    const name=box.querySelector('#wx-q').value;
+    invoke('search_weather_cities',{name:name}).then(rows=>{
+      const host=box.querySelector('#wx-results');
+      host.innerHTML='';
+      if(!rows||!rows.length){ box.querySelector('#wx-msg').textContent=wui('No matching city.'); return; }
+      rows.forEach(city=>{
+        const b=document.createElement('button');
+        b.textContent=[city.name, city.admin1, city.country].filter(Boolean).join(', ');
+        b.onclick=()=>invoke('set_weather_city',{city:city}).then(()=>call('get_widget_prefs',undefined,null).then(renderFromPayload));
+        host.appendChild(b);
+      });
+    }).catch(()=>{ box.querySelector('#wx-msg').textContent=wui('City search failed.'); });
+  };
+}
+function renderFromPayload(v){
+  if(!v) return;
+  widgetPrefs={
+    system:!!v.system, calendar:!!v.calendar, weather:!!v.weatherOn, todo:!!v.todoOn,
+    hidden:v.hidden||[], order:v.order||[], colors:v.colors||{}, weatherCity:v.weatherCity||null
+  };
+  renderWidgets();
+}
+
 /* ---- Appearance: position ------------------------------------------------ */
 document.getElementById('btn-recentre').addEventListener('click', () => {
   invoke('reset_notch_position')
@@ -1326,6 +1465,7 @@ function boot(){
   call('get_notch_edge', undefined, null).then(v => { if(typeof v === 'string') notchEdge = v; renderEdge(); });
   refreshScreens();
   call('get_weekly_ring', undefined, null).then(v => { if(typeof v === 'string') weeklyRing = v; renderWeekly(); });
+  call('get_widget_prefs', undefined, null).then(renderFromPayload);
   call('get_ui_flags', undefined, null).then(v => { if(v && typeof v === 'object') flags = readFlags(v); renderFlags(); });
   Promise.all([call('get_lang', undefined, 'auto'), call('get_lang_resolved', undefined, 'en')]).then(([raw, resolved]) => {
     const l = (typeof raw === 'string' && LANGS.indexOf(raw) >= 0) ? raw : 'auto';

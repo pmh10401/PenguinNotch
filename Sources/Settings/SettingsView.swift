@@ -773,7 +773,55 @@ struct SettingsView: View {
     // warning.
     private var appearancePane: some View {
         Form {
+            Section(L10n.t("Notch items and order")) {
+                Toggle(L10n.t("Enable system monitoring"), isOn: $preferences.showsSystemUsage)
+                NotchOrderSettings(preferences: preferences, snapshots: notchOrderSnapshots)
+            }
+            Section(L10n.t("Weather city")) {
+                WeatherSettings(preferences: preferences)
+            }
+            Section(L10n.t("Stocks")) {
+                StockSettings(preferences: preferences)
+            }
+            Section(L10n.t("System usage")) {
+                Text(L10n.t("System monitoring refreshes every second. Hiding individual meters keeps monitoring active. Turn off Enable system monitoring above to stop sampling. Choose each item's color below."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(SystemUsageReading().snapshots + [CalendarMonth.snapshot(), NotchWidgetsMonitor.weatherPlaceholder(), TodoItem.snapshot([])] + StockBoard.orderSnapshots(stored: preferences.stockSymbols)) { snapshot in
+                    LabeledContent(snapshot.displayName) {
+                        HStack(spacing: 2) {
+                            ForEach(AccentColorChoice.allCases) { choice in
+                                AccentColorSwatch(choice: choice,
+                                                  isSelected: preferences.systemUsageColors[snapshot.id] == choice) {
+                                    preferences.systemUsageColors[snapshot.id] = choice
+                                }
+                                .accessibilityLabel("\(snapshot.displayName), \(choice.title)")
+                            }
+                            Button {
+                                preferences.systemUsageColors[snapshot.id] = nil
+                            } label: {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .frame(width: 22, height: 22)
+                            }
+                            .buttonStyle(.plain)
+                            .help(L10n.t("Reset to defaults"))
+                            .accessibilityLabel("\(snapshot.displayName), \(L10n.t("Reset to defaults"))")
+                            .disabled(preferences.systemUsageColors[snapshot.id] == nil)
+                        }
+                    }
+                }
+            }
             Section(L10n.t("Notch")) {
+                Picker(L10n.t("Meter style"), selection: $preferences.notchMeterStyle) {
+                    ForEach(NotchMeterStyle.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text(L10n.t("Circles are the ordinary cells. Bars draw the same readings, including accounts, system meters and stocks. A stock bar still fills at 30 percent and stays green or red."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Picker(L10n.t("Reset time"), selection: $preferences.resetTimeFormat) {
                     ForEach(ResetTimeFormat.allCases) { Text($0.title).tag($0) }
                 }
@@ -1057,6 +1105,14 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var notchOrderSnapshots: [ProviderSnapshot] {
+        var snapshots = usageStore?.notchSnapshots ?? []
+        snapshots += SystemUsageReading().snapshots
+        snapshots += [CalendarMonth.snapshot(), NotchWidgetsMonitor.weatherPlaceholder(), TodoItem.snapshot(preferences.todoItems)]
+        snapshots += StockBoard.orderSnapshots(stored: preferences.stockSymbols)
+        return snapshots
     }
 
     /// Limits in the menu bar: the switch, and under it one row for each

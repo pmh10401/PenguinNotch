@@ -42,8 +42,12 @@ pub fn show(app: &AppHandle, screen: &crate::Screen, zones: &Zones) {
         .title("Codenotch drop zones")
         .position(ax as f64 / screen.scale, ay as f64 / screen.scale)
         .inner_size(aw as f64 / screen.scale, ah as f64 / screen.scale)
-        .decorations(false)
-        .transparent(true)
+        .decorations(false);
+    // Tauri only exposes `transparent` off macOS unless the private-API feature is on.
+    // This window is a Windows overlay; the macOS build of the crate is for tests.
+    #[cfg(windows)]
+    let builder = builder.transparent(true);
+    let builder = builder
         .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)

@@ -278,6 +278,145 @@ and the time until it resets, like `72% · 2h 18m | 41% · 4h 05m`. Choosing
 what the bar shows never changes what Codenotch reads, and with nothing chosen
 the icon comes back. Its menu has the full readings either way.
 
+## System usage (local development)
+
+The macOS notch, and the Windows notch, also show **CPU, RAM, GPU, DISK, NET, BAT and PWR** as seven cells,
+refreshed about once a second. **Settings → Appearance → System usage** hides
+the cells and stops sampling. These readings also work with no connected AI
+accounts and do not trigger quota alerts or get saved to the usage archive.
+
+Choose a separate colour for each meter in the same settings section. The
+choice is saved and applies to its arc, label, value and tooltip bar regardless
+of usage level. The reset arrow beside each palette restores automatic usage
+colours for that meter. NET's arc shows the primary connection while its label
+keeps the traffic rate; PWR has no percentage arc. BAT colours warn about low charge rather than
+high usage, unless an explicit colour is selected.
+
+- **CPU:** busy ticks across all logical cores between samples, from 0–100%.
+  Hover for user/system shares, logical core count, macOS thermal pressure and uptime.
+  A scrollable two-column grid shows each logical core's load, numbered from 1,
+  using Mach processor ticks on the same sampling interval. The grid follows the
+  CPU color setting. Initial readings, read failures and long gaps never invent 0%.
+- **RAM:** anonymous memory minus purgeable pages, plus wired memory and the
+  physical compressor footprint. File-backed cache is excluded. Hover for
+  used/total capacity, wired and compressed memory, and swap used. These sizes
+  are not a memory-pressure measurement.
+- **GPU:** the busiest accelerator's driver-reported `Device Utilization %`.
+  This IOKit statistic is undocumented and may be absent on other hardware or
+  macOS versions; an unavailable reading is shown as `—`, never 0%.
+  Hover also shows that same accelerator's renderer/tiler activity and in-use
+  GPU memory when its driver exposes them. These are engine counters, not
+  individual GPU core loads; per-core GPU load is unavailable.
+- **DISK:** used space on the volume containing the home directory, based on
+  total capacity minus currently available capacity. APFS purgeable space can
+  make this differ from Finder. Hover also shows free space and the OS's
+  available-for-important-files estimate, which can include reclaimable space.
+  This measures capacity, not disk I/O speed.
+- **NET:** total receive + send throughput on active `en*` Ethernet/Wi-Fi
+  interfaces. Hover for separate download and upload rates in decimal B/s,
+  KB/s and MB/s. Loopback, VPN, bridge and AirDrop interfaces are excluded to
+  avoid counting the same traffic twice. The compact cell uses K/M/G per second.
+  The primary IPv4 connection (or IPv6 when no recognized IPv4 connection is
+  available) determines the arc: **Ethernet fills the circle; Wi-Fi uses RSSI**.
+  The Wi-Fi arc is a relative scale from -90 to -50 dBm, not a bandwidth
+  percentage. Unknown signal/VPN routes leave the arc unmeasured; no primary
+  connection leaves it empty. A filled Ethernet circle confirms the local
+  connection, not Internet reachability. Hover shows the connection, measured
+  RSSI/noise margin, negotiated Wi-Fi link rate, and bytes received/sent during
+  this monitoring period. **Wi-Fi settings…** opens macOS Wi-Fi settings for
+  network selection and connection management. No SSID, location permission,
+  active network scan or automatic network changes are required.
+- **BAT:** the internal battery's remaining percentage and a lightning mark
+  while charging. Hover to distinguish charging, fully charged, external power
+  without charging, and battery power. This uses Apple's
+  [IOPowerSources API](https://developer.apple.com/documentation/iokit/iopowersources_h).
+  The card also shows the OS's estimated remaining/full-charge time, reported
+  battery condition and Low Power Mode. Missing estimates say “Calculating…”;
+  paused charging never gets an invented completion time.
+- **PWR:** the latest system consumption reading in watts. The tooltip separates
+  system load, adapter input and signed battery flow (charging or discharging).
+  `AppleSmartBattery/PowerTelemetryData` publishes `SystemLoad`, `SystemPowerIn`
+  and `BatteryPower` in milliwatts; this is an undocumented driver interface,
+  also used by [macwatt](https://github.com/ytomasch/macwatt/blob/main/macwatt.py).
+  Sensors may update much more slowly than the one-second display poll. This
+  is power at the Mac, not wall-socket energy or charger rated wattage. Hover
+  includes estimated Wh integrated over observed intervals and the measured
+  duration. Missing battery or power data is shown as `—`; desktop Macs and some
+  drivers may not expose these readings. Inconsistent power-source or flow
+  values are withheld while telemetry catches up with a charger transition.
+
+CPU and network begin with `—` while establishing a baseline. Sleep/wake,
+counter resets and newly connected interfaces establish fresh baselines.
+CPU, GPU and PWR cards include averages/peaks of available samples from the
+last 60 seconds. History and cumulative traffic/energy stay in memory for the
+current sampling period and reset when monitoring is turned off. Waking from
+sleep keeps those totals and the cells already on screen. A gap longer than
+ten seconds, including sleep, is not billed and drops the 60-second trend.
+Missing power readings are not integrated.
+Collection uses native APIs on a background actor without shell processes,
+administrator privileges, or additional dependencies.
+
+## Calendar, weather, today's to-do and notch order
+
+**Settings → Appearance → Notch items and order** controls which cells appear.
+The calendar shows today's date; hover for a month grid, previous/next month,
+Today, and a button to open the Mac's Calendar app. It follows the Mac's calendar
+and week-start setting and does not read personal calendar events.
+Select a date to see its distance from today, then **Copy date** to copy
+`YYYY-MM-DD`. Week number and days remaining in the year are also shown; day
+counts use calendar days so daylight-saving changes do not shift the answer.
+
+Search for a city and select a result to enable weather readings. The cell shows
+the current temperature in Celsius and a weather icon. Hover for daily low/high,
+rain probability, feels-like temperature, humidity, wind in m/s, today's UV
+peak, sunrise/sunset and the measurement time. A complete six-hour forecast adds
+peak precipitation probability and, at 50% or above, the hour ending at that
+peak. This is an hourly rain/snow probability, not an exact rain-start alert.
+Times use the selected city's time zone. Data comes from
+[Open-Meteo](https://open-meteo.com/en/docs), with city search from
+[GeoNames through Open-Meteo](https://open-meteo.com/en/docs/geocoding-api).
+Requests run every 15 minutes and after wake; clicking the cell also refreshes.
+No API key or device-location permission is needed. A failed request keeps the
+last reading marked stale; an unavailable initial reading shows a dash. Old daily
+forecasts disappear when the date changes in the selected city's time zone.
+To include the opt-in live city-search/forecast test, run
+`TEST_RUNNER_CODENOTCH_LIVE_WEATHER_TEST=1 make test-ci`; ordinary tests skip it.
+
+**Stocks** shows the last trade for symbols you add under Appearance. Korean
+codes such as `005930` and US tickers such as `AAPL` can share the list, up to
+30. The current price comes from `GET /api/v1/prices`, then each later trade
+arrives on `wss://openapi-ws.tossinvest.com/ws/v1`. The client id and secret
+are issued in Toss Securities WTS → Settings → Open API and are stored in the
+Keychain. The same screen's allowed-IP list has to include this Mac. Each symbol is its own cell. Settings → Notch → Meter style chooses circles
+or horizontal bars for every cell, including accounts and system meters. A stock still
+measures the move from the previous close, and 30 percent fills the circle or
+the bar. A rise is green and a fall is red. A quiet market keeps the last price. The secret is never
+written to preferences.
+
+**TODO** shows completed/total tasks and a completion ring. Hover to check or
+reopen a task, add one through a native input dialog (up to 200 characters), or
+delete it. **Undo delete** restores the most recently deleted item while the card
+remains open. Unfinished tasks carry over; completed tasks leave today's list at
+local midnight, with their records retained in local preferences. Tasks survive
+app restarts and are stored only on this Mac, without calendar/reminder access
+or cloud sync. Long lists scroll within the card.
+
+Under **Appearance → Notch items and order**, use each row's switch to hide or
+show AI accounts, individual local models, CPU, RAM, GPU, DISK, NET, BAT, PWR,
+calendar, weather and TODO. Hidden rows remain in Settings so they can be shown
+again. Visibility survives restarts, preserves colors, order, accounts and TODO
+data, and applies to every display. Calendar/weather/TODO switches share their
+existing enable settings. Individual system meters hide while collection stays
+active; **Enable system monitoring** stops or resumes all system sampling and
+temporarily disables the meter switches without clearing their choices.
+
+Drag rows or use their up/down arrows to mix
+AI accounts, individual local models, system meters, calendar, weather and TODO in any
+order. The order is saved and applies to all displays and the menu. Temporarily
+hidden widgets keep their saved slots when visible rows move. Existing
+account-only reordering preserves the positions of the other widgets. Calendar,
+weather and TODO also have individual colour palettes alongside the system meters.
+
 ## Updates
 
 Codenotch updates itself. [Sparkle](https://sparkle-project.org) checks daily

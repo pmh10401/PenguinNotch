@@ -101,18 +101,30 @@ struct NotchRootView: View {
                     )))
                 } else if let snapshot = model.hoveredSnapshot, let index = model.hoveredIndex,
                    model.isExpanded {
-                    TooltipCard(
-                        snapshot: snapshot,
-                        activity: model.activity(for: snapshot),
-                        now: model.now,
-                        direction: model.edge.tooltipDirection,
-                        sessionCap: model.sessionCap,
-                        resetTimeFormat: model.resetTimeFormat,
-                        deepSeekPricingEnabled: model.deepSeekPricingEnabled,
-                        deepSeekPricingSchedule: model.deepSeekPricingSchedule,
-                        tailOffset: tooltipTailOffset(index: index, snapshot: snapshot),
-                        onFocusSession: model.onFocusSession
-                    )
+                    Group {
+                        if snapshot.kind == .todo, let preferences = model.todoPreferences {
+                            TodoCard(preferences: preferences, now: model.now, direction: model.edge.tooltipDirection,
+                                     tailOffset: tooltipTailOffset(index: index, snapshot: snapshot),
+                                     color: snapshot.systemColor?.color)
+                        } else if snapshot.kind == .calendar {
+                            CalendarCard(now: model.now, direction: model.edge.tooltipDirection,
+                                         tailOffset: tooltipTailOffset(index: index, snapshot: snapshot),
+                                         color: snapshot.systemColor?.color)
+                        } else {
+                            TooltipCard(
+                                snapshot: snapshot,
+                                activity: model.activity(for: snapshot),
+                                now: model.now,
+                                direction: model.edge.tooltipDirection,
+                                sessionCap: model.sessionCap,
+                                resetTimeFormat: model.resetTimeFormat,
+                                deepSeekPricingEnabled: model.deepSeekPricingEnabled,
+                                deepSeekPricingSchedule: model.deepSeekPricingSchedule,
+                                tailOffset: tooltipTailOffset(index: index, snapshot: snapshot),
+                                onFocusSession: model.onFocusSession
+                            )
+                        }
+                    }
                         // Deliberately *no* `.id` here: the card is one object
                         // that travels and resizes between cells, which reads
                         // far better than one card leaving and another arriving.
@@ -312,14 +324,16 @@ struct NotchRootView: View {
                 snapshot: snapshot,
                 activity: model.activity(for: snapshot),
                 isRefreshing: model.isRefreshing(snapshot),
-                weeklyRing: model.weeklyRing
+                weeklyRing: model.weeklyRing,
+                meterStyle: model.notchMeterStyle
             )
                 // Pinned to what the cell claims along the stack, or the drawn
                 // rings stop lining up with the centres `ringCenter` hands to
                 // the hover bands and the tooltip tails. Across a horizontal
                 // edge that is the ring alone — the label sits below it, in the
                 // notch's depth, and claims nothing here.
-                .frame(width: model.edge.isVertical ? nil : NotchLayout.cellAlong(for: model.edge))
+                .frame(width: model.edge.isVertical ? nil
+                    : NotchLayout.cellAlong(for: model.edge, meterStyle: model.notchMeterStyle))
                 .opacity(model.isExpanded ? 1 : 0)
                 // A short slide toward the edge, no scaling: the clip is
                 // already doing the concealing, and scaling on top of it
@@ -403,26 +417,7 @@ struct NotchRootView: View {
     }
 
     private func tooltipLength(_ snapshot: ProviderSnapshot) -> CGFloat {
-        model.edge.isVertical
-            ? NotchLayout.cardHeight(
-                windowCount: snapshot.windows.count,
-                groupCount: snapshot.windowGroupCount,
-                moneyWindowCount: snapshot.windows.filter { $0.money != nil }.count,
-                usageDetailGroupCount: snapshot.usageDetail?.visibleGroups.count ?? 0,
-                sessionCount: snapshot.localModel == nil ? (model.activity(for: snapshot.id)?.sessions.count ?? 0) : 0,
-                sessionCap: model.sessionCap,
-                statusMessage: snapshot.statusMessage,
-                blockMessage: snapshot.block?.summary(now: model.now),
-                hasTokenUsage: snapshot.tokenUsage != nil,
-                hasPlan: snapshot.plan != nil,
-                hasResetCredits: snapshot.hasAvailableResetCredits,
-                localModelName: snapshot.localModel?.name,
-                showsLocalPerformance: snapshot.showsLocalPerformance,
-                localLedgerRows: snapshot.localLedgerRowCount,
-                compactRowCount: snapshot.compactRowCount,
-                showsDeepSeekPricing: model.deepSeekPricingEnabled
-            )
-            : NotchLayout.cardWidth
+        model.edge.isVertical ? model.cardHeight(for: snapshot) : NotchLayout.cardWidth
     }
 
     private func tooltipTailOffset(index: Int, snapshot: ProviderSnapshot) -> CGFloat {
@@ -435,26 +430,8 @@ struct NotchRootView: View {
     private func tooltipCentre(
         _ place: NotchPlacement, index: Int, snapshot: ProviderSnapshot
     ) -> CGPoint {
-        let card = model.edge.isVertical
-            ? NotchLayout.cardWidth
-            : NotchLayout.cardHeight(
-                windowCount: snapshot.windows.count,
-                groupCount: snapshot.windowGroupCount,
-                moneyWindowCount: snapshot.windows.filter { $0.money != nil }.count,
-                usageDetailGroupCount: snapshot.usageDetail?.visibleGroups.count ?? 0,
-                sessionCount: snapshot.localModel == nil ? (model.activity(for: snapshot.id)?.sessions.count ?? 0) : 0,
-                sessionCap: model.sessionCap,
-                statusMessage: snapshot.statusMessage,
-                blockMessage: snapshot.block?.summary(now: model.now),
-                hasTokenUsage: snapshot.tokenUsage != nil,
-                hasPlan: snapshot.plan != nil,
-                hasResetCredits: snapshot.hasAvailableResetCredits,
-                localModelName: snapshot.localModel?.name,
-                showsLocalPerformance: snapshot.showsLocalPerformance,
-                localLedgerRows: snapshot.localLedgerRowCount,
-                compactRowCount: snapshot.compactRowCount,
-                showsDeepSeekPricing: model.deepSeekPricingEnabled
-            )
+        let card = model.edge.isVertical ? NotchLayout.cardWidth : model.cardHeight(for: snapshot)
+
         // The ring it points at has moved with the notch, so the tail follows
         // it — but the card beyond the tail is drawn at its own size, and
         // `tooltipInset` already ends where the drawn notch does.

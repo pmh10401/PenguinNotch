@@ -40,6 +40,7 @@ enum NotchLayout {
     static let padTop       = Design.px(69.5)   // body top -> first ring
     static let padBottom    = Design.px(50.1)   // last label -> body bottom
     static let cellSpacing  = Design.px(83.5)   // label bottom -> next ring top
+    static let barCellSpacing = Design.px(24)
 
     // The resting pill. Not in the design frame — it is the notch folded away,
     // sized to read as a deliberate handle rather than a sliver of chrome.
@@ -61,6 +62,9 @@ enum NotchLayout {
     static let localArcMinimumSweep: CGFloat = 0.06
     static let glyphSize     = Design.px(46)
     static let ringLabelGap  = Design.px(26.9)
+    static let barLabelGap = Design.px(10)
+    static var barMeterHeight: CGFloat { percentLineHeight + Design.px(20) }
+    static var barCellExtent: CGFloat { barMeterHeight + barLabelGap + percentLineHeight }
 
     // The activity indicator. Not in the design frame — sized to sit in the gap
     // between the glyph (46px across) and the inside edge of the track (86px),
@@ -142,6 +146,8 @@ enum NotchLayout {
 
     // The hover tooltip
     static let cardWidth     = Design.px(600)
+    static let calendarCardHeight: CGFloat = 320
+    static let todoCardHeight: CGFloat = 320
     static let cardCorner    = Design.px(49.5)
     static let cardPadding   = Design.px(32)
     static let tailLength    = Design.px(75)
@@ -247,13 +253,14 @@ enum NotchLayout {
     /// figure leaves 27pt of nothing between every pair of rings, on top of the
     /// spacing the frame already puts there — which is what made the top and
     /// bottom bars read as far too spread out.
-    static func cellAlong(for edge: NotchEdge) -> CGFloat {
-        edge.isVertical ? cellExtent : ringDiameter
+    static func cellAlong(for edge: NotchEdge, meterStyle: NotchMeterStyle = .ring) -> CGFloat {
+        edge.isVertical ? (meterStyle == .bar ? barCellExtent : cellExtent) : ringDiameter
     }
 
     /// Ring centre to ring centre.
-    static func cellPitch(for edge: NotchEdge) -> CGFloat {
-        cellAlong(for: edge) + cellSpacing
+    static func cellPitch(for edge: NotchEdge, meterStyle: NotchMeterStyle = .ring) -> CGFloat {
+        cellAlong(for: edge, meterStyle: meterStyle)
+            + (meterStyle == .bar ? barCellSpacing : cellSpacing)
     }
 
     /// Padding at the start and the end of the stack.
@@ -284,18 +291,20 @@ enum NotchLayout {
     /// else on the stack at all.
     static func ringCenter(index: Int, edge: NotchEdge = .right,
                            flare: CGFloat = curlRadius,
-                           spacing: CGFloat = cellSpacing) -> CGFloat {
-        flare + padStart(for: edge) + ringDiameter / 2
-            + CGFloat(index) * (cellAlong(for: edge) + spacing)
+                           spacing: CGFloat = cellSpacing,
+                           meterStyle: NotchMeterStyle = .ring) -> CGFloat {
+        flare + padStart(for: edge) + (meterStyle == .bar && edge.isVertical ? barCellExtent : ringDiameter) / 2
+            + CGFloat(index) * (cellAlong(for: edge, meterStyle: meterStyle) + spacing)
     }
 
     /// Height of the notch body for a given number of provider cells.
     static func bodyLength(cellCount: Int, edge: NotchEdge = .right,
-                           spacing: CGFloat = cellSpacing) -> CGFloat {
+                           spacing: CGFloat = cellSpacing,
+                           meterStyle: NotchMeterStyle = .ring) -> CGFloat {
         let start = padStart(for: edge), end = padEnd(for: edge)
         guard cellCount > 0 else { return start + end }
         return start
-            + CGFloat(cellCount) * cellAlong(for: edge)
+            + CGFloat(cellCount) * cellAlong(for: edge, meterStyle: meterStyle)
             + CGFloat(cellCount - 1) * spacing
             + end
     }
@@ -317,8 +326,10 @@ enum NotchLayout {
     /// readings — which is exactly what made the top bar look too wide.
     static func shapeLength(cellCount: Int, edge: NotchEdge = .right,
                             flare: CGFloat = curlRadius,
-                            spacing: CGFloat = cellSpacing) -> CGFloat {
-        bodyLength(cellCount: cellCount, edge: edge, spacing: spacing) + 2 * flare
+                            spacing: CGFloat = cellSpacing,
+                            meterStyle: NotchMeterStyle = .ring) -> CGFloat {
+        bodyLength(cellCount: cellCount, edge: edge, spacing: spacing,
+                   meterStyle: meterStyle) + 2 * flare
     }
 
     /// The tooltip's height for a given number of limit windows and live
@@ -350,7 +361,9 @@ enum NotchLayout {
                            localModelName: String? = nil, showsLocalPerformance: Bool = false,
                            localLedgerRows: Int = 0,
                            compactRowCount: Int = 0,
-                           showsDeepSeekPricing: Bool = true) -> CGFloat {
+                           showsDeepSeekPricing: Bool = true,
+                           hasNetworkSettings: Bool = false,
+                           cpuCoreCount: Int = 0) -> CGFloat {
         let header = max(glyphSize, cardTitleLineHeight)
             + (hasPlan ? cardBodyLineHeight : 0)
         var height = 2 * cardPadding + header
@@ -427,7 +440,16 @@ enum NotchLayout {
                 height += blockSpacing + cardBodyLineHeight
             }
         }
+        if hasNetworkSettings { height += blockSpacing + cardBodyLineHeight }
+        if cpuCoreCount > 0 {
+            height += blockSpacing + cardBodyLineHeight + sessionRowGap + cpuCoreGridHeight(cpuCoreCount)
+        }
         return height
+    }
+
+    static func cpuCoreGridHeight(_ count: Int) -> CGFloat {
+        let rows = CGFloat(min(5, (max(0, count) + 1) / 2))
+        return rows * (cardBodyLineHeight + labelToBar + barHeight) + max(0, rows - 1) * blockSpacing
     }
 
     static func modelNameHeight(_ name: String) -> CGFloat {
