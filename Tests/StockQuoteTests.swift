@@ -1,3 +1,4 @@
+import Security
 import XCTest
 @testable import PenguinNotch
 
@@ -132,5 +133,34 @@ final class StockQuoteTests: XCTestCase {
         XCTAssertEqual(reloadedStyle.notchMeterStyle, .bar)
         preferences.removeStockSymbol("kr:005930")
         XCTAssertFalse(preferences.stockSymbols.contains("kr:005930"))
+    }
+
+    func testLegacyTossCredentialsMoveWithoutLosingValues() throws {
+        let suffix = UUID().uuidString
+        let oldService = "penguinnotch-test.old.\(suffix)"
+        let newService = "penguinnotch-test.new.\(suffix)"
+        let accounts = ["client-id", "client-secret"]
+        func query(_ service: String, _ account: String) -> [CFString: Any] {
+            [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account]
+        }
+        defer {
+            for account in accounts {
+                _ = SecItemDelete(query(oldService, account) as CFDictionary)
+                _ = SecItemDelete(query(newService, account) as CFDictionary)
+            }
+        }
+        for account in accounts {
+            var item = query(oldService, account)
+            item[kSecValueData] = Data(account.utf8)
+            guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else {
+                throw XCTSkip("No writable Keychain for the migration check")
+            }
+        }
+
+        TossCredentials.migrateLegacyItems(from: oldService, to: newService)
+        for account in accounts {
+            XCTAssertNil(KeychainItem.newest(service: oldService, account: account))
+            XCTAssertEqual(KeychainItem.read(service: newService, account: account), account)
+        }
     }
 }

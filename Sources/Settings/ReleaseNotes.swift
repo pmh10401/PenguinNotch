@@ -32,6 +32,15 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.17.1",
+                headline: "Clearer stock entry and PenguinNotch Keychain names",
+                changes: [
+                    ReleaseNote.Change(title: "Stock entry is easier to find and use"),
+                    ReleaseNote.Change(title: "Toss Securities keys use PenguinNotch's name",
+                                       detail: "Existing keys are renamed in place without exposing their values.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.17.0",
                 headline: "PenguinNotch: new icon and Korean stock search",
                 changes: [

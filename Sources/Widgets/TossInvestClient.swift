@@ -1,15 +1,24 @@
 import Combine
 import Foundation
+import Security
 
 /// Client id and secret for the Toss Securities Open API. The secret never
 /// goes into UserDefaults; both values live in the login keychain.
 enum TossCredentials {
-    // Keep the existing Keychain service so saved credentials survive the rename.
-    static let service = "com.vinz.codenotch.tossinvest"
+    static let service = "com.pmh10401.penguinnotch.tossinvest"
+    private static let previousService = "com.vinz.codenotch.tossinvest"
+    private static let migratedLegacyItems = migrateLegacyItems(from: previousService, to: service)
 
     static func load() -> (clientID: String, clientSecret: String) {
-        (KeychainItem.read(service: service, account: "client-id") ?? "",
-         KeychainItem.read(service: service, account: "client-secret") ?? "")
+        _ = migratedLegacyItems
+        return (read("client-id"), read("client-secret"))
+    }
+
+    private static func read(_ account: String) -> String {
+        // A refused read of a new item must not fall back to an older copy.
+        let selected = KeychainItem.newest(service: service, account: account) == nil
+            ? previousService : service
+        return KeychainItem.read(service: selected, account: account) ?? ""
     }
 
     static var hasSecret: Bool { !(load().clientSecret.isEmpty) }
@@ -17,9 +26,11 @@ enum TossCredentials {
     /// An empty secret leaves the stored secret in place, so saving a corrected
     /// client id does not wipe a key the field is no longer showing.
     static func save(clientID: String, clientSecret: String) {
+        _ = migratedLegacyItems
         let id = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
         if id.isEmpty {
             KeychainItem.delete(service: service, account: "client-id")
+            KeychainItem.delete(service: previousService, account: "client-id")
         } else {
             _ = KeychainItem.store(service: service, account: "client-id", value: id)
         }
@@ -31,6 +42,26 @@ enum TossCredentials {
     static func clear() {
         KeychainItem.delete(service: service, account: "client-id")
         KeychainItem.delete(service: service, account: "client-secret")
+        KeychainItem.delete(service: previousService, account: "client-id")
+        KeychainItem.delete(service: previousService, account: "client-secret")
+    }
+
+    /// Rename existing items in place so the Keychain prompt shows this app's
+    /// name. The secret never leaves the Keychain during the migration.
+    static func migrateLegacyItems(from oldService: String, to newService: String) {
+        for account in ["client-id", "client-secret"] {
+            guard KeychainItem.newest(service: newService, account: account) == nil else { continue }
+            let query: [CFString: Any] = [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: oldService,
+                kSecAttrAccount: account
+            ]
+            let changes: [CFString: Any] = [
+                kSecAttrService: newService,
+                kSecAttrLabel: "PenguinNotch Stocks"
+            ]
+            _ = SecItemUpdate(query as CFDictionary, changes as CFDictionary)
+        }
     }
 }
 
