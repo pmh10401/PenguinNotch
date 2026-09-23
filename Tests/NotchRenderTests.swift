@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 /// The layout maths can be right in every unit and still put nothing on the
 /// screen. These render the real view and count the pixels it actually paints,
@@ -39,10 +39,10 @@ final class NotchRenderTests: XCTestCase {
         let renderer = ImageRenderer(
             content: NotchRootView(model: model)
                 .frame(width: size.width, height: size.height)
-                .environment(\.codenotchReduceTransparency, reduceTransparency)
+                .environment(\.penguinnotchReduceTransparency, reduceTransparency)
                 // The system material is not renderable offscreen; everything
                 // around it is. See TASKS.md, "The hardware's band stays black".
-                .environment(\.codenotchHeadlessGlass, true)
+                .environment(\.penguinnotchHeadlessGlass, true)
                 // Dark, the scheme the solid style pins its own panel to.
                 //
                 // `Palette.ringTrack` and its neighbours became translucent
@@ -278,7 +278,7 @@ final class NotchRenderTests: XCTestCase {
     /// painted in its place.
     ///
     /// The system material is left out of the render (see
-    /// `\.codenotchHeadlessGlass`), so this pins the one half that is ours —
+    /// `\.penguinnotchHeadlessGlass`), so this pins the one half that is ours —
     /// that the fill really did step aside — rather than what glass looks like.
     ///
     /// Three cells, where its neighbours render four: the first

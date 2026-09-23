@@ -71,7 +71,7 @@ struct TodoCard: View {
     let direction: NotchEdge.TooltipDirection
     var tailOffset: CGFloat = 0
     var color: Color?
-    @Environment(\.codenotchAccentColor) private var accent
+    @Environment(\.penguinnotchAccentColor) private var accent
     @Environment(\.tooltipSecondaryInk) private var secondaryInk
     @State private var deleted: TodoItem?
 

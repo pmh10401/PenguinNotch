@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 /// Catalog lookups with an explicit locale. English is the source; Chinese,
 /// French and Brazilian Portuguese assertions here only prove a translation

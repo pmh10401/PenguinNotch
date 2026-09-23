@@ -1,13 +1,13 @@
 <div align="center">
 
-![Codenotch](docs/design/codenotch-banner.png)
+![PenguinNotch icon](docs/design/PenguinNotch-icon.png)
 
-[![CI](https://github.com/vinzdg/codenotch/actions/workflows/ci.yml/badge.svg)](https://github.com/vinzdg/codenotch/actions/workflows/ci.yml)
+[![CI](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml/badge.svg)](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-black)
 ![Swift](https://img.shields.io/badge/swift-5-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**A macOS app that pins a small black notch to a screen edge, showing how much
+**PenguinNotch (Penguin Notch)** — A macOS app that pins a small black notch to a screen edge, showing how much
 of each coding assistant's usage limit you have burned — and whether it is
 still working, done, or waiting on you.**
 
@@ -21,13 +21,12 @@ two never disagree.
 
 ## Download
 
-[![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/Codenotch.dmg)
+[![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
 That button is the disk image itself, not the page it sits on — the asset is
-named `Codenotch.dmg` in every release, so `releases/latest/download/` always
-resolves to the newest one and the link never needs updating. Signed,
-notarized, and updating itself from then on. Take this one unless you have a
-reason not to; the [release page](../../releases/latest) has the notes.
+named `PenguinNotch.dmg` in every release. A signed release has not been
+published yet; until then, use the [preview build](../../releases/tag/preview)
+or build from source. The [release page](../../releases/latest) lists published versions.
 
 To try unreleased `main` without an Xcode install, the [preview
 build](../../releases/tag/preview) is rebuilt from every commit, and the
@@ -38,7 +37,7 @@ macOS quarantines the download. Clear the flag once, after dragging the app to
 Applications:
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/Codenotch.app
+xattr -dr com.apple.quarantine /Applications/PenguinNotch.app
 ```
 
 If macOS says the app is *damaged*, that is the quarantine flag rather than a bad download — run the command above.
@@ -48,10 +47,10 @@ instead, see [Building](#building).
 
 ## Windows
 
-[![Download for Windows](docs/design/download-windows.svg)](../../releases/latest/download/Codenotch-Setup.exe)
+[![Download for Windows](docs/design/download-windows.svg)](../../releases/latest/download/PenguinNotch-Setup.exe)
 
 A Windows port — Rust/Tauri 2, same design and providers — lives in [`windows/`](windows/README.md).
-The button is the installer itself, named `Codenotch-Setup.exe` in every release for the same
+The button is the installer itself, named `PenguinNotch-Setup.exe` in every release for the same
 reason the dmg keeps one name. It installs for the current user without administrator rights,
 and fetches WebView2 if Windows does not already have it.
 
@@ -61,14 +60,14 @@ installer on its [Windows Package run](../../actions/workflows/windows-package.y
 
 ## Connect your phone
 
-The Codenotch phone app (iOS and Android) can show the same usage
+The companion phone app (iOS and Android) can show the same usage
 percentages, reset times and session states as the notch on your Mac.
 It reads only what the notch already displays — never tokens, credentials
 or raw API responses.
 
 To pair, open **Settings › Phone › Connect a Phone…** (or the menu item)
 on your Mac. A QR code appears with a five-minute countdown; scan it with
-the Codenotch phone app, or copy the link and paste it into the app. The
+the companion phone app, or copy the link and paste it into the app. The
 Mac and phone must be on the same Wi-Fi network — the server answers only
 local-network addresses and rejects anything routed over the internet.
 
@@ -89,11 +88,11 @@ wire-level details.
 | **Claude Code** | official | Claude Desktop's own cached usage response, where Desktop is running and signed into the same account. Then Claude Code's own `/usage`, asked of the installed `claude`. Then the OAuth token in the login keychain, against the endpoint that command uses. |
 | **Cursor** | official | The editor's signed-in session in its local SQLite state, or the `cursor-agent` login in the keychain — no separate sign-in. |
 | **Codex** | official | Using the local Codex sign-in. Shows the 5-hour and weekly limits when available, plus extra limit windows when the account has them. |
-| **DeepSeek Platform** | derived from official Platform responses | Explicit sign-in in Codenotch's own WKWebView, then the Platform account summary and API-key/model usage endpoints. Shows funded/spent balance, 30-day tokens/cost, requests and API-key count. |
+| **DeepSeek Platform** | derived from official Platform responses | Explicit sign-in in PenguinNotch's own WKWebView, then the Platform account summary and API-key/model usage endpoints. Shows funded/spent balance, 30-day tokens/cost, requests and API-key count. |
 | **Antigravity** | official where licensed, otherwise a request count | Antigravity's local language server first, then Google's quota endpoint; a plain count when neither will answer for the account. |
 | **GLM** | official | Z.ai's Coding Plan monitor endpoint, with a key borrowed from whichever coding tool already holds one — Claude Code's `settings.json`, ZCode, or OpenCode. |
-| **MiniMax** | official where a Coding Plan key is used, derived from official Platform responses for the in-app sign-in | A Coding Plan key pasted in Settings, or explicit sign-in in Codenotch's own WKWebView. |
-| **QianwenAI** | derived from official console responses | Explicit sign-in in Codenotch's own WKWebView, then the console's own Token Plan gateway. Shows the personal plan's 7-day credits window. |
+| **MiniMax** | official where a Coding Plan key is used, derived from official Platform responses for the in-app sign-in | A Coding Plan key pasted in Settings, or explicit sign-in in PenguinNotch's own WKWebView. |
+| **QianwenAI** | derived from official console responses | Explicit sign-in in PenguinNotch's own WKWebView, then the console's own Token Plan gateway. Shows the personal plan's 7-day credits window. |
 | **Ollama (Local)** | local runtime | Automatically detected local models, RAM/VRAM, unload time and context. Optional response capture adds thinking and generation speed. |
 | **LM Studio** | local runtime | Loaded models from LM Studio's own listing, what each one is doing (prompt, generating, queue) from its SDK socket, and speed, context use and tokens per day from its server log. No relay needed. |
 | **Grok** | official | The Grok CLI session in `~/.grok/auth.json`, against the same credits billing endpoint `/usage` uses. |
@@ -106,7 +105,7 @@ wire-level details.
 Most providers borrow a credential or session from a tool already on your Mac.
 DeepSeek is the explicit browser-login exception: it never reads a browser's
 cookies or credentials, and only makes requests after you choose **Sign in to
-DeepSeek** from Codenotch. MiniMax is the same kind of exception — a key you
+DeepSeek** from PenguinNotch. MiniMax is the same kind of exception — a key you
 paste in Settings, or an explicit WKWebView sign-in. QianwenAI is a third: it
 publishes no usage API and has no key to paste, so that WKWebView session is the
 only way in. None of them opens a browser's cookie store.
@@ -120,7 +119,7 @@ Each loaded model gets a notch cell; reorder or hide it in **Settings → Accoun
 Hover for RAM/VRAM, unload time, context limit and quantization.
 
 For generation speed (**tok/s**) and live **Thinking**, enable **Measure speed and thinking**
-in Settings → Ollama, keep Codenotch open and connect through its local relay:
+in Settings → Ollama, keep PenguinNotch open and connect through its local relay:
 
 ```sh
 OLLAMA_HOST=http://127.0.0.1:11435 ollama run gemma4:e4b --think
@@ -139,7 +138,7 @@ request used. A white arc turns while the model reads a prompt or generates, and
 of dots when requests are queued behind it. Hover for context used, tokens and requests today,
 reasoning share, speculative-decoding acceptance, model size, quantization and context limit.
 
-Nothing has to be pointed at Codenotch: what a model is doing comes from LM Studio's SDK socket
+Nothing has to be pointed at PenguinNotch: what a model is doing comes from LM Studio's SDK socket
 on the same port (the one `lms ps` uses), and speed and tokens come from `~/.lmstudio/server-logs`,
 which LM Studio writes for every request from any client. Only counts and timings are read from
 those files, never a prompt or a reply. Responses through the OpenAI-compatible endpoint carry no
@@ -177,18 +176,18 @@ mkdir -p "$HOME/.codex-work"
 CODEX_HOME="$HOME/.codex-work" codex -c 'cli_auth_credentials_store="file"' login
 ```
 
-Choose the second account during sign-in, then restart Codenotch. Run that
+Choose the second account during sign-in, then restart PenguinNotch. Run that
 account's CLI sessions with `CODEX_HOME="$HOME/.codex-work" codex` as well.
 Repeat with another name, such as `.codex-personal`, for more accounts.
 Settings shows each account's email and profile directory; each ring can be
 reordered or switched off independently. Switching one off forgets only its
-Codenotch readings and leaves the Codex login intact.
+PenguinNotch readings and leaves the Codex login intact.
 
-Codenotch reads each profile's `auth.json`; keychain-only or API-key-only
+PenguinNotch reads each profile's `auth.json`; keychain-only or API-key-only
 logins cannot provide these ChatGPT account limits. It never copies, refreshes
 or writes Codex credentials. If a login expires, use that profile's Codex CLI
 to renew it. Directories outside the `~/.codex-<slug>` convention are not
-discovered automatically, and adding a profile requires restarting Codenotch,
+discovered automatically, and adding a profile requires restarting PenguinNotch,
 just as it does for Claude.
 
 ## When a session ends
@@ -271,11 +270,11 @@ default; fixed presets are available for pink, red, orange, yellow, green,
 teal, blue, indigo, purple and off-white.
 
 The app itself can show a Dock icon, a menu bar item, or neither. The menu bar
-item is the Codenotch icon until you switch on **Show limit information in
+item is the PenguinNotch icon until you switch on **Show limit information in
 menu bar** under Settings → Appearance → App; then it shows the five-hour
 limits of the providers you choose there — the provider's mark, the share used
 and the time until it resets, like `72% · 2h 18m | 41% · 4h 05m`. Choosing
-what the bar shows never changes what Codenotch reads, and with nothing chosen
+what the bar shows never changes what PenguinNotch reads, and with nothing chosen
 the icon comes back. Its menu has the full readings either way.
 
 ## System usage (local development)
@@ -380,7 +379,7 @@ No API key or device-location permission is needed. A failed request keeps the
 last reading marked stale; an unavailable initial reading shows a dash. Old daily
 forecasts disappear when the date changes in the selected city's time zone.
 To include the opt-in live city-search/forecast test, run
-`TEST_RUNNER_CODENOTCH_LIVE_WEATHER_TEST=1 make test-ci`; ordinary tests skip it.
+`TEST_RUNNER_PENGUINNOTCH_LIVE_WEATHER_TEST=1 make test-ci`; ordinary tests skip it.
 
 **Stocks** shows the last trade for symbols you add under Appearance. Korean
 codes such as `005930` and US tickers such as `AAPL` can share the list, up to
@@ -392,6 +391,12 @@ or horizontal bars for every cell, including accounts and system meters. A stock
 measures the move from the previous close, and 30 percent fills the circle or
 the bar. A rise is green and a fall is red. A quiet market keeps the last price. The secret is never
 written to preferences.
+
+Search by company name to add a Korean stock. Refresh the bundled
+[KRX KIND listed-company directory](https://kind.krx.co.kr/corpgeneral/corpList.do?method=download)
+with `python3 Scripts/update-krx-stocks.py`. Names are used for search and display;
+the stored identity remains the stock code. Enter a code for ETFs, preferred shares,
+and other instruments outside the company directory.
 
 **TODO** shows completed/total tasks and a completion ring. Hover to check or
 reopen a task, add one through a native input dialog (up to 200 characters), or
@@ -417,12 +422,23 @@ hidden widgets keep their saved slots when visible rows move. Existing
 account-only reordering preserves the positions of the other widgets. Calendar,
 weather and TODO also have individual colour palettes alongside the system meters.
 
+## Origin and license
+
+PenguinNotch is based on [vinzdg's Codenotch](https://github.com/vinzdg/codenotch).
+The original copyright notice and MIT license remain in [LICENSE](LICENSE).
+The Windows port's copyright notice remains in [windows/LICENSE](windows/LICENSE).
+The new icon and features were developed in this repository.
+
 ## Updates
 
-Codenotch updates itself. [Sparkle](https://sparkle-project.org) checks daily
+PenguinNotch uses [Sparkle](https://sparkle-project.org) to check
+[this repository's releases](https://github.com/pmh10401/PenguinNotch/releases) for updates.
+Sparkle checks daily
 and installs in the background without prompting; Settings says so and can
 switch it off. Every update is EdDSA-signed, so nothing installs that wasn't
-built and signed by the maintainer.
+built and signed by this fork's maintainer. Automatic updates become available
+after a signed release with `appcast.xml` is published; preview builds do not
+provide that guarantee.
 
 ## Building
 
@@ -445,14 +461,14 @@ tool's token returns on every launch. To make the grant stick during local
 development, sign the built app with a stable self-signed identity:
 
 ```sh
-Scripts/sign-local.sh   # signs /Applications/Codenotch.app (pass a path to override)
+Scripts/sign-local.sh   # signs /Applications/PenguinNotch.app (pass a path to override)
 ```
 
-It creates a reusable `Codenotch Local Signing` certificate in your login
+It creates a reusable `PenguinNotch Local Signing` certificate in your login
 keychain (no Apple Developer account needed) and re-signs the app. Grant the
 keychain prompt once more after signing; it will not ask again.
 
-Run with `CODENOTCH_DEMO=1` to see fixed sample data instead of live readings.
+Run with `PENGUINNOTCH_DEMO=1` to see fixed sample data instead of live readings.
 
 ## Architecture
 
@@ -521,7 +537,7 @@ right-clicking the notch offers **Refresh now**.
 unified log.
 
 ```sh
-/usr/bin/log stream --predicate 'subsystem == "com.vinz.codenotch"' --level debug
+/usr/bin/log stream --predicate 'subsystem == "com.vinz.penguinnotch"' --level debug
 ```
 
 ## Contributing

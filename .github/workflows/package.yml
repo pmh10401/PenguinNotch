@@ -13,7 +13,7 @@ on:
 
 jobs:
   package:
-    if: github.repository == 'vinzdg/codenotch'
+    if: github.repository == 'pmh10401/PenguinNotch'
     name: Unsigned app bundle
     # Only the preview release step writes anything; the token is read-only by
     # default on this repository, and `gh release create` fails without this.
@@ -51,7 +51,7 @@ jobs:
       # produces one of these and the version only changes at a release.
       - uses: actions/upload-artifact@v7
         with:
-          name: Codenotch-${{ steps.version.outputs.value }}-${{ github.sha }}
+          name: PenguinNotch-${{ steps.version.outputs.value }}-${{ github.sha }}
           path: build/ci/*.dmg
           # Silence here would mean a green run with nothing to download, which
           # is the one failure this workflow exists to prevent.
@@ -63,7 +63,7 @@ jobs:
       - name: Explain how to open it
         run: |
           {
-            echo "### Codenotch ${{ steps.version.outputs.value }} — unsigned build"
+            echo "### PenguinNotch ${{ steps.version.outputs.value }} — unsigned build"
             echo
             echo "Download the artifact below, unzip it, and open the \`.dmg\`."
             echo
@@ -71,7 +71,7 @@ jobs:
             echo "After dragging the app to /Applications, clear the quarantine flag once:"
             echo
             echo '```'
-            echo "xattr -dr com.apple.quarantine /Applications/Codenotch.app"
+            echo "xattr -dr com.apple.quarantine /Applications/PenguinNotch.app"
             echo '```'
             echo
             echo "If macOS says the app is *damaged*, that is the quarantine flag rather than a bad download — run the command above."
@@ -111,7 +111,7 @@ jobs:
           notarized, so macOS quarantines the download. After dragging it to
           Applications, clear the flag once:
 
-              xattr -dr com.apple.quarantine /Applications/Codenotch.app
+              xattr -dr com.apple.quarantine /Applications/PenguinNotch.app
 
           If macOS says the app is *damaged*, that is the quarantine flag rather than a bad download — run the command above.
 

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-require(path.join(__dirname, '../codenotch/ui/widgets.js'));
-const W = globalThis.CodenotchWidgets;
+require(path.join(__dirname, '../penguinnotch/ui/widgets.js'));
+const W = globalThis.PenguinNotchWidgets;
 
 assert.equal(W.formatRate(0, false), '0B/s');
 assert.equal(W.formatRate(1500000, true), '1.5M/s');

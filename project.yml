@@ -1,6 +1,6 @@
-name: Codenotch
+name: PenguinNotch
 options:
-  bundleIdPrefix: com.vinz
+  bundleIdPrefix: com.pmh10401
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -14,8 +14,8 @@ settings:
     # Sources/Info.plist reads both from here — hardcoding them there instead
     # silently pins every build to one version, so no customer ever sees an
     # update. Bump CURRENT_PROJECT_VERSION on every release.
-    MARKETING_VERSION: "1.16.0"
-    CURRENT_PROJECT_VERSION: "19"
+    MARKETING_VERSION: "1.17.0"
+    CURRENT_PROJECT_VERSION: "20"
     # Signed with a stable identity on purpose. The app reads Claude Code's
     # OAuth token out of the login keychain, and the keychain's ACL remembers
     # *which signed binary* was allowed. Ad-hoc or unsigned builds get a new
@@ -44,7 +44,7 @@ packages:
     from: "2.6.0"
 
 targets:
-  Codenotch:
+  PenguinNotch:
     type: application
     platform: macOS
     sources:
@@ -68,8 +68,8 @@ targets:
         # notch is ambient, but the *app* still has to be findable: without a
         # Dock tile there is nothing to click to open it, nothing in Cmd-Tab,
         # and no obvious way to reach settings or quit.
-        CFBundleName: Codenotch
-        CFBundleDisplayName: Codenotch
+        CFBundleName: PenguinNotch
+        CFBundleDisplayName: PenguinNotch
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations:
           - en
@@ -87,21 +87,16 @@ targets:
         # build settings keeps one place to bump.
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        NSLocalNetworkUsageDescription: "Codenotch answers your phone on this network so it can show your usage."
+        NSLocalNetworkUsageDescription: "PenguinNotch displays your usage on your phone over this network."
         # --- Sparkle -------------------------------------------------------
-        # Beside the download itself, on hivinz.com. It used to point at a
-        # GitHub Pages URL for a repo that was never created, so every check
-        # got a 404 and Sparkle reported "an error occurred in retrieving
-        # update information" — correctly, since there was nothing there.
-        #
-        # Must stay reachable for as long as any copy is installed: the feed is
-        # the only route by which a shipped build can ever be replaced.
-        SUFeedURL: https://hivinz.com/appcast.xml
-        # The public half of the EdDSA key in the login keychain. Sparkle
+        # This fork publishes the feed beside the dmg on its own GitHub release.
+        # Keep this URL available for every shipped copy.
+        SUFeedURL: https://github.com/pmh10401/PenguinNotch/releases/latest/download/appcast.xml
+        # The public half of this fork's EdDSA key in the login keychain. Sparkle
         # refuses any update not signed by its private half, so a hijacked feed
         # or a swapped download cannot install code. Losing the private key
         # means no existing install can ever be updated again — back it up.
-        SUPublicEDKey: rmUfT5r49nR+3HdkbR5/YYLghfnAi6L49eOk3sIegSk=
+        SUPublicEDKey: vjZrZO+z+sq43vqpqwU7qTq/fBf5aWDEhE/apwuR9AM=
         # Set explicitly so Sparkle never asks on first launch. Left unset, it
         # shows a "check for updates automatically?" prompt, which is exactly
         # the permission this is meant to avoid.
@@ -110,7 +105,9 @@ targets:
         SUScheduledCheckInterval: 86400
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.vinz.codenotch
+        PRODUCT_BUNDLE_IDENTIFIER: com.pmh10401.penguinnotch
+        PRODUCT_NAME: PenguinNotch
+        PRODUCT_MODULE_NAME: PenguinNotch
         GENERATE_INFOPLIST_FILE: "NO"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_EMIT_LOC_STRINGS: "YES"
@@ -121,29 +118,30 @@ targets:
         # anywhere a signed, notarized app can reach — see
         # Sources/Vendor/zstd/README.md. Delete this line and that directory
         # together if the Desktop source is ever dropped.
-        SWIFT_OBJC_BRIDGING_HEADER: Sources/Codenotch-Bridging-Header.h
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/PenguinNotch-Bridging-Header.h
 
-  CodenotchTests:
+  PenguinNotchTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - path: Tests
     dependencies:
-      - target: Codenotch
+      - target: PenguinNotch
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.vinz.codenotch.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.pmh10401.penguinnotch.tests
         GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/PenguinNotch.app/Contents/MacOS/PenguinNotch"
 
 schemes:
-  Codenotch:
+  PenguinNotch:
     build:
       targets:
-        Codenotch: all
-        CodenotchTests: [test]
+        PenguinNotch: all
+        PenguinNotchTests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - CodenotchTests
+        - PenguinNotchTests

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Which language Codenotch's own copy uses.
+/// Which language PenguinNotch's own copy uses.
 ///
 /// Follow System is the default. A forced choice exists because the Mac's
 /// language is not always the one the person wants this app in — bilingual
@@ -64,7 +64,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
             return L10n.t("Matches the Mac's preferred language.")
         case .english, .french, .german, .japanese, .brazilianPortuguese, .russian,
              .simplifiedChinese, .traditionalChinese, .ukrainian:
-            return L10n.t("Codenotch uses this language even if the Mac does not.")
+            return L10n.t("PenguinNotch uses this language even if the Mac does not.")
         }
     }
 }

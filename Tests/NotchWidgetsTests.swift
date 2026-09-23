@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 final class NotchWidgetsTests: XCTestCase {
     static let weatherJSON = Data(#"{"timezone":"Asia/Seoul","current":{"time":1790035200,"temperature_2m":23.4,"weather_code":61,"is_day":1,"relative_humidity_2m":65,"wind_speed_10m":2.3},"daily":{"time":[1790002800],"temperature_2m_min":[18],"temperature_2m_max":[26],"precipitation_probability_max":[75]}}"#.utf8)
@@ -141,7 +141,7 @@ final class NotchWidgetsTests: XCTestCase {
     }
 
     func testLiveWeatherWhenRequested() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["CODENOTCH_LIVE_WEATHER_TEST"] == "1")
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PENGUINNOTCH_LIVE_WEATHER_TEST"] == "1")
         let cities = try await WeatherClient.search("Seoul")
         let city = try XCTUnwrap(cities.first)
         let reading = try await WeatherClient.fetch(city)
@@ -306,7 +306,7 @@ final class NotchWidgetsIntegrationTests: XCTestCase {
         renderer.scale = 2
         let image = try XCTUnwrap(renderer.cgImage)
         let png = try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
-        try png.write(to: URL(fileURLWithPath: "/tmp/codenotch-widgets-preview.png"))
+        try png.write(to: URL(fileURLWithPath: "/tmp/penguinnotch-widgets-preview.png"))
     }
 
     func testTodoPersistsCarriesUnfinishedTasksAndUpdatesTheNotch() throws {
@@ -354,7 +354,7 @@ final class NotchWidgetsIntegrationTests: XCTestCase {
         renderer.scale = 2
         let image = try XCTUnwrap(renderer.cgImage)
         let png = try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
-        try png.write(to: URL(fileURLWithPath: "/tmp/codenotch-todo-preview.png"))
+        try png.write(to: URL(fileURLWithPath: "/tmp/penguinnotch-todo-preview.png"))
         preferences.removeTodo(first.id)
         XCTAssertEqual(Preferences(defaults: defaults).todoItems.count, 1)
         preferences.showsTodo = false

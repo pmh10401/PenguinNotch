@@ -38,7 +38,7 @@ struct SystemNetworkLink: Equatable, Sendable {
     }
 
     static func read() -> Self {
-        guard let store = SCDynamicStoreCreate(nil, "CodenotchNetwork" as CFString, nil, nil) else {
+        guard let store = SCDynamicStoreCreate(nil, "PenguinNotchNetwork" as CFString, nil, nil) else {
             return .init(kind: .other)
         }
         let primary = ["IPv4", "IPv6"].compactMap { family -> String? in

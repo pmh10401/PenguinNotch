@@ -62,7 +62,7 @@ struct CalendarCard: View {
     @State private var monthOffset = 0
     @State private var selectedDate: Date?
     @State private var copiedDate: String?
-    @Environment(\.codenotchAccentColor) private var accent
+    @Environment(\.penguinnotchAccentColor) private var accent
     @Environment(\.tooltipSecondaryInk) private var secondaryInk
 
     private var calendar: Calendar {

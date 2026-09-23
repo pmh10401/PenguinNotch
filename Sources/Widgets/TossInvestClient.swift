@@ -4,6 +4,7 @@ import Foundation
 /// Client id and secret for the Toss Securities Open API. The secret never
 /// goes into UserDefaults; both values live in the login keychain.
 enum TossCredentials {
+    // Keep the existing Keychain service so saved credentials survive the rename.
     static let service = "com.vinz.codenotch.tossinvest"
 
     static func load() -> (clientID: String, clientSecret: String) {

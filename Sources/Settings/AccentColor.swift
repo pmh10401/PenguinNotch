@@ -53,13 +53,13 @@ enum AccentColorChoice: String, CaseIterable, Identifiable {
     }
 }
 
-private struct CodenotchAccentColorKey: EnvironmentKey {
+private struct PenguinNotchAccentColorKey: EnvironmentKey {
     static let defaultValue = Color(nsColor: .controlAccentColor)
 }
 
 extension EnvironmentValues {
-    var codenotchAccentColor: Color {
-        get { self[CodenotchAccentColorKey.self] }
-        set { self[CodenotchAccentColorKey.self] = newValue }
+    var penguinnotchAccentColor: Color {
+        get { self[PenguinNotchAccentColorKey.self] }
+        set { self[PenguinNotchAccentColorKey.self] = newValue }
     }
 }

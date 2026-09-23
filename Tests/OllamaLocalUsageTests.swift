@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 final class OllamaMemoryTests: XCTestCase {
     func testGPUAndCPUAllocationRemainDistinctFromQuota() throws {

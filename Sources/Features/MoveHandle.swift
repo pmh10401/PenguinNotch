@@ -28,7 +28,7 @@ struct MoveHandle: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.notchSurfaceStyle) private var surfaceStyle
-    @Environment(\.codenotchReduceTransparency) private var reduceTransparency
+    @Environment(\.penguinnotchReduceTransparency) private var reduceTransparency
 
     private var glassy: Bool { surfaceStyle.isGlass && !reduceTransparency }
 

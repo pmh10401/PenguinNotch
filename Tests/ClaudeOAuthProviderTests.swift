@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 /// The token path of `ClaudeOAuthProvider`.
 ///
@@ -279,7 +279,7 @@ final class ClaudeOAuthProviderTests: XCTestCase {
         XCTAssertEqual(StubEndpoint.requestCount, 1)
     }
 
-    /// Claude Desktop is signed into one account; Codenotch draws a ring per
+    /// Claude Desktop is signed into one account; PenguinNotch draws a ring per
     /// Claude Code profile. A profile whose organization does not match the
     /// cached URL gets nothing from Desktop — the alternative is the personal
     /// account's session percentage on the work ring.
@@ -303,7 +303,7 @@ final class ClaudeOAuthProviderTests: XCTestCase {
         StubEndpoint.reset([.init(status: 200, body: Self.usagePayload)])
         let source = CredentialSource(readable: true)
         let home = FileManager.default.temporaryDirectory
-            .appendingPathComponent("codenotch-nohome-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("penguinnotch-nohome-\(UUID().uuidString)", isDirectory: true)
         let provider = makeProvider(source: source, profile: .default(home: home),
                                     desktopCache: desktopCache(age: 0))
 
@@ -319,7 +319,7 @@ final class ClaudeOAuthProviderTests: XCTestCase {
         StubEndpoint.reset([.init(status: 200, body: Self.usagePayload)])
         let source = CredentialSource(readable: true)
         let absent = FileManager.default.temporaryDirectory
-            .appendingPathComponent("codenotch-absent-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("penguinnotch-absent-\(UUID().uuidString)", isDirectory: true)
         let provider = makeProvider(source: source, profile: desktopProfile(),
                                     desktopCache: ClaudeDesktopUsageCache(directory: absent))
 
@@ -378,7 +378,7 @@ final class ClaudeOAuthProviderTests: XCTestCase {
         organization: String = ClaudeDesktopUsageCacheTests.organization
     ) -> ClaudeProfile {
         let home = FileManager.default.temporaryDirectory
-            .appendingPathComponent("codenotch-home-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("penguinnotch-home-\(UUID().uuidString)", isDirectory: true)
         let config = home.appendingPathComponent(".claude")
         try? FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
         let json = #"{"oauthAccount":{"emailAddress":"someone@example.com","organizationUuid":"\#(organization)"}}"#
@@ -397,7 +397,7 @@ final class ClaudeOAuthProviderTests: XCTestCase {
     /// An empty throwaway directory shaped like `Cache_Data`.
     private func makeCacheDirectory() -> URL {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("codenotch-cache-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("penguinnotch-cache-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         return directory
@@ -619,7 +619,7 @@ final class ClaudeKeychainPromptTests: XCTestCase {
     }
 
     private func keychain(_ reads: Reads) -> ClaudeKeychain {
-        ClaudeKeychain(services: ["codenotch-test-\(UUID().uuidString)"]) { _, interactive in
+        ClaudeKeychain(services: ["penguinnotch-test-\(UUID().uuidString)"]) { _, interactive in
             reads.interactive.append(interactive)
             if reads.fails { throw UsageProviderError.accessDenied }
             return ClaudeCredentials(accessToken: "t", expiresAt: .distantFuture,
@@ -709,7 +709,7 @@ final class ClaudeKeychainPromptTests: XCTestCase {
         let suite = "ClaudeKeychainRefusal.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let service = "codenotch-test-\(UUID().uuidString)"
+        let service = "penguinnotch-test-\(UUID().uuidString)"
         let first = ClaudeKeychain(services: [service], refusals: defaults) { _, _ in
             throw UsageProviderError.accessDenied
         }
@@ -734,7 +734,7 @@ extension ClaudeKeychainPromptTests {
         final class Clock: @unchecked Sendable { var now = Date(timeIntervalSince1970: 1_000) }
         let clock = Clock()
         var interactive: [Bool] = []
-        let k = ClaudeKeychain(services: ["codenotch-test-\(UUID().uuidString)"],
+        let k = ClaudeKeychain(services: ["penguinnotch-test-\(UUID().uuidString)"],
                                now: { clock.now }) { _, flag in
             interactive.append(flag)
             return ClaudeCredentials(accessToken: "t", expiresAt: .distantFuture, subscriptionType: nil)

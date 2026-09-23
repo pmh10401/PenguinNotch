@@ -1,6 +1,6 @@
 import IOKit.ps
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 final class SystemPowerTests: XCTestCase {
     func testBatteryStatesAndPowerUnitsStayDistinct() throws {

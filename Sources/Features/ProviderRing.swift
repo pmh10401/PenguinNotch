@@ -37,10 +37,10 @@ struct ProviderRing: View {
     var centerText: String? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.codenotchReduceTransparency) private var reduceTransparency
+    @Environment(\.penguinnotchReduceTransparency) private var reduceTransparency
     @Environment(\.usageWatchLimit) private var watchLimit
     @Environment(\.usageCriticalLimit) private var criticalLimit
-    @Environment(\.codenotchAccentColor) private var accentColor
+    @Environment(\.penguinnotchAccentColor) private var accentColor
     @Environment(\.weeklyRingDashed) private var weeklyRingDashed
     @State private var spin: Double = 0
 
@@ -173,7 +173,8 @@ struct ProviderRing: View {
                     if let centerText {
                         Text(centerText)
                             .font(.system(size: Design.px(13), weight: .semibold, design: .rounded))
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
                             .minimumScaleFactor(0.4)
                             .frame(width: NotchLayout.ringDiameter * 0.72)
                             .foregroundStyle(Palette.textPrimary)
@@ -249,7 +250,7 @@ private struct ActivityArc: View {
     let summary: ActivitySummary
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.codenotchReduceTransparency) private var reduceTransparency
+    @Environment(\.penguinnotchReduceTransparency) private var reduceTransparency
     @State private var pulsing = false
 
     /// How much of the circle the moving arc covers.
@@ -313,15 +314,17 @@ private struct NotchMeterBar: View {
     var fraction: CGFloat
     var color: Color
     var name: String
+    var isKoreanStock: Bool = false
 
     private var trackWidth: CGFloat { NotchLayout.ringDiameter * 0.92 }
 
     var body: some View {
         VStack(spacing: Design.px(6)) {
             Text(name)
-                .font(Typography.percent)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .font(isKoreanStock ? .system(size: Design.fontSize(capPixels: 12), weight: .semibold) : Typography.percent)
+                .lineLimit(isKoreanStock ? 2 : 1)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(isKoreanStock ? 0.7 : 0.4)
                 .frame(width: trackWidth, height: NotchLayout.percentLineHeight)
                 .foregroundStyle(Palette.textPrimary)
             ZStack(alignment: .leading) {
@@ -367,7 +370,7 @@ struct ProviderCell: View {
         return band.color(accent: accentColor)
     }
 
-    @Environment(\.codenotchAccentColor) private var accentColor
+    @Environment(\.penguinnotchAccentColor) private var accentColor
 
     private var ringColor: Color? {
         guard snapshot.kind == .stocks else { return snapshot.systemColor?.color }
@@ -383,7 +386,8 @@ struct ProviderCell: View {
             if meterStyle == .bar {
                 NotchMeterBar(fraction: CGFloat(snapshot.ringFraction ?? 0),
                               color: meterColor,
-                              name: meterName)
+                              name: meterName,
+                              isKoreanStock: snapshot.id.hasPrefix("widget-stock:kr:"))
             } else {
             ProviderRing(
                 usedFraction: snapshot.localModel == nil && snapshot.hasReading ? snapshot.ringFraction : nil,

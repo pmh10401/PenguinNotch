@@ -1,7 +1,7 @@
 import Combine
 import SwiftUI
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 final class SystemUsageTests: XCTestCase {
     func testNetworkRingReflectsPrimaryLinkAndKeepsTrafficLabel() {
@@ -247,7 +247,7 @@ final class SystemUsageIntegrationTests: XCTestCase {
         for edge in NotchEdge.allCases {
             model.edge = edge
             let renderer = ImageRenderer(content: NotchRootView(model: model)
-                .environment(\.codenotchHeadlessGlass, true))
+                .environment(\.penguinnotchHeadlessGlass, true))
             XCTAssertNotNil(renderer.cgImage)
         }
         let content = TooltipCard(snapshot: snapshot, now: Date())
@@ -266,7 +266,7 @@ final class SystemUsageIntegrationTests: XCTestCase {
         let rep = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
         hosting.cacheDisplay(in: hosting.bounds, to: rep)
         let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
-        try png.write(to: URL(fileURLWithPath: "/tmp/codenotch-cpu-cores.png"))
+        try png.write(to: URL(fileURLWithPath: "/tmp/penguinnotch-cpu-cores.png"))
         snapshot.cpuCores[0] = .init(id: 0, fraction: 0.9)
         model.updateSnapshots([snapshot])
         XCTAssertEqual(model.hoveredIndex, 0)
@@ -316,7 +316,7 @@ final class SystemUsageIntegrationTests: XCTestCase {
             renderer.scale = 2
             let image = try XCTUnwrap(renderer.cgImage)
             let png = try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
-            try png.write(to: URL(fileURLWithPath: "/tmp/codenotch-hover-\(suffix).png"))
+            try png.write(to: URL(fileURLWithPath: "/tmp/penguinnotch-hover-\(suffix).png"))
         }
     }
 
@@ -421,7 +421,7 @@ final class SystemUsageIntegrationTests: XCTestCase {
             let size = model.panelSize
             let renderer = ImageRenderer(content: NotchRootView(model: model)
                 .frame(width: size.width, height: size.height)
-                .environment(\.codenotchHeadlessGlass, true)
+                .environment(\.penguinnotchHeadlessGlass, true)
                 .environment(\.colorScheme, .dark))
             XCTAssertNotNil(renderer.cgImage)
         }
@@ -433,7 +433,7 @@ final class SystemUsageIntegrationTests: XCTestCase {
         }
         for snapshot in snapshots {
             let renderer = ImageRenderer(content: TooltipCard(snapshot: snapshot, now: Date())
-                .environment(\.codenotchHeadlessGlass, true)
+                .environment(\.penguinnotchHeadlessGlass, true)
                 .environment(\.colorScheme, .dark))
             XCTAssertNotNil(renderer.cgImage)
         }
@@ -447,7 +447,7 @@ final class SystemUsageIntegrationTests: XCTestCase {
                     TooltipCard(snapshot: snapshots[6], now: Date())
                 }
             }.padding(24).background(Color.black)
-                .environment(\.codenotchHeadlessGlass, true)
+                .environment(\.penguinnotchHeadlessGlass, true)
                 .environment(\.colorScheme, .dark))
             renderer.scale = 3
             let image = try XCTUnwrap(renderer.cgImage)

@@ -170,7 +170,7 @@ struct TooltipShell<Content: View>: View {
     var tailOffset: CGFloat = 0
     @ViewBuilder let content: Content
 
-    @Environment(\.codenotchReduceTransparency) private var reduceTransparency
+    @Environment(\.penguinnotchReduceTransparency) private var reduceTransparency
     @Environment(\.notchSurfaceStyle) private var surfaceStyle
     @Environment(\.colorScheme) private var colorScheme
 
@@ -427,7 +427,7 @@ private struct LimitWindowRow: View {
     let resetTimeFormat: ResetTimeFormat
     let showsUsagePace: Bool
     var colorOverride: Color? = nil
-    @Environment(\.codenotchAccentColor) private var accentColor
+    @Environment(\.penguinnotchAccentColor) private var accentColor
     @Environment(\.usageWatchLimit) private var watchLimit
     @Environment(\.usageCriticalLimit) private var criticalLimit
     @Environment(\.tooltipSecondaryInk) private var secondaryInk
@@ -496,7 +496,7 @@ private struct MoneyBreakdownView: View {
     let title: String
     let money: UsageMoneyBreakdown
     let fidelity: Fidelity
-    @Environment(\.codenotchAccentColor) private var accentColor
+    @Environment(\.penguinnotchAccentColor) private var accentColor
     @Environment(\.usageWatchLimit) private var watchLimit
     @Environment(\.usageCriticalLimit) private var criticalLimit
 
@@ -559,7 +559,7 @@ private struct MoneyStat: View {
 private struct CPUCoreLoads: View {
     let cores: [SystemUsageReading.CoreLoad]
     let colorOverride: Color?
-    @Environment(\.codenotchAccentColor) private var accentColor
+    @Environment(\.penguinnotchAccentColor) private var accentColor
     @Environment(\.usageWatchLimit) private var watchLimit
     @Environment(\.usageCriticalLimit) private var criticalLimit
     @Environment(\.tooltipSecondaryInk) private var secondaryInk
@@ -1012,7 +1012,7 @@ private struct SessionRow: View {
     let now: Date
     /// Set when rows can be clicked to jump to the session's terminal.
     var onFocus: ((pid_t) -> Void)? = nil
-    @Environment(\.codenotchAccentColor) private var accentColor
+    @Environment(\.penguinnotchAccentColor) private var accentColor
     @Environment(\.tooltipSecondaryInk) private var secondaryInk
 
     private var stateColor: Color {

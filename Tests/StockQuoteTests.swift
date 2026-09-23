@@ -1,7 +1,17 @@
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 final class StockQuoteTests: XCTestCase {
+    func testKrxCompanyNamesResolveToStoredCodes() {
+        let directory = KoreanStockDirectory.shared
+        XCTAssertGreaterThan(directory.companies.count, 2_000)
+        XCTAssertEqual(directory.resolve("삼성전자"), WatchedStock(symbol: "005930", market: .kr))
+        XCTAssertEqual(directory.resolve(" SK하이닉스 "), WatchedStock(symbol: "000660", market: .kr))
+        XCTAssertEqual(directory.resolve("005930"), WatchedStock(symbol: "005930", market: .kr))
+        XCTAssertTrue(directory.search("삼성").contains { $0.code == "005930" })
+        XCTAssertNil(directory.resolve("존재하지않는종목"))
+    }
+
     func testSymbolsSeparateKoreanCodesFromUsTickers() {
         XCTAssertEqual(WatchedStock.parse("005930"), WatchedStock(symbol: "005930", market: .kr))
         XCTAssertEqual(WatchedStock.parse(" 0101n0 "), WatchedStock(symbol: "0101N0", market: .kr))
@@ -74,7 +84,7 @@ final class StockQuoteTests: XCTestCase {
                                           locale: Locale(identifier: "en_US_POSIX"))
         XCTAssertEqual(rising.id, "widget-stock:kr:005930")
         XCTAssertEqual(falling.id, "widget-stock:us:AAPL")
-        XCTAssertEqual(rising.ringLabel, "005930")
+        XCTAssertEqual(rising.ringLabel, "삼성전자")
         XCTAssertEqual(rising.headlineText, "+30.00%")
         XCTAssertEqual(rising.ringFraction, 1)
         XCTAssertEqual(rising.bandOverride, .ample)

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Codenotch</string>
+	<string>PenguinNotch</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,7 +25,7 @@
 		<string>uk</string>
 	</array>
 	<key>CFBundleName</key>
-	<string>Codenotch</string>
+	<string>PenguinNotch</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -35,15 +35,15 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Codenotch answers your phone on this network so it can show your usage.</string>
+	<string>PenguinNotch displays your usage on your phone over this network.</string>
 	<key>SUAutomaticallyUpdate</key>
 	<true/>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://hivinz.com/appcast.xml</string>
+	<string>https://github.com/pmh10401/PenguinNotch/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>rmUfT5r49nR+3HdkbR5/YYLghfnAi6L49eOk3sIegSk=</string>
+	<string>vjZrZO+z+sq43vqpqwU7qTq/fBf5aWDEhE/apwuR9AM=</string>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 </dict>

@@ -1,6 +1,6 @@
 import Sparkle
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 /// "Checking…" is a state the settings sheet must always leave: a check that
 /// ends any other way, or never reports back, still lands somewhere.
@@ -25,7 +25,7 @@ final class UpdaterOutcomeTests: XCTestCase {
         guard case .failed(let why) = Updater.outcome(afterTimeoutFrom: .checking) else {
             return XCTFail("a stalled check must not stay on Checking…")
         }
-        XCTAssertTrue(why.contains("hivinz.com"), why)
+        XCTAssertTrue(why.contains("GitHub"), why)
         XCTAssertEqual(Updater.outcome(afterTimeoutFrom: .upToDate(Date(timeIntervalSince1970: 1))),
                        .upToDate(Date(timeIntervalSince1970: 1)))
     }

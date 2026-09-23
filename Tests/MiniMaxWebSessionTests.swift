@@ -1,7 +1,7 @@
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
-/// MiniMax is signed into from Codenotch's own WKWebView, the same way
+/// MiniMax is signed into from PenguinNotch's own WKWebView, the same way
 /// DeepSeek is. These pin the regional platform origin, the absolute www
 /// remains fetch, and the extra host that sign-out has to clear.
 @MainActor

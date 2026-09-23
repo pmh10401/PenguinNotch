@@ -315,11 +315,13 @@ enum StockBoard {
 
     static func snapshot(stock: WatchedStock, quote: StockTick?, previousClose: Decimal?, name: String?,
                          link: StockLink, locale: Locale = L10n.locale) -> ProviderSnapshot {
-        let title = name ?? stock.symbol
+        let title = (stock.market == .kr ? KoreanStockDirectory.shared.name(for: stock.symbol) : nil)
+            ?? name?.precomposedStringWithCanonicalMapping ?? stock.symbol
+        let label = stock.market == .kr ? title : stock.symbol
         guard let quote else {
             return ProviderSnapshot(id: cellID(stock), displayName: title, glyph: .stock, fidelity: .official,
                                     status: .unsupported(emptyMessage(link)), windows: [], kind: .stocks,
-                                    ringLabel: stock.symbol, plan: "Toss Securities")
+                                    ringLabel: label, plan: "Toss Securities")
         }
         let priceText = StockQuoteCodec.format(price: quote.price, currency: quote.currency, locale: locale)
         var windows: [LimitWindow] = []
@@ -347,7 +349,7 @@ enum StockBoard {
         }
         return ProviderSnapshot(id: cellID(stock), displayName: title, glyph: .stock, fidelity: .official,
                                 status: .ok, windows: windows, headlineID: headline, kind: .stocks,
-                                ringLabel: stock.symbol, plan: "Toss Securities")
+                                ringLabel: label, plan: "Toss Securities")
     }
 
     static func orderSnapshots(stored: [String]) -> [ProviderSnapshot] {

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 @MainActor
 final class OllamaPreferencesTests: XCTestCase {

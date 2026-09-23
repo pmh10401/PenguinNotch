@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 @MainActor
 final class AccessibilityTransparencyTests: XCTestCase {
@@ -17,18 +17,18 @@ final class AccessibilityTransparencyTests: XCTestCase {
 
     func testEnvironmentValueCanBeOverridden() {
         var values = EnvironmentValues()
-        XCTAssertFalse(values.codenotchReduceTransparency)
-        values.codenotchReduceTransparency = true
-        XCTAssertTrue(values.codenotchReduceTransparency)
+        XCTAssertFalse(values.penguinnotchReduceTransparency)
+        values.penguinnotchReduceTransparency = true
+        XCTAssertTrue(values.penguinnotchReduceTransparency)
     }
 
     func testProviderRingRendersUnderStandardAndReducedTransparency() throws {
         let normalRing = ProviderRing(usedFraction: 0.5, glyph: .claude)
-            .environment(\.codenotchReduceTransparency, false)
+            .environment(\.penguinnotchReduceTransparency, false)
             .frame(width: NotchLayout.ringDiameter, height: NotchLayout.ringDiameter)
 
         let reducedRing = ProviderRing(usedFraction: 0.5, glyph: .claude)
-            .environment(\.codenotchReduceTransparency, true)
+            .environment(\.penguinnotchReduceTransparency, true)
             .frame(width: NotchLayout.ringDiameter, height: NotchLayout.ringDiameter)
 
         let normalRenderer = ImageRenderer(content: normalRing)
@@ -49,7 +49,7 @@ final class AccessibilityTransparencyTests: XCTestCase {
             isBlocked: true,
             activity: ActivitySummary(sessions: [session("s1", .waiting)])
         )
-        .environment(\.codenotchReduceTransparency, true)
+        .environment(\.penguinnotchReduceTransparency, true)
         .frame(width: NotchLayout.ringDiameter, height: NotchLayout.ringDiameter)
 
         let renderer = ImageRenderer(content: staleExhaustedRing)
@@ -74,11 +74,11 @@ final class AccessibilityTransparencyTests: XCTestCase {
         ])
 
         let standardCard = TooltipCard(snapshot: snapshot, activity: activity, now: Date())
-            .environment(\.codenotchReduceTransparency, false)
+            .environment(\.penguinnotchReduceTransparency, false)
             .padding(10)
 
         let reducedCard = TooltipCard(snapshot: snapshot, activity: activity, now: Date())
-            .environment(\.codenotchReduceTransparency, true)
+            .environment(\.penguinnotchReduceTransparency, true)
             .padding(10)
 
         let standardRenderer = ImageRenderer(content: standardCard)
@@ -107,7 +107,7 @@ final class AccessibilityTransparencyTests: XCTestCase {
             quit: {},
             updater: updater
         )
-        .environment(\.codenotchReduceTransparency, true)
+        .environment(\.penguinnotchReduceTransparency, true)
         .frame(width: SettingsView.width, height: SettingsView.height)
 
         let renderer = ImageRenderer(content: view)

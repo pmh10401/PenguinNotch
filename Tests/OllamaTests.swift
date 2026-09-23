@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Codenotch
+@testable import PenguinNotch
 
 /// Memory sizes and token counts are printed through `Foundation`'s
 /// locale-aware formatting, so a machine set to Indonesian prints "4,5 GB"
@@ -880,15 +880,15 @@ final class OllamaRenderTests: XCTestCase {
     }
 
     func testLiveLocalListingWhenExplicitlyEnabled() async throws {
-        guard ProcessInfo.processInfo.environment["CODENOTCH_OLLAMA_LIVE"] == "1" else {
+        guard ProcessInfo.processInfo.environment["PENGUINNOTCH_OLLAMA_LIVE"] == "1" else {
             throw XCTSkip("Opt-in live Ollama check")
         }
         let provider = OllamaLocalProvider(endpoint: try OllamaEndpoint.parse(OllamaEndpoint.defaultAddress))
         let snapshot = try await provider.fetchSnapshot()
         XCTAssertTrue(snapshot.hasReading)
         XCTAssertNil(snapshot.ringFraction)
-        if let expectedName = ProcessInfo.processInfo.environment["CODENOTCH_OLLAMA_EXPECTED_MODEL"],
-           let expectedBrand = ProcessInfo.processInfo.environment["CODENOTCH_OLLAMA_EXPECTED_BRAND"] {
+        if let expectedName = ProcessInfo.processInfo.environment["PENGUINNOTCH_OLLAMA_EXPECTED_MODEL"],
+           let expectedBrand = ProcessInfo.processInfo.environment["PENGUINNOTCH_OLLAMA_EXPECTED_BRAND"] {
             let cell = try XCTUnwrap(snapshot.notchSnapshots.first { $0.localModel?.name == expectedName })
             XCTAssertEqual(cell.localModel?.brand?.rawValue ?? "ollama", expectedBrand)
             XCTAssertEqual(cell.glyph, cell.localModel?.brand?.glyph ?? .ollamaLocal)

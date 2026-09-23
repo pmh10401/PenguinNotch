@@ -1,4 +1,4 @@
-# Codenotch Phone Link — protocol v3
+# PenguinNotch Phone Link — protocol v3
 
 **Status:** contract for implementation. Both the Mac server and the phone client
 build against this document. Where this document and existing code disagree,
@@ -37,7 +37,7 @@ Re-pairing costs the user one QR scan.
 - `/health` advertises `"api": 3`. The phone refuses to pair against `api < 3`
   with "Your Mac app is out of date".
 
-The v1 path (the standalone `agent/codenotch_agent.py`, static secret, plaintext)
+The v1 path (the standalone `agent/penguinnotch_agent.py`, static secret, plaintext)
 stays in the phone client for now and is **out of scope for this round**. The
 phone must show a persistent "Unencrypted (legacy agent)" indicator whenever a
 v1 connection is active.
@@ -53,16 +53,16 @@ chars. Unchanged from v2.
 Device secret, derived independently on both sides, never transmitted:
 
 ```
-S = HMAC-SHA256(key = hexdecode(C), msg = "codenotch-device-v3:" + deviceId)   // 32 raw bytes
+S = HMAC-SHA256(key = hexdecode(C), msg = "penguinnotch-device-v3:" + deviceId)   // 32 raw bytes
 ```
 
 Per-purpose keys, HKDF-SHA256 (RFC 5869), zero-length salt, L = 32:
 
 ```
-K_sig      = HKDF(IKM = S,           info = "codenotch/v3/sig")
-K_enc      = HKDF(IKM = S,           info = "codenotch/v3/enc")
-K_pair_sig = HKDF(IKM = hexdecode(C), info = "codenotch/v3/pair-sig")
-K_pair_enc = HKDF(IKM = hexdecode(C), info = "codenotch/v3/pair-enc")
+K_sig      = HKDF(IKM = S,           info = "penguinnotch/v3/sig")
+K_enc      = HKDF(IKM = S,           info = "penguinnotch/v3/enc")
+K_pair_sig = HKDF(IKM = hexdecode(C), info = "penguinnotch/v3/pair-sig")
+K_pair_enc = HKDF(IKM = hexdecode(C), info = "penguinnotch/v3/pair-enc")
 ```
 
 One key, one purpose. Do not sign and encrypt with the same key.
@@ -78,7 +78,7 @@ base64( nonce12 || ciphertext || tag16 )
 - **AES-256-GCM.** Key `K_enc` (or `K_pair_enc` for pairing).
 - `nonce12`: 12 bytes from a CSPRNG, fresh per message. A response MUST NOT
   reuse the request's nonce.
-- Sent as base64 **text**, `content-type: application/codenotch-v3`. Base64
+- Sent as base64 **text**, `content-type: application/penguinnotch-v3`. Base64
   rather than raw binary because React Native `fetch` handles binary bodies
   badly.
 
@@ -169,7 +169,7 @@ it cannot enable a replay.
 
 | Endpoint | Auth | Body |
 |---|---|---|
-| `GET /health` | none | plaintext JSON, `{"ok":true,"app":"codenotch","api":3,"version":"x.y.z"}` |
+| `GET /health` | none | plaintext JSON, `{"ok":true,"app":"penguinnotch","api":3,"version":"x.y.z"}` |
 | `POST /api/v3/pair` | `K_pair_sig` + window open | encrypted under `K_pair_enc` |
 | `GET /api/v3/snapshot` | `K_sig` | encrypted under `K_enc` |
 | `POST /api/v3/refresh` | `K_sig` | encrypted under `K_enc` |
@@ -227,7 +227,7 @@ of it. The café case is fixed by the pairing window, not by the bind.
   `platform`, `pairedAt`, `lastSeenAt`, `lastSeenIP`) stays in `devices.json`.
 - The secret goes to the keychain via the existing
   `Sources/Providers/KeychainItem.swift`: service
-  `com.codenotch.phonelink.device`, account = `deviceId`.
+  `com.penguinnotch.phonelink.device`, account = `deviceId`.
 - Why split rather than move the whole record: the handler updates
   `lastSeenAt`/`lastSeenIP` on **every** request. With the secret on the struct,
   every heartbeat becomes a keychain round-trip.

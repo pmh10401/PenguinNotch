@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Codenotch
+@testable import PenguinNotch
 
 @MainActor
 final class LMStudioProviderTests: XCTestCase {

@@ -1338,55 +1338,55 @@
         }
       }
     },
-    "Codenotch was refused access to %@'s saved login. Click this ring to ask again, and choose Always Allow.": {
+    "PenguinNotch was refused access to %@'s saved login. Click this ring to ask again, and choose Always Allow.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch s'est vu refuser l'accès aux identifiants enregistrés de %@. Cliquez sur cet anneau pour redemander, puis choisissez Toujours autoriser."
+            "value": "PenguinNotch s'est vu refuser l'accès aux identifiants enregistrés de %@. Cliquez sur cet anneau pour redemander, puis choisissez Toujours autoriser."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は %@ の保存済みログインへのアクセスを拒否されました。このリングをクリックして再度要求し、「常に許可」を選んでください。"
+            "value": "PenguinNotch は %@ の保存済みログインへのアクセスを拒否されました。このリングをクリックして再度要求し、「常に許可」を選んでください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch teve acesso negado ao login salvo do %@. Clique neste anel para pedir de novo e escolha Sempre Permitir."
+            "value": "O PenguinNotch teve acesso negado ao login salvo do %@. Clique neste anel para pedir de novo e escolha Sempre Permitir."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 未能读取 %@ 已保存的登录信息。点击这个圆环再试一次，并选择「始终允许」。"
+            "value": "PenguinNotch 未能读取 %@ 已保存的登录信息。点击这个圆环再试一次，并选择「始终允许」。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 未能讀取 %@ 已儲存的登入資訊。點按這個圓環再試一次，並選擇「始終允許」。"
+            "value": "PenguinNotch 未能讀取 %@ 已儲存的登入資訊。點按這個圓環再試一次，並選擇「始終允許」。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch не получил доступ к сохранённому входу %@. Нажмите это кольцо, повторите запрос и выберите «Разрешать всегда»."
+            "value": "PenguinNotch не получил доступ к сохранённому входу %@. Нажмите это кольцо, повторите запрос и выберите «Разрешать всегда»."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch wurde der Zugriff auf die gespeicherte Anmeldung von %@ verweigert. Klicke auf diesen Ring, um erneut zu fragen, und wähle „Immer erlauben“."
+            "value": "PenguinNotch wurde der Zugriff auf die gespeicherte Anmeldung von %@ verweigert. Klicke auf diesen Ring, um erneut zu fragen, und wähle „Immer erlauben“."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch не отримав доступу до збереженого входу %@. Натисніть це кільце, щоб запитати знову, і виберіть «Завжди дозволяти»."
+            "value": "PenguinNotch не отримав доступу до збереженого входу %@. Натисніть це кільце, щоб запитати знову, і виберіть «Завжди дозволяти»."
           }
         }
       }
@@ -3935,55 +3935,55 @@
         }
       }
     },
-    "Nothing on screen. Open Codenotch again from Applications to bring these settings back.": {
+    "Nothing on screen. Open PenguinNotch again from Applications to bring these settings back.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ничего не показывать. Откройте Codenotch снова из Программ, чтобы вернуть эти настройки."
+            "value": "Ничего не показывать. Откройте PenguinNotch снова из Программ, чтобы вернуть эти настройки."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rien à l'écran. Rouvrez Codenotch depuis Applications pour retrouver ces réglages."
+            "value": "Rien à l'écran. Rouvrez PenguinNotch depuis Applications pour retrouver ces réglages."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "画面には何も出ません。この設定に戻るには、アプリケーションから Codenotch をもう一度開いてください。"
+            "value": "画面には何も出ません。この設定に戻るには、アプリケーションから PenguinNotch をもう一度開いてください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nada na tela. Abra o Codenotch novamente em Aplicativos para trazer estes ajustes de volta."
+            "value": "Nada na tela. Abra o PenguinNotch novamente em Aplicativos para trazer estes ajustes de volta."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "屏幕上什么都没有。从「应用程序」再打开 Codenotch，才能回到这些设置。"
+            "value": "屏幕上什么都没有。从「应用程序」再打开 PenguinNotch，才能回到这些设置。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "螢幕上什麼都沒有。從「應用程式」再開啟 Codenotch，才能回到這些設定。"
+            "value": "螢幕上什麼都沒有。從「應用程式」再開啟 PenguinNotch，才能回到這些設定。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nichts auf dem Bildschirm. Öffne Codenotch erneut aus dem Programme-Ordner, um diese Einstellungen zurückzuholen."
+            "value": "Nichts auf dem Bildschirm. Öffne PenguinNotch erneut aus dem Programme-Ordner, um diese Einstellungen zurückzuholen."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Нічого на екрані. Відкрийте Codenotch знову з теки «Програми», щоб повернути ці налаштування."
+            "value": "Нічого на екрані. Відкрийте PenguinNotch знову з теки «Програми», щоб повернути ці налаштування."
           }
         }
       }
@@ -4147,55 +4147,55 @@
         }
       }
     },
-    "A normal app icon in the Dock while Codenotch is running.": {
+    "A normal app icon in the Dock while PenguinNotch is running.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Обычный значок приложения в Dock во время работы Codenotch."
+            "value": "Обычный значок приложения в Dock во время работы PenguinNotch."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une icône d'app normale dans le Dock tant que Codenotch fonctionne."
+            "value": "Une icône d'app normale dans le Dock tant que PenguinNotch fonctionne."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch の実行中、Dock に通常のアプリアイコンが出ます。"
+            "value": "PenguinNotch の実行中、Dock に通常のアプリアイコンが出ます。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um ícone de app normal no Dock enquanto o Codenotch está em execução."
+            "value": "Um ícone de app normal no Dock enquanto o PenguinNotch está em execução."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 运行时，程序坞里有一个普通应用图标。"
+            "value": "PenguinNotch 运行时，程序坞里有一个普通应用图标。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 執行時，程式塢裡有一個普通 App 圖示。"
+            "value": "PenguinNotch 執行時，程式塢裡有一個普通 App 圖示。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein normales App-Symbol im Dock, solange Codenotch läuft."
+            "value": "Ein normales App-Symbol im Dock, solange PenguinNotch läuft."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Звичайний значок застосунку в Dock, поки Codenotch працює."
+            "value": "Звичайний значок застосунку в Dock, поки PenguinNotch працює."
           }
         }
       }
@@ -4253,55 +4253,55 @@
         }
       }
     },
-    "No icon anywhere. Open Codenotch again from Applications to bring these settings back.": {
+    "No icon anywhere. Open PenguinNotch again from Applications to bring these settings back.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ни одного значка. Откройте Codenotch снова из Программ, чтобы вернуть эти настройки."
+            "value": "Ни одного значка. Откройте PenguinNotch снова из Программ, чтобы вернуть эти настройки."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune icône nulle part. Rouvrez Codenotch depuis Applications pour retrouver ces réglages."
+            "value": "Aucune icône nulle part. Rouvrez PenguinNotch depuis Applications pour retrouver ces réglages."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "どこにもアイコンが出ません。この設定に戻るには、アプリケーションから Codenotch をもう一度開いてください。"
+            "value": "どこにもアイコンが出ません。この設定に戻るには、アプリケーションから PenguinNotch をもう一度開いてください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhum ícone em lugar algum. Abra o Codenotch novamente em Aplicativos para trazer estes ajustes de volta."
+            "value": "Nenhum ícone em lugar algum. Abra o PenguinNotch novamente em Aplicativos para trazer estes ajustes de volta."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "哪里都没有图标。从「应用程序」再打开 Codenotch，才能回到这些设置。"
+            "value": "哪里都没有图标。从「应用程序」再打开 PenguinNotch，才能回到这些设置。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "哪裡都沒有圖示。從「應用程式」再開啟 Codenotch，才能回到這些設定。"
+            "value": "哪裡都沒有圖示。從「應用程式」再開啟 PenguinNotch，才能回到這些設定。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nirgends ein Symbol. Öffne Codenotch erneut aus dem Programme-Ordner, um diese Einstellungen zurückzuholen."
+            "value": "Nirgends ein Symbol. Öffne PenguinNotch erneut aus dem Programme-Ordner, um diese Einstellungen zurückzuholen."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Жодного значка. Відкрийте Codenotch знову з теки «Програми», щоб повернути ці налаштування."
+            "value": "Жодного значка. Відкрийте PenguinNotch знову з теки «Програми», щоб повернути ці налаштування."
           }
         }
       }
@@ -5048,55 +5048,55 @@
         }
       }
     },
-    "Open Codenotch at login": {
+    "Open PenguinNotch at login": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открывать Codenotch при входе"
+            "value": "Открывать PenguinNotch при входе"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvrir Codenotch à l'ouverture de session"
+            "value": "Ouvrir PenguinNotch à l'ouverture de session"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ログイン時に Codenotch を開く"
+            "value": "ログイン時に PenguinNotch を開く"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abrir o Codenotch ao iniciar a sessão"
+            "value": "Abrir o PenguinNotch ao iniciar a sessão"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "登录时打开 Codenotch"
+            "value": "登录时打开 PenguinNotch"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "登入時開啟 Codenotch"
+            "value": "登入時開啟 PenguinNotch"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch bei der Anmeldung öffnen"
+            "value": "PenguinNotch bei der Anmeldung öffnen"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Відкривати Codenotch під час входу"
+            "value": "Відкривати PenguinNotch під час входу"
           }
         }
       }
@@ -5313,108 +5313,108 @@
         }
       }
     },
-    "Codenotch never signs in — each reading is borrowed from the tool that already holds the account. Signing out here stops the credential being read and forgets the numbers, but leaves you signed in to that tool. macOS asks once per tool the first time, and again whenever you sign in to a different account; Always Allow keeps it quiet.": {
+    "PenguinNotch never signs in — each reading is borrowed from the tool that already holds the account. Signing out here stops the credential being read and forgets the numbers, but leaves you signed in to that tool. macOS asks once per tool the first time, and again whenever you sign in to a different account; Always Allow keeps it quiet.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch ne se connecte jamais — chaque relevé est emprunté à l'outil qui détient déjà le compte. Vous déconnecter ici arrête la lecture de l'identifiant et oublie les chiffres, mais vous restez connecté à cet outil. macOS demande une fois par outil la première fois, puis à nouveau chaque fois que vous vous connectez à un autre compte ; Toujours autoriser évite les rappels."
+            "value": "PenguinNotch ne se connecte jamais — chaque relevé est emprunté à l'outil qui détient déjà le compte. Vous déconnecter ici arrête la lecture de l'identifiant et oublie les chiffres, mais vous restez connecté à cet outil. macOS demande une fois par outil la première fois, puis à nouveau chaque fois que vous vous connectez à un autre compte ; Toujours autoriser évite les rappels."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch がサインインすることはありません。読み取りはすべて、すでにアカウントを保持しているツールから借りたものです。ここでサインアウトすると資格情報の読み取りが止まり、数値も忘れられますが、そのツールへのサインインはそのまま残ります。macOS はツールごとに初回の一度、そして別のアカウントにサインインするたびに確認します。「常に許可」を選べば以後は尋ねられません。"
+            "value": "PenguinNotch がサインインすることはありません。読み取りはすべて、すでにアカウントを保持しているツールから借りたものです。ここでサインアウトすると資格情報の読み取りが止まり、数値も忘れられますが、そのツールへのサインインはそのまま残ります。macOS はツールごとに初回の一度、そして別のアカウントにサインインするたびに確認します。「常に許可」を選べば以後は尋ねられません。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch nunca faz login — cada leitura é emprestada da ferramenta que já tem a conta. Sair daqui interrompe a leitura da credencial e esquece os números, mas você continua conectado naquela ferramenta. O macOS pergunta uma vez por ferramenta na primeira vez, e de novo sempre que você entrar em outra conta; Sempre Permitir mantém isso em silêncio."
+            "value": "O PenguinNotch nunca faz login — cada leitura é emprestada da ferramenta que já tem a conta. Sair daqui interrompe a leitura da credencial e esquece os números, mas você continua conectado naquela ferramenta. O macOS pergunta uma vez por ferramenta na primeira vez, e de novo sempre que você entrar em outra conta; Sempre Permitir mantém isso em silêncio."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 从不自己登录 — 每条读数都借自已经持有该账号的工具。在这里退出只会停止读取凭证并忘掉数字，你在那个工具里仍然是登录状态。macOS 每种工具第一次会问一次，换账号再登录时还会再问；选「始终允许」就不会再打扰。"
+            "value": "PenguinNotch 从不自己登录 — 每条读数都借自已经持有该账号的工具。在这里退出只会停止读取凭证并忘掉数字，你在那个工具里仍然是登录状态。macOS 每种工具第一次会问一次，换账号再登录时还会再问；选「始终允许」就不会再打扰。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 從不自己登入 — 每條讀數都借自已經持有該帳號的工具。在這裡登出只會停止讀取憑證並忘掉數字，你在那個工具裡仍然是登入狀態。macOS 每種工具第一次會問一次，換帳號再登入時還會再問；選「始終允許」就不會再打擾。"
+            "value": "PenguinNotch 從不自己登入 — 每條讀數都借自已經持有該帳號的工具。在這裡登出只會停止讀取憑證並忘掉數字，你在那個工具裡仍然是登入狀態。macOS 每種工具第一次會問一次，換帳號再登入時還會再問；選「始終允許」就不會再打擾。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch не выполняет вход — каждое показание берётся из уже авторизованного инструмента. Выход здесь прекращает чтение учётных данных и удаляет числа, но не выполняет выход из инструмента. macOS спрашивает разрешение один раз для каждого инструмента и при смене аккаунта; «Разрешать всегда» отключает повторные запросы."
+            "value": "PenguinNotch не выполняет вход — каждое показание берётся из уже авторизованного инструмента. Выход здесь прекращает чтение учётных данных и удаляет числа, но не выполняет выход из инструмента. macOS спрашивает разрешение один раз для каждого инструмента и при смене аккаунта; «Разрешать всегда» отключает повторные запросы."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch meldet sich nie selbst an — jeder Messwert wird von dem Tool geliehen, das das Konto bereits besitzt. Sich hier abzumelden stoppt nur das Lesen der Zugangsdaten und vergisst die Zahlen, meldet dich aber nicht bei diesem Tool ab. macOS fragt beim ersten Mal einmal pro Tool nach, und erneut, sobald du dich bei einem anderen Konto anmeldest; „Immer erlauben“ hält es still."
+            "value": "PenguinNotch meldet sich nie selbst an — jeder Messwert wird von dem Tool geliehen, das das Konto bereits besitzt. Sich hier abzumelden stoppt nur das Lesen der Zugangsdaten und vergisst die Zahlen, meldet dich aber nicht bei diesem Tool ab. macOS fragt beim ersten Mal einmal pro Tool nach, und erneut, sobald du dich bei einem anderen Konto anmeldest; „Immer erlauben“ hält es still."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch ніколи не виконує вхід — кожен показник позичено в інструмента, який уже тримає акаунт. Вихід тут лише припиняє читання облікових даних і забуває числа, але вхід у сам інструмент лишається. macOS питає один раз для кожного інструмента під час першого читання і ще раз щоразу, коли ви входите в інший акаунт; «Завжди дозволяти» знімає ці запити."
+            "value": "PenguinNotch ніколи не виконує вхід — кожен показник позичено в інструмента, який уже тримає акаунт. Вихід тут лише припиняє читання облікових даних і забуває числа, але вхід у сам інструмент лишається. macOS питає один раз для кожного інструмента під час першого читання і ще раз щоразу, коли ви входите в інший акаунт; «Завжди дозволяти» знімає ці запити."
           }
         }
       }
     },
-    "Codenotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor, Codex, Antigravity, GLM, Grok or OpenCode, and its ring appears in the notch.": {
+    "PenguinNotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor, Codex, Antigravity, GLM, Grok or OpenCode, and its ring appears in the notch.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch lit la consommation des outils déjà connectés sur ce Mac — il ne demande jamais votre mot de passe. Installez l'un de Claude Code (l'outil en terminal, pas l'app Claude), Cursor, Codex, Antigravity, GLM, Grok ou OpenCode et connectez-vous : son anneau apparaît dans l'encoche."
+            "value": "PenguinNotch lit la consommation des outils déjà connectés sur ce Mac — il ne demande jamais votre mot de passe. Installez l'un de Claude Code (l'outil en terminal, pas l'app Claude), Cursor, Codex, Antigravity, GLM, Grok ou OpenCode et connectez-vous : son anneau apparaît dans l'encoche."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor、Codex、Antigravity、GLM、Grok、OpenCode のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
+            "value": "PenguinNotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor、Codex、Antigravity、GLM、Grok、OpenCode のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch lê o uso de ferramentas já conectadas neste Mac — ele nunca pede sua senha. Instale e entre em qualquer um destes: Claude Code (a ferramenta de terminal, não o app Claude), Cursor, Codex, Antigravity, GLM, Grok ou OpenCode, e o anel correspondente aparece no notch."
+            "value": "O PenguinNotch lê o uso de ferramentas já conectadas neste Mac — ele nunca pede sua senha. Instale e entre em qualquer um destes: Claude Code (a ferramenta de terminal, não o app Claude), Cursor, Codex, Antigravity, GLM, Grok ou OpenCode, e o anel correspondente aparece no notch."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor、Codex、Antigravity、GLM、Grok 或 OpenCode 中的任意一个，刘海里就会出现对应的圆环。"
+            "value": "PenguinNotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor、Codex、Antigravity、GLM、Grok 或 OpenCode 中的任意一个，刘海里就会出现对应的圆环。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 讀取這台 Mac 上已經登入的工具的用量 — 從不問你的密碼。安裝並登入 Claude Code（終端工具，不是 Claude App）、Cursor、Codex、Antigravity、GLM、Grok 或 OpenCode 中的任意一個，瀏海裡就會出現對應的圓環。"
+            "value": "PenguinNotch 讀取這台 Mac 上已經登入的工具的用量 — 從不問你的密碼。安裝並登入 Claude Code（終端工具，不是 Claude App）、Cursor、Codex、Antigravity、GLM、Grok 或 OpenCode 中的任意一個，瀏海裡就會出現對應的圓環。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch читает использование из инструментов, уже авторизованных на этом Mac, и никогда не спрашивает пароль. Установите и авторизуйтесь в Claude Code (терминальном инструменте, не приложении Claude), Cursor, Codex, Antigravity, GLM, Grok или OpenCode — и кольцо появится на панели."
+            "value": "PenguinNotch читает использование из инструментов, уже авторизованных на этом Mac, и никогда не спрашивает пароль. Установите и авторизуйтесь в Claude Code (терминальном инструменте, не приложении Claude), Cursor, Codex, Antigravity, GLM, Grok или OpenCode — и кольцо появится на панели."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch liest die Nutzung von Tools, die auf diesem Mac bereits angemeldet sind — es fragt nie nach deinem Passwort. Installiere eines von Claude Code (das Terminal-Tool, nicht die Claude-App), Cursor, Codex, Antigravity, GLM, Grok oder OpenCode und melde dich an — der zugehörige Ring erscheint dann in der Notch."
+            "value": "PenguinNotch liest die Nutzung von Tools, die auf diesem Mac bereits angemeldet sind — es fragt nie nach deinem Passwort. Installiere eines von Claude Code (das Terminal-Tool, nicht die Claude-App), Cursor, Codex, Antigravity, GLM, Grok oder OpenCode und melde dich an — der zugehörige Ring erscheint dann in der Notch."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor, Codex, Antigravity, GLM, Grok або OpenCode — і увійдіть: його кільце зʼявиться у вирізі."
+            "value": "PenguinNotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor, Codex, Antigravity, GLM, Grok або OpenCode — і увійдіть: його кільце зʼявиться у вирізі."
           }
         }
       }
@@ -5472,55 +5472,55 @@
         }
       }
     },
-    "Version %@. Updates install in the background and apply next time Codenotch starts.": {
+    "Version %@. Updates install in the background and apply next time PenguinNotch starts.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Version %@. Les mises à jour s'installent en arrière-plan et s'appliquent au prochain démarrage de Codenotch."
+            "value": "Version %@. Les mises à jour s'installent en arrière-plan et s'appliquent au prochain démarrage de PenguinNotch."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "バージョン %@。アップデートはバックグラウンドでインストールされ、次回 Codenotch を起動したときに適用されます。"
+            "value": "バージョン %@。アップデートはバックグラウンドでインストールされ、次回 PenguinNotch を起動したときに適用されます。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Versão %@. As atualizações são instaladas em segundo plano e valem na próxima vez que o Codenotch iniciar."
+            "value": "Versão %@. As atualizações são instaladas em segundo plano e valem na próxima vez que o PenguinNotch iniciar."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "版本 %@。更新在后台安装，下次启动 Codenotch 时生效。"
+            "value": "版本 %@。更新在后台安装，下次启动 PenguinNotch 时生效。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "版本 %@。更新在背景安裝，下次啟動 Codenotch 時生效。"
+            "value": "版本 %@。更新在背景安裝，下次啟動 PenguinNotch 時生效。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Версия %@. Обновления устанавливаются в фоне и применяются при следующем запуске Codenotch."
+            "value": "Версия %@. Обновления устанавливаются в фоне и применяются при следующем запуске PenguinNotch."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Version %@. Updates werden im Hintergrund installiert und gelten ab dem nächsten Start von Codenotch."
+            "value": "Version %@. Updates werden im Hintergrund installiert und gelten ab dem nächsten Start von PenguinNotch."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Версія %@. Оновлення встановлюються у фоні й застосовуються під час наступного запуску Codenotch."
+            "value": "Версія %@. Оновлення встановлюються у фоні й застосовуються під час наступного запуску PenguinNotch."
           }
         }
       }
@@ -5843,55 +5843,55 @@
         }
       }
     },
-    "Codenotch is not reading %@'s saved login. Choose Allow access… above and answer Allow.": {
+    "PenguinNotch is not reading %@'s saved login. Choose Allow access… above and answer Allow.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch ne lit pas la connexion enregistrée de %@. Choisissez Autoriser l'accès… ci-dessus et répondez Autoriser."
+            "value": "PenguinNotch ne lit pas la connexion enregistrée de %@. Choisissez Autoriser l'accès… ci-dessus et répondez Autoriser."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は %@ の保存済みログインを読んでいません。上の「アクセスを許可…」を選び、「許可」と答えてください。"
+            "value": "PenguinNotch は %@ の保存済みログインを読んでいません。上の「アクセスを許可…」を選び、「許可」と答えてください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch não está lendo o login salvo de %@. Escolha Permitir acesso… acima e responda Permitir."
+            "value": "O PenguinNotch não está lendo o login salvo de %@. Escolha Permitir acesso… acima e responda Permitir."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 没有读取 %@ 保存的登录信息。请在上方选择“允许访问…”，然后选择“允许”。"
+            "value": "PenguinNotch 没有读取 %@ 保存的登录信息。请在上方选择“允许访问…”，然后选择“允许”。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 沒有讀取 %@ 儲存的登入資訊。請在上方選擇“允許取用…”，然後選擇“允許”。"
+            "value": "PenguinNotch 沒有讀取 %@ 儲存的登入資訊。請在上方選擇“允許取用…”，然後選擇“允許”。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch не читает сохранённый вход %@. Выберите «Разрешить доступ…» выше и ответьте «Разрешить»."
+            "value": "PenguinNotch не читает сохранённый вход %@. Выберите «Разрешить доступ…» выше и ответьте «Разрешить»."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch liest die gespeicherte Anmeldung von %@ nicht. Wähle oben „Zugriff erlauben…“ und antworte mit „Erlauben“."
+            "value": "PenguinNotch liest die gespeicherte Anmeldung von %@ nicht. Wähle oben „Zugriff erlauben…“ und antworte mit „Erlauben“."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch не читає збережений вхід %@. Виберіть «Дозволити доступ…» вище й дайте відповідь «Дозволити»."
+            "value": "PenguinNotch не читає збережений вхід %@. Виберіть «Дозволити доступ…» вище й дайте відповідь «Дозволити»."
           }
         }
       }
@@ -6055,55 +6055,55 @@
         }
       }
     },
-    "Codenotch Settings": {
+    "PenguinNotch Settings": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réglages de Codenotch"
+            "value": "Réglages de PenguinNotch"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 設定"
+            "value": "PenguinNotch 設定"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajustes do Codenotch"
+            "value": "Ajustes do PenguinNotch"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 设置"
+            "value": "PenguinNotch 设置"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 設定"
+            "value": "PenguinNotch 設定"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Настройки Codenotch"
+            "value": "Настройки PenguinNotch"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch-Einstellungen"
+            "value": "PenguinNotch-Einstellungen"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Налаштування Codenotch"
+            "value": "Налаштування PenguinNotch"
           }
         }
       }
@@ -6161,55 +6161,55 @@
         }
       }
     },
-    "What's new in Codenotch": {
+    "What's new in PenguinNotch": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les nouveautés de Codenotch"
+            "value": "Les nouveautés de PenguinNotch"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch の新機能"
+            "value": "PenguinNotch の新機能"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Novidades do Codenotch"
+            "value": "Novidades do PenguinNotch"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 新变化"
+            "value": "PenguinNotch 新变化"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 新變化"
+            "value": "PenguinNotch 新變化"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Что нового в Codenotch"
+            "value": "Что нового в PenguinNotch"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neuheiten in Codenotch"
+            "value": "Neuheiten in PenguinNotch"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Що нового в Codenotch"
+            "value": "Що нового в PenguinNotch"
           }
         }
       }
@@ -6320,55 +6320,55 @@
         }
       }
     },
-    "macOS refused this — try moving Codenotch to /Applications.": {
+    "macOS refused this — try moving PenguinNotch to /Applications.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS a refusé — essayez de déplacer Codenotch dans /Applications."
+            "value": "macOS a refusé — essayez de déplacer PenguinNotch dans /Applications."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS に拒否されました — Codenotch を /Applications に移動してみてください。"
+            "value": "macOS に拒否されました — PenguinNotch を /Applications に移動してみてください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O macOS recusou isso — tente mover o Codenotch para /Applications."
+            "value": "O macOS recusou isso — tente mover o PenguinNotch para /Applications."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS 拒绝了 — 试着把 Codenotch 移到「应用程序」。"
+            "value": "macOS 拒绝了 — 试着把 PenguinNotch 移到「应用程序」。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS 拒絕了 — 試著把 Codenotch 移到「應用程式」。"
+            "value": "macOS 拒絕了 — 試著把 PenguinNotch 移到「應用程式」。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS отказала — попробуйте переместить Codenotch в /Applications."
+            "value": "macOS отказала — попробуйте переместить PenguinNotch в /Applications."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS hat das abgelehnt — versuche, Codenotch nach /Applications zu verschieben."
+            "value": "macOS hat das abgelehnt — versuche, PenguinNotch nach /Applications zu verschieben."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS відмовила — спробуйте перемістити Codenotch у /Applications."
+            "value": "macOS відмовила — спробуйте перемістити PenguinNotch у /Applications."
           }
         }
       }
@@ -6744,55 +6744,55 @@
         }
       }
     },
-    "Signs out of %@ — the session belongs to Codenotch.": {
+    "Signs out of %@ — the session belongs to PenguinNotch.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Выход из %@ — сессия принадлежит Codenotch."
+            "value": "Выход из %@ — сессия принадлежит PenguinNotch."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous déconnecte de %@ — la session appartient à Codenotch."
+            "value": "Vous déconnecte de %@ — la session appartient à PenguinNotch."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ からサインアウトします — このセッションは Codenotch のものです。"
+            "value": "%@ からサインアウトします — このセッションは PenguinNotch のものです。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sai do %@ — a sessão pertence ao Codenotch."
+            "value": "Sai do %@ — a sessão pertence ao PenguinNotch."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "会退出 %@ — 这个会话属于 Codenotch。"
+            "value": "会退出 %@ — 这个会话属于 PenguinNotch。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "會登出 %@ — 這個工作階段屬於 Codenotch。"
+            "value": "會登出 %@ — 這個工作階段屬於 PenguinNotch。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meldet dich bei %@ ab — die Sitzung gehört Codenotch."
+            "value": "Meldet dich bei %@ ab — die Sitzung gehört PenguinNotch."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вихід із %@ — сесія належить Codenotch."
+            "value": "Вихід із %@ — сесія належить PenguinNotch."
           }
         }
       }
@@ -7057,7 +7057,7 @@
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Запустіть grok login — команда виконує вхід і оновлює токен, який читає Codenotch."
+            "value": "Запустіть grok login — команда виконує вхід і оновлює токен, який читає PenguinNotch."
           }
         }
       }
@@ -7216,7 +7216,7 @@
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Запустіть `%@` один раз — команда виконує вхід і оновлює токен, який читає Codenotch. Щоб змінити акаунт, введіть там /login."
+            "value": "Запустіть `%@` один раз — команда виконує вхід і оновлює токен, який читає PenguinNotch. Щоб змінити акаунт, введіть там /login."
           }
         }
       }
@@ -7539,55 +7539,55 @@
         }
       }
     },
-    "Quit Codenotch": {
+    "Quit PenguinNotch": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Выйти из Codenotch"
+            "value": "Выйти из PenguinNotch"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quitter Codenotch"
+            "value": "Quitter PenguinNotch"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch を終了"
+            "value": "PenguinNotch を終了"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encerrar o Codenotch"
+            "value": "Encerrar o PenguinNotch"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "退出 Codenotch"
+            "value": "退出 PenguinNotch"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "結束 Codenotch"
+            "value": "結束 PenguinNotch"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch beenden"
+            "value": "PenguinNotch beenden"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вийти з Codenotch"
+            "value": "Вийти з PenguinNotch"
           }
         }
       }
@@ -7698,55 +7698,55 @@
         }
       }
     },
-    "Codenotch is set to Always show. Change it in Settings.": {
+    "PenguinNotch is set to Always show. Change it in Settings.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch est réglé sur Toujours afficher. Modifiez-le dans les Réglages."
+            "value": "PenguinNotch est réglé sur Toujours afficher. Modifiez-le dans les Réglages."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は「常に表示」に設定されています。設定で変更してください。"
+            "value": "PenguinNotch は「常に表示」に設定されています。設定で変更してください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch está definido como Sempre exibir. Altere isso nos Ajustes."
+            "value": "O PenguinNotch está definido como Sempre exibir. Altere isso nos Ajustes."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 已设为「始终显示」。请在设置里更改。"
+            "value": "PenguinNotch 已设为「始终显示」。请在设置里更改。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 已設為「始終顯示」。請在設定裡更改。"
+            "value": "PenguinNotch 已設為「始終顯示」。請在設定裡更改。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Для Codenotch включён режим «Показывать всегда». Измените его в настройках."
+            "value": "Для PenguinNotch включён режим «Показывать всегда». Измените его в настройках."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch ist auf „Immer anzeigen“ eingestellt. Ändere das in den Einstellungen."
+            "value": "PenguinNotch ist auf „Immer anzeigen“ eingestellt. Ändere das in den Einstellungen."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Для Codenotch увімкнено режим «Показувати завжди». Змініть його в налаштуваннях."
+            "value": "Для PenguinNotch увімкнено режим «Показувати завжди». Змініть його в налаштуваннях."
           }
         }
       }
@@ -7804,55 +7804,55 @@
         }
       }
     },
-    "Codenotch is up to date.": {
+    "PenguinNotch is up to date.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch обновлён."
+            "value": "PenguinNotch обновлён."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch est à jour."
+            "value": "PenguinNotch est à jour."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は最新です。"
+            "value": "PenguinNotch は最新です。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch está atualizado."
+            "value": "O PenguinNotch está atualizado."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 已是最新版本。"
+            "value": "PenguinNotch 已是最新版本。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 已是最新版本。"
+            "value": "PenguinNotch 已是最新版本。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch ist auf dem neuesten Stand."
+            "value": "PenguinNotch ist auf dem neuesten Stand."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch має найновішу версію."
+            "value": "PenguinNotch має найновішу версію."
           }
         }
       }
@@ -7910,55 +7910,55 @@
         }
       }
     },
-    "Couldn't reach the update server. Codenotch will try again on its own — nothing is wrong with this copy.": {
+    "Couldn't reach the update server. PenguinNotch will try again on its own — nothing is wrong with this copy.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Serveur de mise à jour injoignable. Codenotch réessaiera de lui-même — cette copie n'a aucun problème."
+            "value": "Serveur de mise à jour injoignable. PenguinNotch réessaiera de lui-même — cette copie n'a aucun problème."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アップデートサーバーに接続できませんでした。Codenotch が自動で再試行します — このコピーに問題はありません。"
+            "value": "アップデートサーバーに接続できませんでした。PenguinNotch が自動で再試行します — このコピーに問題はありません。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível acessar o servidor de atualizações. O Codenotch tentará de novo sozinho — não há nada de errado com esta cópia."
+            "value": "Não foi possível acessar o servidor de atualizações. O PenguinNotch tentará de novo sozinho — não há nada de errado com esta cópia."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "连不上更新服务器。Codenotch 会自己再试 — 这份安装没有问题。"
+            "value": "连不上更新服务器。PenguinNotch 会自己再试 — 这份安装没有问题。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "連不上更新伺服器。Codenotch 會自己再試 — 這份安裝沒有問題。"
+            "value": "連不上更新伺服器。PenguinNotch 會自己再試 — 這份安裝沒有問題。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не удалось связаться с сервером обновлений. Codenotch повторит попытку автоматически — с этой копией всё в порядке."
+            "value": "Не удалось связаться с сервером обновлений. PenguinNotch повторит попытку автоматически — с этой копией всё в порядке."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Update-Server war nicht erreichbar. Codenotch versucht es von selbst noch einmal — mit dieser Kopie ist alles in Ordnung."
+            "value": "Der Update-Server war nicht erreichbar. PenguinNotch versucht es von selbst noch einmal — mit dieser Kopie ist alles in Ordnung."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не вдалося звʼязатися із сервером оновлень. Codenotch спробує ще раз самостійно — із цією копією все гаразд."
+            "value": "Не вдалося звʼязатися із сервером оновлень. PenguinNotch спробує ще раз самостійно — із цією копією все гаразд."
           }
         }
       }
@@ -9500,13 +9500,13 @@
         }
       }
     },
-    "The figure came from a file Codex writes during a turn, so it was as old as the last time you used it — three days stale in one case. Codenotch now asks Codex itself, and matches its own panel.": {
+    "The figure came from a file Codex writes during a turn, so it was as old as the last time you used it — three days stale in one case. PenguinNotch now asks Codex itself, and matches its own panel.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffre venait d'un fichier que Codex écrit pendant un tour : il datait donc de votre dernière utilisation — trois jours de retard dans un cas. Codenotch interroge désormais Codex lui-même, et correspond à son propre panneau."
+            "value": "Le chiffre venait d'un fichier que Codex écrit pendant un tour : il datait donc de votre dernière utilisation — trois jours de retard dans un cas. PenguinNotch interroge désormais Codex lui-même, et correspond à son propre panneau."
           }
         },
         "ja": {
@@ -9518,37 +9518,37 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O número vinha de um arquivo que o Codex escreve durante um turno, então era tão antigo quanto a última vez que você o usou — três dias desatualizado em um caso. Agora o Codenotch pergunta ao próprio Codex, e bate com o painel dele."
+            "value": "O número vinha de um arquivo que o Codex escreve durante um turno, então era tão antigo quanto a última vez que você o usou — três dias desatualizado em um caso. Agora o PenguinNotch pergunta ao próprio Codex, e bate com o painel dele."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "数字来自 Codex 在一轮对话里写的文件，所以有多旧取决于你上次用它是什么时候 — 有一次旧了三天。Codenotch 现在直接问 Codex，并与它自己的面板一致。"
+            "value": "数字来自 Codex 在一轮对话里写的文件，所以有多旧取决于你上次用它是什么时候 — 有一次旧了三天。PenguinNotch 现在直接问 Codex，并与它自己的面板一致。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "數字來自 Codex 在一輪對話裡寫的檔案，所以有多舊取決於你上次用它是什麼時候 — 有一次舊了三天。Codenotch 現在直接問 Codex，並與它自己的面板一致。"
+            "value": "數字來自 Codex 在一輪對話裡寫的檔案，所以有多舊取決於你上次用它是什麼時候 — 有一次舊了三天。PenguinNotch 現在直接問 Codex，並與它自己的面板一致。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Число бралась из файла, который Codex записывает во время хода, поэтому могло устареть на несколько дней. Теперь Codenotch спрашивает сам Codex и показывает данные его панели."
+            "value": "Число бралась из файла, который Codex записывает во время хода, поэтому могло устареть на несколько дней. Теперь PenguinNotch спрашивает сам Codex и показывает данные его панели."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Zahl stammte aus einer Datei, die Codex während eines Turns schreibt, war also so alt wie deine letzte Nutzung — in einem Fall drei Tage veraltet. Codenotch fragt jetzt Codex selbst und stimmt mit dessen eigenem Panel überein."
+            "value": "Die Zahl stammte aus einer Datei, die Codex während eines Turns schreibt, war also so alt wie deine letzte Nutzung — in einem Fall drei Tage veraltet. PenguinNotch fragt jetzt Codex selbst und stimmt mit dessen eigenem Panel überein."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Число бралося з файлу, який Codex записує під час ходу, тож воно було старим рівно настільки, наскільки давно ви ним користувалися — в одному випадку застаріле на три дні. Тепер Codenotch питає сам Codex і збігається з його власною панеллю."
+            "value": "Число бралося з файлу, який Codex записує під час ходу, тож воно було старим рівно настільки, наскільки давно ви ним користувалися — в одному випадку застаріле на три дні. Тепер PenguinNotch питає сам Codex і збігається з його власною панеллю."
           }
         }
       }
@@ -10560,55 +10560,55 @@
         }
       }
     },
-    "Google will not answer Codenotch directly, so it asks Antigravity's own language server instead — the same place Antigravity's usage panel gets its figure.": {
+    "Google will not answer PenguinNotch directly, so it asks Antigravity's own language server instead — the same place Antigravity's usage panel gets its figure.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google ne répond pas directement à Codenotch, qui interroge donc le serveur de langage d'Antigravity — là où le panneau de consommation d'Antigravity prend son chiffre."
+            "value": "Google ne répond pas directement à PenguinNotch, qui interroge donc le serveur de langage d'Antigravity — là où le panneau de consommation d'Antigravity prend son chiffre."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google は Codenotch に直接応答しないため、代わりに Antigravity 自身の言語サーバーに問い合わせます。Antigravity の使用量パネルが数値を得ているのと同じ場所です。"
+            "value": "Google は PenguinNotch に直接応答しないため、代わりに Antigravity 自身の言語サーバーに問い合わせます。Antigravity の使用量パネルが数値を得ているのと同じ場所です。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Google não responde ao Codenotch diretamente, então ele pergunta ao servidor de linguagem do próprio Antigravity — o mesmo lugar de onde o painel de uso do Antigravity tira o número dele."
+            "value": "O Google não responde ao PenguinNotch diretamente, então ele pergunta ao servidor de linguagem do próprio Antigravity — o mesmo lugar de onde o painel de uso do Antigravity tira o número dele."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google 不会直接回答 Codenotch，所以改问 Antigravity 自己的语言服务器 — 也就是 Antigravity 用量面板取数字的地方。"
+            "value": "Google 不会直接回答 PenguinNotch，所以改问 Antigravity 自己的语言服务器 — 也就是 Antigravity 用量面板取数字的地方。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google 不會直接回答 Codenotch，所以改問 Antigravity 自己的語言伺服器 — 也就是 Antigravity 用量面板取數字的地方。"
+            "value": "Google 不會直接回答 PenguinNotch，所以改問 Antigravity 自己的語言伺服器 — 也就是 Antigravity 用量面板取數字的地方。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google не отвечает Codenotch напрямую, поэтому приложение спрашивает языковой сервер Antigravity — тот же источник использует панель использования Antigravity."
+            "value": "Google не отвечает PenguinNotch напрямую, поэтому приложение спрашивает языковой сервер Antigravity — тот же источник использует панель использования Antigravity."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google antwortet Codenotch nicht direkt, deshalb fragt es stattdessen Antigravitys eigenen Language-Server — dieselbe Quelle, aus der auch Antigravitys Nutzungsanzeige ihre Zahl bezieht."
+            "value": "Google antwortet PenguinNotch nicht direkt, deshalb fragt es stattdessen Antigravitys eigenen Language-Server — dieselbe Quelle, aus der auch Antigravitys Nutzungsanzeige ihre Zahl bezieht."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google не відповідає Codenotch напряму, тому застосунок звертається до власного мовного сервера Antigravity — того самого джерела, звідки бере число панель використання Antigravity."
+            "value": "Google не відповідає PenguinNotch напряму, тому застосунок звертається до власного мовного сервера Antigravity — того самого джерела, звідки бере число панель використання Antigravity."
           }
         }
       }
@@ -11355,108 +11355,108 @@
         }
       }
     },
-    "Each read from the tool already signed in on this Mac. Codenotch never asks for a password.": {
+    "Each read from the tool already signed in on this Mac. PenguinNotch never asks for a password.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chacun lu depuis l'outil déjà connecté sur ce Mac. Codenotch ne demande jamais de mot de passe."
+            "value": "Chacun lu depuis l'outil déjà connecté sur ce Mac. PenguinNotch ne demande jamais de mot de passe."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "いずれもこの Mac ですでにサインイン済みのツールから読み取ります。Codenotch がパスワードを尋ねることはありません。"
+            "value": "いずれもこの Mac ですでにサインイン済みのツールから読み取ります。PenguinNotch がパスワードを尋ねることはありません。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada um lido da ferramenta já conectada neste Mac. O Codenotch nunca pede uma senha."
+            "value": "Cada um lido da ferramenta já conectada neste Mac. O PenguinNotch nunca pede uma senha."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "各自读取这台 Mac 上已经登录的工具。Codenotch 从不问密码。"
+            "value": "各自读取这台 Mac 上已经登录的工具。PenguinNotch 从不问密码。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "各自讀取這台 Mac 上已經登入的工具。Codenotch 從不問密碼。"
+            "value": "各自讀取這台 Mac 上已經登入的工具。PenguinNotch 從不問密碼。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Данные читаются из уже авторизованного на этом Mac инструмента. Codenotch никогда не спрашивает пароль."
+            "value": "Данные читаются из уже авторизованного на этом Mac инструмента. PenguinNotch никогда не спрашивает пароль."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder wird aus dem Tool gelesen, das auf diesem Mac bereits angemeldet ist. Codenotch fragt nie nach einem Passwort."
+            "value": "Jeder wird aus dem Tool gelesen, das auf diesem Mac bereits angemeldet ist. PenguinNotch fragt nie nach einem Passwort."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Кожен зчитується з інструмента, у якому вже виконано вхід на цьому Mac. Codenotch ніколи не запитує пароль."
+            "value": "Кожен зчитується з інструмента, у якому вже виконано вхід на цьому Mac. PenguinNotch ніколи не запитує пароль."
           }
         }
       }
     },
-    "Choose where Codenotch appears": {
+    "Choose where PenguinNotch appears": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisissez où Codenotch apparaît"
+            "value": "Choisissez où PenguinNotch apparaît"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch の表示場所を選択"
+            "value": "PenguinNotch の表示場所を選択"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escolha onde o Codenotch aparece"
+            "value": "Escolha onde o PenguinNotch aparece"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择 Codenotch 出现在哪里"
+            "value": "选择 PenguinNotch 出现在哪里"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "選擇 Codenotch 出現在哪裡"
+            "value": "選擇 PenguinNotch 出現在哪裡"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Выберите, где показывать Codenotch"
+            "value": "Выберите, где показывать PenguinNotch"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wählen, wo Codenotch erscheint"
+            "value": "Wählen, wo PenguinNotch erscheint"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Виберіть, де показувати Codenotch"
+            "value": "Виберіть, де показувати PenguinNotch"
           }
         }
       }
@@ -11514,55 +11514,55 @@
         }
       }
     },
-    "Codenotch": {
+    "PenguinNotch": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch"
+            "value": "PenguinNotch"
           }
         }
       }
@@ -12627,55 +12627,55 @@
         }
       }
     },
-    "Nothing on screen. The readings stay in the menu bar menu when App icon is Menu bar. Otherwise, open Codenotch again from Applications to bring these settings back.": {
+    "Nothing on screen. The readings stay in the menu bar menu when App icon is Menu bar. Otherwise, open PenguinNotch again from Applications to bring these settings back.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rien à l'écran. Les relevés restent dans le menu de la barre des menus quand Icône de l'app est réglée sur Barre des menus. Sinon, rouvrez Codenotch depuis Applications pour retrouver ces réglages."
+            "value": "Rien à l'écran. Les relevés restent dans le menu de la barre des menus quand Icône de l'app est réglée sur Barre des menus. Sinon, rouvrez PenguinNotch depuis Applications pour retrouver ces réglages."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "画面には何も出ません。「アプリアイコン」が「メニューバー」なら、読み取りはメニューバーのメニューに残ります。それ以外の場合、この設定に戻るには、アプリケーションから Codenotch をもう一度開いてください。"
+            "value": "画面には何も出ません。「アプリアイコン」が「メニューバー」なら、読み取りはメニューバーのメニューに残ります。それ以外の場合、この設定に戻るには、アプリケーションから PenguinNotch をもう一度開いてください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nada na tela. As leituras continuam no menu da barra de menus quando o Ícone do app é Barra de menus. Caso contrário, abra o Codenotch novamente em Aplicativos para trazer estes ajustes de volta."
+            "value": "Nada na tela. As leituras continuam no menu da barra de menus quando o Ícone do app é Barra de menus. Caso contrário, abra o PenguinNotch novamente em Aplicativos para trazer estes ajustes de volta."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "屏幕上什么都没有。应用图标选「菜单栏」时，读数仍在菜单栏菜单里。否则，从「应用程序」再打开 Codenotch，才能回到这些设置。"
+            "value": "屏幕上什么都没有。应用图标选「菜单栏」时，读数仍在菜单栏菜单里。否则，从「应用程序」再打开 PenguinNotch，才能回到这些设置。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "螢幕上什麼都沒有。App 圖示選「選單列」時，讀數仍在選單列選單裡。否則，從「應用程式」再開啟 Codenotch，才能回到這些設定。"
+            "value": "螢幕上什麼都沒有。App 圖示選「選單列」時，讀數仍在選單列選單裡。否則，從「應用程式」再開啟 PenguinNotch，才能回到這些設定。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На экране ничего нет. Если значок приложения находится в строке меню, показания остаются в её меню. Иначе снова откройте Codenotch из папки «Программы», чтобы вернуть эти настройки."
+            "value": "На экране ничего нет. Если значок приложения находится в строке меню, показания остаются в её меню. Иначе снова откройте PenguinNotch из папки «Программы», чтобы вернуть эти настройки."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nichts auf dem Bildschirm. Wenn App-Symbol auf Menüleiste steht, bleiben die Messwerte im Menü der Menüleiste. Andernfalls öffne Codenotch erneut aus dem Programme-Ordner, um diese Einstellungen zurückzuholen."
+            "value": "Nichts auf dem Bildschirm. Wenn App-Symbol auf Menüleiste steht, bleiben die Messwerte im Menü der Menüleiste. Andernfalls öffne PenguinNotch erneut aus dem Programme-Ordner, um diese Einstellungen zurückzuholen."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Нічого на екрані. Якщо значок застосунку — «Рядок меню», показники лишаються в його меню. Інакше відкрийте Codenotch знову з теки «Програми», щоб повернути ці налаштування."
+            "value": "Нічого на екрані. Якщо значок застосунку — «Рядок меню», показники лишаються в його меню. Інакше відкрийте PenguinNotch знову з теки «Програми», щоб повернути ці налаштування."
           }
         }
       }
@@ -15277,55 +15277,55 @@
         }
       }
     },
-    "That display is disconnected. Codenotch follows the active window until it returns.": {
+    "That display is disconnected. PenguinNotch follows the active window until it returns.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cet écran est déconnecté. Codenotch suit la fenêtre active jusqu'à son retour."
+            "value": "Cet écran est déconnecté. PenguinNotch suit la fenêtre active jusqu'à son retour."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "そのディスプレイは接続されていません。復帰するまで、Codenotch はアクティブなウインドウに追従します。"
+            "value": "そのディスプレイは接続されていません。復帰するまで、PenguinNotch はアクティブなウインドウに追従します。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Essa tela está desconectada. O Codenotch acompanha a janela ativa até ela voltar."
+            "value": "Essa tela está desconectada. O PenguinNotch acompanha a janela ativa até ela voltar."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "那台显示器已断开。Codenotch 会跟随活动窗口，直到它回来。"
+            "value": "那台显示器已断开。PenguinNotch 会跟随活动窗口，直到它回来。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "那台顯示器已斷開。Codenotch 會跟隨活動視窗，直到它回來。"
+            "value": "那台顯示器已斷開。PenguinNotch 會跟隨活動視窗，直到它回來。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот дисплей отключён. Codenotch следует за активным окном, пока дисплей не вернётся."
+            "value": "Этот дисплей отключён. PenguinNotch следует за активным окном, пока дисплей не вернётся."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Bildschirm ist getrennt. Codenotch folgt dem aktiven Fenster, bis er zurückkommt."
+            "value": "Dieser Bildschirm ist getrennt. PenguinNotch folgt dem aktiven Fenster, bis er zurückkommt."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Цей дисплей відʼєднано. Codenotch стежить за активним вікном, доки дисплей не повернеться."
+            "value": "Цей дисплей відʼєднано. PenguinNotch стежить за активним вікном, доки дисплей не повернеться."
           }
         }
       }
@@ -15595,108 +15595,108 @@
         }
       }
     },
-    "Codenotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor (the editor or cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot or a Gemini API key (via Gemini CLI, OpenCode or Hermes), and its ring appears in the notch.": {
+    "PenguinNotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor (the editor or cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot or a Gemini API key (via Gemini CLI, OpenCode or Hermes), and its ring appears in the notch.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch lit la consommation des outils déjà connectés sur ce Mac — il ne demande jamais votre mot de passe. Installez l'un de Claude Code (l'outil en terminal, pas l'app Claude), Cursor (l'éditeur ou cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot ou une clé API Gemini (via Gemini CLI, OpenCode ou Hermes) et connectez-vous : son anneau apparaît dans l'encoche."
+            "value": "PenguinNotch lit la consommation des outils déjà connectés sur ce Mac — il ne demande jamais votre mot de passe. Installez l'un de Claude Code (l'outil en terminal, pas l'app Claude), Cursor (l'éditeur ou cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot ou une clé API Gemini (via Gemini CLI, OpenCode ou Hermes) et connectez-vous : son anneau apparaît dans l'encoche."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor（エディタまたは cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、GitHub Copilot、または Gemini API キー（Gemini CLI、OpenCode、Hermes 経由）のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
+            "value": "PenguinNotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor（エディタまたは cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、GitHub Copilot、または Gemini API キー（Gemini CLI、OpenCode、Hermes 経由）のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch lê o uso de ferramentas já conectadas neste Mac — ele nunca pede sua senha. Instale e entre em qualquer um destes: Claude Code (a ferramenta de terminal, não o app Claude), Cursor (o editor ou o cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot ou uma chave de API do Gemini (via CLI do Gemini, OpenCode ou Hermes), e o anel correspondente aparece no notch."
+            "value": "O PenguinNotch lê o uso de ferramentas já conectadas neste Mac — ele nunca pede sua senha. Instale e entre em qualquer um destes: Claude Code (a ferramenta de terminal, não o app Claude), Cursor (o editor ou o cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot ou uma chave de API do Gemini (via CLI do Gemini, OpenCode ou Hermes), e o anel correspondente aparece no notch."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor（编辑器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、GitHub Copilot 或 Gemini API 密钥（经由 Gemini CLI、OpenCode 或 Hermes）中的任意一个，刘海里就会出现对应的圆环。"
+            "value": "PenguinNotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor（编辑器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、GitHub Copilot 或 Gemini API 密钥（经由 Gemini CLI、OpenCode 或 Hermes）中的任意一个，刘海里就会出现对应的圆环。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 讀取這台 Mac 上已經登入的工具的用量 — 從不問你的密碼。安裝並登入 Claude Code（終端工具，不是 Claude App）、Cursor（編輯器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、GitHub Copilot 或 Gemini API 金鑰（經由 Gemini CLI、OpenCode 或 Hermes）中的任意一個，瀏海裡就會出現對應的圓環。"
+            "value": "PenguinNotch 讀取這台 Mac 上已經登入的工具的用量 — 從不問你的密碼。安裝並登入 Claude Code（終端工具，不是 Claude App）、Cursor（編輯器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、GitHub Copilot 或 Gemini API 金鑰（經由 Gemini CLI、OpenCode 或 Hermes）中的任意一個，瀏海裡就會出現對應的圓環。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch читает использование из инструментов, уже авторизованных на этом Mac, и никогда не спрашивает пароль. Установите и авторизуйтесь в Claude Code (терминальном инструменте, не приложении Claude), Cursor (редакторе или cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot или Gemini API через Gemini CLI, OpenCode или Hermes — и кольцо появится на панели."
+            "value": "PenguinNotch читает использование из инструментов, уже авторизованных на этом Mac, и никогда не спрашивает пароль. Установите и авторизуйтесь в Claude Code (терминальном инструменте, не приложении Claude), Cursor (редакторе или cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot или Gemini API через Gemini CLI, OpenCode или Hermes — и кольцо появится на панели."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch liest die Nutzung von Tools, die auf diesem Mac bereits angemeldet sind — es fragt nie nach deinem Passwort. Installiere eines von Claude Code (das Terminal-Tool, nicht die Claude-App), Cursor (den Editor oder cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot oder einen Gemini-API-Schlüssel (über Gemini CLI, OpenCode oder Hermes) und melde dich an — der zugehörige Ring erscheint dann in der Notch."
+            "value": "PenguinNotch liest die Nutzung von Tools, die auf diesem Mac bereits angemeldet sind — es fragt nie nach deinem Passwort. Installiere eines von Claude Code (das Terminal-Tool, nicht die Claude-App), Cursor (den Editor oder cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot oder einen Gemini-API-Schlüssel (über Gemini CLI, OpenCode oder Hermes) und melde dich an — der zugehörige Ring erscheint dann in der Notch."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor (редактор або cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot чи ключ Gemini API (через Gemini CLI, OpenCode або Hermes) — і увійдіть: його кільце зʼявиться у вирізі."
+            "value": "PenguinNotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor (редактор або cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, GitHub Copilot чи ключ Gemini API (через Gemini CLI, OpenCode або Hermes) — і увійдіть: його кільце зʼявиться у вирізі."
           }
         }
       }
     },
-    "macOS may ask before Codenotch reads Claude Code's, Antigravity's or cursor-agent's saved login. Background refreshes never show that question; it appears only when you click Allow access…, and Deny stops Codenotch reading that login until you ask again.": {
+    "macOS may ask before PenguinNotch reads Claude Code's, Antigravity's or cursor-agent's saved login. Background refreshes never show that question; it appears only when you click Allow access…, and Deny stops PenguinNotch reading that login until you ask again.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS peut demander l'autorisation avant que Codenotch lise la connexion enregistrée de Claude Code, d'Antigravity ou de cursor-agent. Les actualisations en arrière-plan n'affichent jamais cette question ; elle n'apparaît que lorsque vous cliquez sur Autoriser l'accès…, et Refuser empêche Codenotch de lire cette connexion jusqu'à ce que vous redemandiez."
+            "value": "macOS peut demander l'autorisation avant que PenguinNotch lise la connexion enregistrée de Claude Code, d'Antigravity ou de cursor-agent. Les actualisations en arrière-plan n'affichent jamais cette question ; elle n'apparaît que lorsque vous cliquez sur Autoriser l'accès…, et Refuser empêche PenguinNotch de lire cette connexion jusqu'à ce que vous redemandiez."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch が Claude Code・Antigravity・cursor-agent の保存済みログインを読む前に、macOS が確認することがあります。バックグラウンドの更新でこの確認が表示されることはなく、「アクセスを許可…」をクリックしたときだけ表示されます。「拒否」を選ぶと、もう一度求めるまで Codenotch はそのログインを読みません。"
+            "value": "PenguinNotch が Claude Code・Antigravity・cursor-agent の保存済みログインを読む前に、macOS が確認することがあります。バックグラウンドの更新でこの確認が表示されることはなく、「アクセスを許可…」をクリックしたときだけ表示されます。「拒否」を選ぶと、もう一度求めるまで PenguinNotch はそのログインを読みません。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O macOS pode perguntar antes de o Codenotch ler o login salvo do Claude Code, do Antigravity ou do cursor-agent. As atualizações em segundo plano nunca mostram essa pergunta; ela só aparece quando você clica em Permitir acesso…, e Negar impede o Codenotch de ler esse login até você pedir de novo."
+            "value": "O macOS pode perguntar antes de o PenguinNotch ler o login salvo do Claude Code, do Antigravity ou do cursor-agent. As atualizações em segundo plano nunca mostram essa pergunta; ela só aparece quando você clica em Permitir acesso…, e Negar impede o PenguinNotch de ler esse login até você pedir de novo."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 读取 Claude Code、Antigravity 或 cursor-agent 保存的登录信息前，macOS 可能会先询问。后台刷新从不弹出这个询问；只有点击“允许访问…”时才会出现，选择“拒绝”后，在你再次请求之前 Codenotch 不会读取该登录信息。"
+            "value": "PenguinNotch 读取 Claude Code、Antigravity 或 cursor-agent 保存的登录信息前，macOS 可能会先询问。后台刷新从不弹出这个询问；只有点击“允许访问…”时才会出现，选择“拒绝”后，在你再次请求之前 PenguinNotch 不会读取该登录信息。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 讀取 Claude Code、Antigravity 或 cursor-agent 儲存的登入資訊前，macOS 可能會先詢問。背景重新整理從不彈出這個詢問；只有點按“允許取用…”時才會出現，選擇“拒絕”後，在你再次要求之前 Codenotch 不會讀取該登入資訊。"
+            "value": "PenguinNotch 讀取 Claude Code、Antigravity 或 cursor-agent 儲存的登入資訊前，macOS 可能會先詢問。背景重新整理從不彈出這個詢問；只有點按“允許取用…”時才會出現，選擇“拒絕”後，在你再次要求之前 PenguinNotch 不會讀取該登入資訊。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS может спросить разрешение, прежде чем Codenotch прочитает сохранённый вход Claude Code, Antigravity или cursor-agent. Фоновые обновления никогда не показывают этот вопрос: он появляется только после нажатия «Разрешить доступ…», а «Запретить» не даёт Codenotch читать этот вход, пока вы не спросите снова."
+            "value": "macOS может спросить разрешение, прежде чем PenguinNotch прочитает сохранённый вход Claude Code, Antigravity или cursor-agent. Фоновые обновления никогда не показывают этот вопрос: он появляется только после нажатия «Разрешить доступ…», а «Запретить» не даёт PenguinNotch читать этот вход, пока вы не спросите снова."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS kann fragen, bevor Codenotch die gespeicherte Anmeldung von Claude Code, Antigravity oder cursor-agent liest. Hintergrundaktualisierungen zeigen diese Frage nie; sie erscheint nur, wenn du auf „Zugriff erlauben…“ klickst, und „Ablehnen“ verhindert, dass Codenotch diese Anmeldung liest, bis du erneut fragst."
+            "value": "macOS kann fragen, bevor PenguinNotch die gespeicherte Anmeldung von Claude Code, Antigravity oder cursor-agent liest. Hintergrundaktualisierungen zeigen diese Frage nie; sie erscheint nur, wenn du auf „Zugriff erlauben…“ klickst, und „Ablehnen“ verhindert, dass PenguinNotch diese Anmeldung liest, bis du erneut fragst."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS може запитати дозвіл, перш ніж Codenotch прочитає збережений вхід Claude Code, Antigravity або cursor-agent. Фонові оновлення ніколи не показують цього запитання: воно з'являється лише після натискання «Дозволити доступ…», а «Заборонити» не дає Codenotch читати цей вхід, доки ви не запитаєте знову."
+            "value": "macOS може запитати дозвіл, перш ніж PenguinNotch прочитає збережений вхід Claude Code, Antigravity або cursor-agent. Фонові оновлення ніколи не показують цього запитання: воно з'являється лише після натискання «Дозволити доступ…», а «Заборонити» не дає PenguinNotch читати цей вхід, доки ви не запитаєте знову."
           }
         }
       }
@@ -17132,55 +17132,55 @@
         }
       }
     },
-    "Codenotch uses this language even if the Mac does not.": {
+    "PenguinNotch uses this language even if the Mac does not.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch использует этот язык независимо от языка Mac."
+            "value": "PenguinNotch использует этот язык независимо от языка Mac."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch utilise cette langue même si le Mac ne le fait pas."
+            "value": "PenguinNotch utilise cette langue même si le Mac ne le fait pas."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac がこの言語でなくても、Codenotch はこの言語を使います。"
+            "value": "Mac がこの言語でなくても、PenguinNotch はこの言語を使います。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch usa este idioma mesmo que o Mac não use."
+            "value": "O PenguinNotch usa este idioma mesmo que o Mac não use."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "即使 Mac 不是这种语言，Codenotch 也使用它。"
+            "value": "即使 Mac 不是这种语言，PenguinNotch 也使用它。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "即使 Mac 不是這種語言，Codenotch 也使用它。"
+            "value": "即使 Mac 不是這種語言，PenguinNotch 也使用它。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch verwendet diese Sprache, auch wenn der Mac es nicht tut."
+            "value": "PenguinNotch verwendet diese Sprache, auch wenn der Mac es nicht tut."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch використовує цю мову, навіть якщо в системі вибрано іншу."
+            "value": "PenguinNotch використовує цю мову, навіть якщо в системі вибрано іншу."
           }
         }
       }
@@ -18616,55 +18616,55 @@
         }
       }
     },
-    "Codenotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor (the editor or cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot or a Gemini API key (via Gemini CLI, OpenCode or Hermes), and its ring appears in the notch.": {
+    "PenguinNotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor (the editor or cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot or a Gemini API key (via Gemini CLI, OpenCode or Hermes), and its ring appears in the notch.": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch lit la consommation des outils déjà connectés sur ce Mac — il ne demande jamais votre mot de passe. Installez l'un de Claude Code (l'outil en terminal, pas l'app Claude), Cursor (l'éditeur ou cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot ou une clé API Gemini (via Gemini CLI, OpenCode ou Hermes) et connectez-vous : son anneau apparaît dans l'encoche."
+            "value": "PenguinNotch lit la consommation des outils déjà connectés sur ce Mac — il ne demande jamais votre mot de passe. Installez l'un de Claude Code (l'outil en terminal, pas l'app Claude), Cursor (l'éditeur ou cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot ou une clé API Gemini (via Gemini CLI, OpenCode ou Hermes) et connectez-vous : son anneau apparaît dans l'encoche."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor（エディタまたは cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、または Gemini API キー（Gemini CLI、OpenCode、Hermes 経由）のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
+            "value": "PenguinNotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor（エディタまたは cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、または Gemini API キー（Gemini CLI、OpenCode、Hermes 経由）のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Codenotch lê o uso de ferramentas já conectadas neste Mac — ele nunca pede sua senha. Instale e entre em qualquer um destes: Claude Code (a ferramenta de terminal, não o app Claude), Cursor (o editor ou o cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot ou uma chave de API do Gemini (via CLI do Gemini, OpenCode ou Hermes), e o anel correspondente aparece no notch."
+            "value": "O PenguinNotch lê o uso de ferramentas já conectadas neste Mac — ele nunca pede sua senha. Instale e entre em qualquer um destes: Claude Code (a ferramenta de terminal, não o app Claude), Cursor (o editor ou o cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot ou uma chave de API do Gemini (via CLI do Gemini, OpenCode ou Hermes), e o anel correspondente aparece no notch."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor（编辑器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot 或 Gemini API 密钥（经由 Gemini CLI、OpenCode 或 Hermes）中的任意一个，刘海里就会出现对应的圆环。"
+            "value": "PenguinNotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor（编辑器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot 或 Gemini API 密钥（经由 Gemini CLI、OpenCode 或 Hermes）中的任意一个，刘海里就会出现对应的圆环。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 讀取這台 Mac 上已經登入的工具的用量 — 從不問你的密碼。安裝並登入 Claude Code（終端工具，不是 Claude App）、Cursor（編輯器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot 或 Gemini API 金鑰（經由 Gemini CLI、OpenCode 或 Hermes）中的任意一個，瀏海裡就會出現對應的圓環。"
+            "value": "PenguinNotch 讀取這台 Mac 上已經登入的工具的用量 — 從不問你的密碼。安裝並登入 Claude Code（終端工具，不是 Claude App）、Cursor（編輯器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot 或 Gemini API 金鑰（經由 Gemini CLI、OpenCode 或 Hermes）中的任意一個，瀏海裡就會出現對應的圓環。"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch читает использование из инструментов, уже авторизованных на этом Mac, и никогда не спрашивает пароль. Установите и авторизуйтесь в Claude Code (терминальном инструменте, не приложении Claude), Cursor (редакторе или cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot или Gemini API через Gemini CLI, OpenCode или Hermes — и кольцо появится на панели."
+            "value": "PenguinNotch читает использование из инструментов, уже авторизованных на этом Mac, и никогда не спрашивает пароль. Установите и авторизуйтесь в Claude Code (терминальном инструменте, не приложении Claude), Cursor (редакторе или cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot или Gemini API через Gemini CLI, OpenCode или Hermes — и кольцо появится на панели."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch liest die Nutzung von Tools, die auf diesem Mac bereits angemeldet sind — es fragt nie nach deinem Passwort. Installiere eines von Claude Code (das Terminal-Tool, nicht die Claude-App), Cursor (den Editor oder cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot oder einen Gemini-API-Schlüssel (über Gemini CLI, OpenCode oder Hermes) und melde dich an — der zugehörige Ring erscheint dann in der Notch."
+            "value": "PenguinNotch liest die Nutzung von Tools, die auf diesem Mac bereits angemeldet sind — es fragt nie nach deinem Passwort. Installiere eines von Claude Code (das Terminal-Tool, nicht die Claude-App), Cursor (den Editor oder cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot oder einen Gemini-API-Schlüssel (über Gemini CLI, OpenCode oder Hermes) und melde dich an — der zugehörige Ring erscheint dann in der Notch."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor (редактор або cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot чи ключ Gemini API (через Gemini CLI, OpenCode або Hermes) — і увійдіть: його кільце зʼявиться у вирізі."
+            "value": "PenguinNotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor (редактор або cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot чи ключ Gemini API (через Gemini CLI, OpenCode або Hermes) — і увійдіть: його кільце зʼявиться у вирізі."
           }
         }
       }
@@ -22056,37 +22056,37 @@
         }
       }
     },
-    "Codenotch already knows the moment an agent stops working or stops to ask you something. Clicking the notch while it is open brings that session's app to the front — the app, not the tab: only some terminals let anything outside them choose a tab, so the tooltip names the session instead.": {
+    "PenguinNotch already knows the moment an agent stops working or stops to ask you something. Clicking the notch while it is open brings that session's app to the front — the app, not the tab: only some terminals let anything outside them choose a tab, so the tooltip names the session instead.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch weiß bereits in dem Moment Bescheid, in dem ein Agent aufhört zu arbeiten oder dich etwas fragt. Ein Klick auf die geöffnete Notch holt die App dieser Sitzung in den Vordergrund — die App, nicht den Tab: Nur manche Terminals erlauben es, von außen einen Tab auszuwählen, deshalb nennt der Tooltip stattdessen die Sitzung."
+            "value": "PenguinNotch weiß bereits in dem Moment Bescheid, in dem ein Agent aufhört zu arbeiten oder dich etwas fragt. Ein Klick auf die geöffnete Notch holt die App dieser Sitzung in den Vordergrund — die App, nicht den Tab: Nur manche Terminals erlauben es, von außen einen Tab auszuwählen, deshalb nennt der Tooltip stattdessen die Sitzung."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は、エージェントが作業を止めた瞬間や、あなたに質問するために止まった瞬間をすでに把握しています。開いているノッチをクリックすると、そのセッションのアプリが前面に出ます。タブではなくアプリです。外部からタブを選べるターミナルは一部に限られるため、代わりにツールチップがセッション名を示します。"
+            "value": "PenguinNotch は、エージェントが作業を止めた瞬間や、あなたに質問するために止まった瞬間をすでに把握しています。開いているノッチをクリックすると、そのセッションのアプリが前面に出ます。タブではなくアプリです。外部からタブを選べるターミナルは一部に限られるため、代わりにツールチップがセッション名を示します。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 已经知道助手何时停下来、或停下来问你。刘海展开时点一下，会把那个会话的应用带到前台 — 是应用，不是标签页：只有部分终端允许外部选定标签，所以提示里会写会话名称。"
+            "value": "PenguinNotch 已经知道助手何时停下来、或停下来问你。刘海展开时点一下，会把那个会话的应用带到前台 — 是应用，不是标签页：只有部分终端允许外部选定标签，所以提示里会写会话名称。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 已經知道助手何時停下來、或停下來問你。瀏海展開時點一下，會把那個工作階段的 App 帶到前景 — 是 App，不是分頁：只有部分終端允許外部選定標籤，所以提示裡會寫工作階段名稱。"
+            "value": "PenguinNotch 已經知道助手何時停下來、或停下來問你。瀏海展開時點一下，會把那個工作階段的 App 帶到前景 — 是 App，不是分頁：只有部分終端允許外部選定標籤，所以提示裡會寫工作階段名稱。"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch уже знає момент, коли агент завершує роботу або зупиняється, щоб щось запитати. Клік по відкритому вирізу виводить наперед застосунок цієї сесії — саме застосунок, не вкладку: лише деякі термінали дозволяють вибирати вкладку ззовні, тому підказка натомість називає сесію."
+            "value": "PenguinNotch уже знає момент, коли агент завершує роботу або зупиняється, щоб щось запитати. Клік по відкритому вирізу виводить наперед застосунок цієї сесії — саме застосунок, не вкладку: лише деякі термінали дозволяють вибирати вкладку ззовні, тому підказка натомість називає сесію."
           }
         }
       }
@@ -22126,37 +22126,37 @@
         }
       }
     },
-    "Most readings are borrowed from a tool that already holds the account. DeepSeek is the exception: clicking Sign in opens its own Codenotch WebView, and signing out here clears only that session and its saved reading.": {
+    "Most readings are borrowed from a tool that already holds the account. DeepSeek is the exception: clicking Sign in opens its own PenguinNotch WebView, and signing out here clears only that session and its saved reading.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die meisten Messwerte werden von einem Tool geliehen, das das Konto bereits besitzt. DeepSeek ist die Ausnahme: Ein Klick auf „Anmelden“ öffnet eine eigene WebView von Codenotch, und eine Abmeldung hier löscht nur diese Sitzung und ihren gespeicherten Messwert."
+            "value": "Die meisten Messwerte werden von einem Tool geliehen, das das Konto bereits besitzt. DeepSeek ist die Ausnahme: Ein Klick auf „Anmelden“ öffnet eine eigene WebView von PenguinNotch, und eine Abmeldung hier löscht nur diese Sitzung und ihren gespeicherten Messwert."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ほとんどの読み取りは、すでにアカウントを持っているツールから借りています。DeepSeek だけは例外で、「サインイン」をクリックすると Codenotch 専用の WebView が開きます。ここでサインアウトしても、消えるのはそのセッションと保存された読み取りだけです。"
+            "value": "ほとんどの読み取りは、すでにアカウントを持っているツールから借りています。DeepSeek だけは例外で、「サインイン」をクリックすると PenguinNotch 専用の WebView が開きます。ここでサインアウトしても、消えるのはそのセッションと保存された読み取りだけです。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "大多数读数借自已经持有该账号的工具。DeepSeek 是例外：点「登录」会打开 Codenotch 自己的 WebView，在这里退出只会清掉这次会话和已保存的读数。"
+            "value": "大多数读数借自已经持有该账号的工具。DeepSeek 是例外：点「登录」会打开 PenguinNotch 自己的 WebView，在这里退出只会清掉这次会话和已保存的读数。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "大多數讀數借自已經持有該帳號的工具。DeepSeek 是例外：點「登入」會開啟 Codenotch 自己的 WebView，在這裡登出只會清掉這次工作階段和已儲存的讀數。"
+            "value": "大多數讀數借自已經持有該帳號的工具。DeepSeek 是例外：點「登入」會開啟 PenguinNotch 自己的 WebView，在這裡登出只會清掉這次工作階段和已儲存的讀數。"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Більшість показників беруться з інструмента, який уже тримає цей акаунт. Виняток — DeepSeek: натискання «Увійти» відкриває власний WebView Codenotch, а вихід тут очищає лише цю сесію та її збережений показник."
+            "value": "Більшість показників беруться з інструмента, який уже тримає цей акаунт. Виняток — DeepSeek: натискання «Увійти» відкриває власний WebView PenguinNotch, а вихід тут очищає лише цю сесію та її збережений показник."
           }
         }
       }
@@ -23486,37 +23486,37 @@
         }
       }
     },
-    "To measure responses, point your chat client to http://127.0.0.1:11435 and keep Codenotch open.": {
+    "To measure responses, point your chat client to http://127.0.0.1:11435 and keep PenguinNotch open.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um Antworten zu messen, richte deinen Chat-Client auf http://127.0.0.1:11435 und lass Codenotch geöffnet."
+            "value": "Um Antworten zu messen, richte deinen Chat-Client auf http://127.0.0.1:11435 und lass PenguinNotch geöffnet."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "応答を計測するには、チャットクライアントの向き先を http://127.0.0.1:11435 にして、Codenotch を開いたままにしてください。"
+            "value": "応答を計測するには、チャットクライアントの向き先を http://127.0.0.1:11435 にして、PenguinNotch を開いたままにしてください。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "要测量回复，把聊天客户端指向 http://127.0.0.1:11435，并保持 Codenotch 打开。"
+            "value": "要测量回复，把聊天客户端指向 http://127.0.0.1:11435，并保持 PenguinNotch 打开。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "要測量回復，把聊天客戶端指向 http://127.0.0.1:11435，並保持 Codenotch 開啟。"
+            "value": "要測量回復，把聊天客戶端指向 http://127.0.0.1:11435，並保持 PenguinNotch 開啟。"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Щоб вимірювати відповіді, спрямуйте свій чат-клієнт на http://127.0.0.1:11435 і не закривайте Codenotch."
+            "value": "Щоб вимірювати відповіді, спрямуйте свій чат-клієнт на http://127.0.0.1:11435 і не закривайте PenguinNotch."
           }
         }
       }
@@ -23985,31 +23985,31 @@
         }
       }
     },
-    "Scan this code with the Codenotch app on your phone.": {
+    "Scan this code with the PenguinNotch app on your phone.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "スマートフォンの Codenotch アプリでこのコードを読み取ってください。"
+            "value": "スマートフォンの PenguinNotch アプリでこのコードを読み取ってください。"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Відскануйте цей код застосунком Codenotch на телефоні."
+            "value": "Відскануйте цей код застосунком PenguinNotch на телефоні."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "用手机上的 Codenotch 应用扫描此码。"
+            "value": "用手机上的 PenguinNotch 应用扫描此码。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "用手機上的 Codenotch App 掃描此配對碼。"
+            "value": "用手機上的 PenguinNotch App 掃描此配對碼。"
           }
         }
       }
@@ -24101,31 +24101,31 @@
         }
       }
     },
-    "1. Open Codenotch on your phone": {
+    "1. Open PenguinNotch on your phone": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. スマートフォンで Codenotch を開く"
+            "value": "1. スマートフォンで PenguinNotch を開く"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. Відкрийте Codenotch на телефоні"
+            "value": "1. Відкрийте PenguinNotch на телефоні"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. 在手机上打开 Codenotch"
+            "value": "1. 在手机上打开 PenguinNotch"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. 在手機上開啟 Codenotch"
+            "value": "1. 在手機上開啟 PenguinNotch"
           }
         }
       }
@@ -26244,7 +26244,7 @@
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Запустіть kimi і увійдіть через /login — так записується й оновлюється токен, який читає Codenotch."
+            "value": "Запустіть kimi і увійдіть через /login — так записується й оновлюється токен, який читає PenguinNotch."
           }
         },
         "zh-Hans": {
@@ -26389,7 +26389,7 @@
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Запустіть kiro-cli login — так записується й оновлюється сесія, яку читає Codenotch."
+            "value": "Запустіть kiro-cli login — так записується й оновлюється сесія, яку читає PenguinNotch."
           }
         },
         "zh-Hans": {
@@ -26667,31 +26667,31 @@
         }
       }
     },
-    "Codenotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor (the editor or cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot, Kimi Code, Kiro or a Gemini API key (via Gemini CLI, OpenCode or Hermes), and its ring appears in the notch.": {
+    "PenguinNotch reads usage from tools already signed in on this Mac — it never asks for your password. Install and sign in to any of Claude Code (the terminal tool, not the Claude app), Cursor (the editor or cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot, Kimi Code, Kiro or a Gemini API key (via Gemini CLI, OpenCode or Hermes), and its ring appears in the notch.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor（エディタまたは cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、Kimi Code、Kiro、または Gemini API キー（Gemini CLI、OpenCode、Hermes 経由）のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
+            "value": "PenguinNotch は、この Mac ですでにサインイン済みのツールから使用量を読み取ります。パスワードを尋ねることはありません。Claude Code（Claude アプリではなくターミナルのツール）、Cursor（エディタまたは cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、Kimi Code、Kiro、または Gemini API キー（Gemini CLI、OpenCode、Hermes 経由）のいずれかをインストールしてサインインすると、そのリングがノッチに現れます。"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor (редактор або cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot, Kimi Code, Kiro чи ключ Gemini API (через Gemini CLI, OpenCode або Hermes) — і увійдіть: його кільце зʼявиться у вирізі."
+            "value": "PenguinNotch читає використання з інструментів, у які вже виконано вхід на цьому Mac, і ніколи не питає ваш пароль. Установіть будь-який з них — Claude Code (термінальний інструмент, не застосунок Claude), Cursor (редактор або cursor-agent), Codex, Antigravity, GLM, Grok, OpenCode, Command Code, GitHub Copilot, Kimi Code, Kiro чи ключ Gemini API (через Gemini CLI, OpenCode або Hermes) — і увійдіть: його кільце зʼявиться у вирізі."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor（编辑器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、Kimi Code、Kiro 或 Gemini API 密钥（经由 Gemini CLI、OpenCode 或 Hermes）中的任意一个，刘海里就会出现对应的圆环。"
+            "value": "PenguinNotch 读取这台 Mac 上已经登录的工具的用量 — 从不问你的密码。安装并登录 Claude Code（终端工具，不是 Claude 应用）、Cursor（编辑器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、Kimi Code、Kiro 或 Gemini API 密钥（经由 Gemini CLI、OpenCode 或 Hermes）中的任意一个，刘海里就会出现对应的圆环。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 會從這部 Mac 上已登入的工具讀取用量 — 它不會向你要密碼。安裝並登入 Claude Code（終端機工具，不是 Claude App）、Cursor（編輯器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、Kimi Code、Kiro，或 Gemini API 金鑰（透過 Gemini CLI、OpenCode 或 Hermes），對應的圓環就會出現在瀏海上。"
+            "value": "PenguinNotch 會從這部 Mac 上已登入的工具讀取用量 — 它不會向你要密碼。安裝並登入 Claude Code（終端機工具，不是 Claude App）、Cursor（編輯器或 cursor-agent）、Codex、Antigravity、GLM、Grok、OpenCode、Command Code、GitHub Copilot、Kimi Code、Kiro，或 Gemini API 金鑰（透過 Gemini CLI、OpenCode 或 Hermes），對應的圓環就會出現在瀏海上。"
           }
         }
       }
@@ -26812,31 +26812,31 @@
         }
       }
     },
-    "Most readings are borrowed from a tool that already holds the account. DeepSeek and MiniMax are the exceptions: clicking Sign in opens a Codenotch window for that account, and signing out here clears only that session and its saved reading.": {
+    "Most readings are borrowed from a tool that already holds the account. DeepSeek and MiniMax are the exceptions: clicking Sign in opens a PenguinNotch window for that account, and signing out here clears only that session and its saved reading.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ほとんどの読み取りは、すでにアカウントを持っているツールから借りています。DeepSeek と MiniMax だけは例外で、「サインイン」をクリックするとそのアカウント用の Codenotch のウインドウが開きます。ここでサインアウトしても、消えるのはそのセッションと保存された読み取りだけです。"
+            "value": "ほとんどの読み取りは、すでにアカウントを持っているツールから借りています。DeepSeek と MiniMax だけは例外で、「サインイン」をクリックするとそのアカウント用の PenguinNotch のウインドウが開きます。ここでサインアウトしても、消えるのはそのセッションと保存された読み取りだけです。"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Більшість показників беруться з інструмента, який уже тримає цей акаунт. Винятки — DeepSeek і MiniMax: натискання «Увійти» відкриває вікно Codenotch для цього акаунта, а вихід тут очищає лише цю сесію та її збережений показник."
+            "value": "Більшість показників беруться з інструмента, який уже тримає цей акаунт. Винятки — DeepSeek і MiniMax: натискання «Увійти» відкриває вікно PenguinNotch для цього акаунта, а вихід тут очищає лише цю сесію та її збережений показник."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "大多数读数借自已经持有该账号的工具。DeepSeek 和 MiniMax 是例外：点「登录」会打开该账号的 Codenotch 窗口，在这里退出只会清掉这次会话和已保存的读数。"
+            "value": "大多数读数借自已经持有该账号的工具。DeepSeek 和 MiniMax 是例外：点「登录」会打开该账号的 PenguinNotch 窗口，在这里退出只会清掉这次会话和已保存的读数。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "大多數讀數是向已經持有帳號的工具借用的。DeepSeek 與 MiniMax 是例外：點一下「登入」會開啟該帳號的 Codenotch 視窗，而在這裡登出只會清除該工作階段及其已儲存的讀數。"
+            "value": "大多數讀數是向已經持有帳號的工具借用的。DeepSeek 與 MiniMax 是例外：點一下「登入」會開啟該帳號的 PenguinNotch 視窗，而在這裡登出只會清除該工作階段及其已儲存的讀數。"
           }
         }
       }
@@ -26986,31 +26986,31 @@
         }
       }
     },
-    "Sign in to MiniMax in Codenotch, or paste a Coding Plan key. A Cookie header is optional. Codenotch never reads a browser's cookies.": {
+    "Sign in to MiniMax in PenguinNotch, or paste a Coding Plan key. A Cookie header is optional. PenguinNotch never reads a browser's cookies.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch で MiniMax にサインインするか、Coding Plan のキーを貼り付けてください。Cookie ヘッダーは任意です。Codenotch がブラウザの Cookie を読むことはありません。"
+            "value": "PenguinNotch で MiniMax にサインインするか、Coding Plan のキーを貼り付けてください。Cookie ヘッダーは任意です。PenguinNotch がブラウザの Cookie を読むことはありません。"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Увійдіть у MiniMax просто в Codenotch або вставте ключ Coding Plan. Заголовок Cookie можна не вказувати. Codenotch ніколи не читає кукі браузера."
+            "value": "Увійдіть у MiniMax просто в PenguinNotch або вставте ключ Coding Plan. Заголовок Cookie можна не вказувати. PenguinNotch ніколи не читає кукі браузера."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 Codenotch 里登录 MiniMax，或粘贴 Coding Plan 密钥。Cookie 请求头可选。Codenotch 从不读取浏览器的 Cookie。"
+            "value": "在 PenguinNotch 里登录 MiniMax，或粘贴 Coding Plan 密钥。Cookie 请求头可选。PenguinNotch 从不读取浏览器的 Cookie。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 Codenotch 登入 MiniMax，或貼上 Coding Plan 金鑰。Cookie 標頭為選用。Codenotch 絕不會讀取瀏覽器的 Cookie。"
+            "value": "在 PenguinNotch 登入 MiniMax，或貼上 Coding Plan 金鑰。Cookie 標頭為選用。PenguinNotch 絕不會讀取瀏覽器的 Cookie。"
           }
         }
       }
@@ -27283,55 +27283,55 @@
         }
       }
     },
-    "Asks macOS for %@'s saved login again. Deny stops Codenotch reading it until you ask again.": {
+    "Asks macOS for %@'s saved login again. Deny stops PenguinNotch reading it until you ask again.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fragt macOS erneut nach der gespeicherten Anmeldung von %@. „Ablehnen“ verhindert, dass Codenotch sie liest, bis du erneut fragst."
+            "value": "Fragt macOS erneut nach der gespeicherten Anmeldung von %@. „Ablehnen“ verhindert, dass PenguinNotch sie liest, bis du erneut fragst."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Redemande à macOS la connexion enregistrée de %@. Refuser empêche Codenotch de la lire jusqu'à ce que vous redemandiez."
+            "value": "Redemande à macOS la connexion enregistrée de %@. Refuser empêche PenguinNotch de la lire jusqu'à ce que vous redemandiez."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ の保存済みログインをもう一度 macOS に求めます。「拒否」を選ぶと、もう一度求めるまで Codenotch はそれを読みません。"
+            "value": "%@ の保存済みログインをもう一度 macOS に求めます。「拒否」を選ぶと、もう一度求めるまで PenguinNotch はそれを読みません。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pede de novo ao macOS o login salvo de %@. Negar impede o Codenotch de lê-lo até você pedir de novo."
+            "value": "Pede de novo ao macOS o login salvo de %@. Negar impede o PenguinNotch de lê-lo até você pedir de novo."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Снова запрашивает у macOS сохранённый вход %@. «Запретить» не даёт Codenotch читать его, пока вы не спросите снова."
+            "value": "Снова запрашивает у macOS сохранённый вход %@. «Запретить» не даёт PenguinNotch читать его, пока вы не спросите снова."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Знову запитує в macOS збережений вхід %@. «Заборонити» не дає Codenotch читати його, доки ви не запитаєте знову."
+            "value": "Знову запитує в macOS збережений вхід %@. «Заборонити» не дає PenguinNotch читати його, доки ви не запитаєте знову."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "再次向 macOS 请求 %@ 保存的登录信息。选择“拒绝”后，在你再次请求之前 Codenotch 不会读取它。"
+            "value": "再次向 macOS 请求 %@ 保存的登录信息。选择“拒绝”后，在你再次请求之前 PenguinNotch 不会读取它。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "再次向 macOS 要求 %@ 儲存的登入資訊。選擇“拒絕”後，在你再次要求之前 Codenotch 不會讀取它。"
+            "value": "再次向 macOS 要求 %@ 儲存的登入資訊。選擇“拒絕”後，在你再次要求之前 PenguinNotch 不會讀取它。"
           }
         }
       }
@@ -27866,55 +27866,55 @@
         }
       }
     },
-    "What Codenotch tells you, and when.": {
+    "What PenguinNotch tells you, and when.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Was Codenotch dir mitteilt, und wann."
+            "value": "Was PenguinNotch dir mitteilt, und wann."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce que Codenotch vous signale, et quand."
+            "value": "Ce que PenguinNotch vous signale, et quand."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch が知らせる内容とタイミング。"
+            "value": "PenguinNotch が知らせる内容とタイミング。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O que o Codenotch avisa, e quando."
+            "value": "O que o PenguinNotch avisa, e quando."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "О чём и когда сообщает Codenotch."
+            "value": "О чём и когда сообщает PenguinNotch."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Про що й коли повідомляє Codenotch."
+            "value": "Про що й коли повідомляє PenguinNotch."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 提醒你什么，以及何时提醒。"
+            "value": "PenguinNotch 提醒你什么，以及何时提醒。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 提醒你什麼，以及何時提醒。"
+            "value": "PenguinNotch 提醒你什麼，以及何時提醒。"
           }
         }
       }
@@ -28078,55 +28078,55 @@
         }
       }
     },
-    "The update check didn't finish. Try again, or download the latest Codenotch from hivinz.com.": {
+    "The update check didn't finish. Try again, or download the latest PenguinNotch from hivinz.com.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Suche nach Updates wurde nicht abgeschlossen. Versuche es erneut oder lade das neueste Codenotch von hivinz.com."
+            "value": "Die Suche nach Updates wurde nicht abgeschlossen. Versuche es erneut oder lade das neueste PenguinNotch von hivinz.com."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La recherche de mises à jour ne s'est pas terminée. Réessayez, ou téléchargez la dernière version de Codenotch sur hivinz.com."
+            "value": "La recherche de mises à jour ne s'est pas terminée. Réessayez, ou téléchargez la dernière version de PenguinNotch sur hivinz.com."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アップデートの確認が完了しませんでした。もう一度試すか、hivinz.com から最新の Codenotch をダウンロードしてください。"
+            "value": "アップデートの確認が完了しませんでした。もう一度試すか、hivinz.com から最新の PenguinNotch をダウンロードしてください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A verificação de atualizações não terminou. Tente de novo ou baixe o Codenotch mais recente em hivinz.com."
+            "value": "A verificação de atualizações não terminou. Tente de novo ou baixe o PenguinNotch mais recente em hivinz.com."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Проверка обновлений не завершилась. Попробуйте ещё раз или скачайте последнюю версию Codenotch с hivinz.com."
+            "value": "Проверка обновлений не завершилась. Попробуйте ещё раз или скачайте последнюю версию PenguinNotch с hivinz.com."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Перевірка оновлень не завершилася. Спробуйте ще раз або завантажте останню версію Codenotch з hivinz.com."
+            "value": "Перевірка оновлень не завершилася. Спробуйте ще раз або завантажте останню версію PenguinNotch з hivinz.com."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "更新检查未完成。请重试，或从 hivinz.com 下载最新的 Codenotch。"
+            "value": "更新检查未完成。请重试，或从 hivinz.com 下载最新的 PenguinNotch。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "更新檢查未完成。請再試一次，或從 hivinz.com 下載最新的 Codenotch。"
+            "value": "更新檢查未完成。請再試一次，或從 hivinz.com 下載最新的 PenguinNotch。"
           }
         }
       }
@@ -28449,161 +28449,161 @@
         }
       }
     },
-    "Shows %@'s five-hour limit in the menu bar. Codenotch reads it either way.": {
+    "Shows %@'s five-hour limit in the menu bar. PenguinNotch reads it either way.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Показывает пятичасовой лимит %@ в строке меню. Codenotch читает его в любом случае."
+            "value": "Показывает пятичасовой лимит %@ в строке меню. PenguinNotch читает его в любом случае."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Affiche la limite de cinq heures de %@ dans la barre des menus. Codenotch le lit dans tous les cas."
+            "value": "Affiche la limite de cinq heures de %@ dans la barre des menus. PenguinNotch le lit dans tous les cas."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ の5時間の上限をメニューバーに表示します。どちらの場合も Codenotch は読み取りを続けます。"
+            "value": "%@ の5時間の上限をメニューバーに表示します。どちらの場合も PenguinNotch は読み取りを続けます。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostra o limite de cinco horas de %@ na barra de menus. O Codenotch continua a lê-lo de qualquer forma."
+            "value": "Mostra o limite de cinco horas de %@ na barra de menus. O PenguinNotch continua a lê-lo de qualquer forma."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在菜单栏显示 %@ 的 5 小时额度。无论是否显示，Codenotch 都会读取它。"
+            "value": "在菜单栏显示 %@ 的 5 小时额度。无论是否显示，PenguinNotch 都会读取它。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在選單列顯示 %@ 的 5 小時額度。無論是否顯示，Codenotch 都會讀取它。"
+            "value": "在選單列顯示 %@ 的 5 小時額度。無論是否顯示，PenguinNotch 都會讀取它。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zeigt das Fünf-Stunden-Limit von %@ in der Menüleiste. Codenotch liest den Anbieter so oder so."
+            "value": "Zeigt das Fünf-Stunden-Limit von %@ in der Menüleiste. PenguinNotch liest den Anbieter so oder so."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Показує п’ятигодинний ліміт %@ у рядку меню. Codenotch читає його в будь-якому разі."
+            "value": "Показує п’ятигодинний ліміт %@ у рядку меню. PenguinNotch читає його в будь-якому разі."
           }
         }
       }
     },
-    "Nothing Codenotch reads has a five-hour limit to show yet. Claude and Codex do — switch one on in Accounts.": {
+    "Nothing PenguinNotch reads has a five-hour limit to show yet. Claude and Codex do — switch one on in Accounts.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ни у одного провайдера, которого читает Codenotch, пока нет пятичасового лимита. У Claude и Codex он есть — включите одного из них в разделе «Аккаунты»."
+            "value": "Ни у одного провайдера, которого читает PenguinNotch, пока нет пятичасового лимита. У Claude и Codex он есть — включите одного из них в разделе «Аккаунты»."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rien de ce que lit Codenotch n'a encore de limite de cinq heures à afficher. Claude et Codex en ont une — activez-en un dans Comptes."
+            "value": "Rien de ce que lit PenguinNotch n'a encore de limite de cinq heures à afficher. Claude et Codex en ont une — activez-en un dans Comptes."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch が読み取っているものには、まだ表示できる5時間の上限がありません。Claude と Codex にはあります。「アカウント」でどちらかをオンにしてください。"
+            "value": "PenguinNotch が読み取っているものには、まだ表示できる5時間の上限がありません。Claude と Codex にはあります。「アカウント」でどちらかをオンにしてください。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nada do que o Codenotch lê tem ainda um limite de cinco horas para mostrar. Claude e Codex têm — ative um deles em Contas."
+            "value": "Nada do que o PenguinNotch lê tem ainda um limite de cinco horas para mostrar. Claude e Codex têm — ative um deles em Contas."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 读取的服务中还没有可显示的 5 小时额度。Claude 和 Codex 有——在“账号”中打开其中一个。"
+            "value": "PenguinNotch 读取的服务中还没有可显示的 5 小时额度。Claude 和 Codex 有——在“账号”中打开其中一个。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codenotch 讀取的服務中還沒有可顯示的 5 小時額度。Claude 和 Codex 有——在“帳號”中開啟其中一個。"
+            "value": "PenguinNotch 讀取的服務中還沒有可顯示的 5 小時額度。Claude 和 Codex 有——在“帳號”中開啟其中一個。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nichts, was Codenotch liest, hat bisher ein Fünf-Stunden-Limit zum Anzeigen. Claude und Codex haben eines – schalte einen davon unter „Konten“ ein."
+            "value": "Nichts, was PenguinNotch liest, hat bisher ein Fünf-Stunden-Limit zum Anzeigen. Claude und Codex haben eines – schalte einen davon unter „Konten“ ein."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Жоден провайдер, якого читає Codenotch, поки не має п’ятигодинного ліміту. У Claude і Codex він є — увімкніть одного з них у розділі «Акаунти»."
+            "value": "Жоден провайдер, якого читає PenguinNotch, поки не має п’ятигодинного ліміту. У Claude і Codex він є — увімкніть одного з них у розділі «Акаунти»."
           }
         }
       }
     },
-    "Leaving a provider out keeps it off the menu bar only — Codenotch still reads it. With none chosen, the icon comes back.": {
+    "Leaving a provider out keeps it off the menu bar only — PenguinNotch still reads it. With none chosen, the icon comes back.": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Невыбранный провайдер лишь исчезает из строки меню — Codenotch продолжает его читать. Если не выбран ни один, возвращается значок."
+            "value": "Невыбранный провайдер лишь исчезает из строки меню — PenguinNotch продолжает его читать. Если не выбран ни один, возвращается значок."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exclure un fournisseur le retire seulement de la barre des menus — Codenotch continue de le lire. Si aucun n'est choisi, l'icône revient."
+            "value": "Exclure un fournisseur le retire seulement de la barre des menus — PenguinNotch continue de le lire. Si aucun n'est choisi, l'icône revient."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "オフにしたプロバイダはメニューバーに出なくなるだけで、Codenotch は読み取りを続けます。何も選ばないとアイコンに戻ります。"
+            "value": "オフにしたプロバイダはメニューバーに出なくなるだけで、PenguinNotch は読み取りを続けます。何も選ばないとアイコンに戻ります。"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deixar um provedor de fora só o tira da barra de menus — o Codenotch continua a lê-lo. Sem nenhum escolhido, o ícone volta."
+            "value": "Deixar um provedor de fora só o tira da barra de menus — o PenguinNotch continua a lê-lo. Sem nenhum escolhido, o ícone volta."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "不选某个服务只会让它离开菜单栏——Codenotch 仍会读取它。一个都不选时，图标会回来。"
+            "value": "不选某个服务只会让它离开菜单栏——PenguinNotch 仍会读取它。一个都不选时，图标会回来。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "不選某個服務只會讓它離開選單列——Codenotch 仍會讀取它。一個都不選時，圖示會回來。"
+            "value": "不選某個服務只會讓它離開選單列——PenguinNotch 仍會讀取它。一個都不選時，圖示會回來。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein ausgelassener Anbieter fehlt nur in der Menüleiste – Codenotch liest ihn weiter. Ist keiner gewählt, kehrt das Symbol zurück."
+            "value": "Ein ausgelassener Anbieter fehlt nur in der Menüleiste – PenguinNotch liest ihn weiter. Ist keiner gewählt, kehrt das Symbol zurück."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Невибраний провайдер лише зникає з рядка меню — Codenotch і далі його читає. Якщо не вибрано жодного, повертається значок."
+            "value": "Невибраний провайдер лише зникає з рядка меню — PenguinNotch і далі його читає. Якщо не вибрано жодного, повертається значок."
           }
         }
       }
@@ -28683,13 +28683,13 @@
         }
       }
     },
-    "With the app in 简体中文, a provider past 80% crashed Codenotch a few seconds after launch. Every translation is now checked for this.": {
+    "With the app in 简体中文, a provider past 80% crashed PenguinNotch a few seconds after launch. Every translation is now checked for this.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリを 简体中文 にしていると、80% を超えたサービスがあるときに、起動の数秒後に Codenotch がクラッシュしていました。今はすべての翻訳をこの観点で検査しています。"
+            "value": "アプリを 简体中文 にしていると、80% を超えたサービスがあるときに、起動の数秒後に PenguinNotch がクラッシュしていました。今はすべての翻訳をこの観点で検査しています。"
           }
         }
       }
@@ -28705,13 +28705,13 @@
         }
       }
     },
-    "Answering Deny when macOS asks about a saved login now stops Codenotch reading that account from any source, until you choose Allow access… again.": {
+    "Answering Deny when macOS asks about a saved login now stops PenguinNotch reading that account from any source, until you choose Allow access… again.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "保存済みログインについて macOS に尋ねられて「拒否」を選ぶと、「アクセスを許可…」を選び直すまで、Codenotch はそのアカウントをどの取得元からも読まなくなりました。"
+            "value": "保存済みログインについて macOS に尋ねられて「拒否」を選ぶと、「アクセスを許可…」を選び直すまで、PenguinNotch はそのアカウントをどの取得元からも読まなくなりました。"
           }
         }
       }
@@ -28727,13 +28727,13 @@
         }
       }
     },
-    "Renewing Claude's login no longer starts your MCP servers and hooks, and Kimi sessions are matched without looking inside your folders, so macOS no longer asks about Documents, Desktop or network volumes on Codenotch's behalf.": {
+    "Renewing Claude's login no longer starts your MCP servers and hooks, and Kimi sessions are matched without looking inside your folders, so macOS no longer asks about Documents, Desktop or network volumes on PenguinNotch's behalf.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Claude のログイン更新で MCP サーバーやフックが起動しなくなり、Kimi のセッションもフォルダの中を見ずに照合するようになりました。そのため macOS が Codenotch のために「書類」「デスクトップ」やネットワークボリュームへのアクセスを尋ねることがなくなりました。"
+            "value": "Claude のログイン更新で MCP サーバーやフックが起動しなくなり、Kimi のセッションもフォルダの中を見ずに照合するようになりました。そのため macOS が PenguinNotch のために「書類」「デスクトップ」やネットワークボリュームへのアクセスを尋ねることがなくなりました。"
           }
         }
       }
@@ -28782,7 +28782,7 @@
         }
       }
     },
-    "Codenotch idles at a fraction of the CPU it used, and moving the pointer costs less than half as much. The working spinner is drawn by the system instead of redrawing the notch every frame, and full-screen apps are checked every two seconds rather than on every movement.": {
+    "PenguinNotch idles at a fraction of the CPU it used, and moving the pointer costs less than half as much. The working spinner is drawn by the system instead of redrawing the notch every frame, and full-screen apps are checked every two seconds rather than on every movement.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
@@ -28881,24 +28881,24 @@
         }
       }
     },
-    "Codenotch for Windows, installable": {
+    "PenguinNotch for Windows, installable": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Windows 版 Codenotch をインストール可能に"
+            "value": "Windows 版 PenguinNotch をインストール可能に"
           }
         }
       }
     },
-    "Every release now carries Codenotch-Setup.exe, which installs for the current user without administrator rights. It is not signed yet, so Windows asks once. The port also gains the Mac's settings window, Small, Medium and Large sizes, a ring for the weekly limit, and Chinese, Japanese, Korean and Ukrainian.": {
+    "Every release now carries PenguinNotch-Setup.exe, which installs for the current user without administrator rights. It is not signed yet, so Windows asks once. The port also gains the Mac's settings window, Small, Medium and Large sizes, a ring for the weekly limit, and Chinese, Japanese, Korean and Ukrainian.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべてのリリースに Codenotch-Setup.exe が付くようになりました。管理者権限なしで現在のユーザー向けにインストールします。まだ署名されていないため、Windows が一度確認します。移植版には Mac と同じ設定ウインドウ、小・中・大のサイズ、週間上限のリング、そして中国語・日本語・韓国語・ウクライナ語も加わりました。"
+            "value": "すべてのリリースに PenguinNotch-Setup.exe が付くようになりました。管理者権限なしで現在のユーザー向けにインストールします。まだ署名されていないため、Windows が一度確認します。移植版には Mac と同じ設定ウインドウ、小・中・大のサイズ、週間上限のリング、そして中国語・日本語・韓国語・ウクライナ語も加わりました。"
           }
         }
       }
@@ -29046,13 +29046,13 @@
         }
       }
     },
-    "Kiro reads the kiro-cli sign-in already on this Mac. MiniMax signs in from Codenotch, with a choice of international or China region.": {
+    "Kiro reads the kiro-cli sign-in already on this Mac. MiniMax signs in from PenguinNotch, with a choice of international or China region.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kiro は、この Mac にすでにある kiro-cli のサインインを読み取ります。MiniMax は Codenotch からサインインし、国際と中国本土のどちらかの地域を選べます。"
+            "value": "Kiro は、この Mac にすでにある kiro-cli のサインインを読み取ります。MiniMax は PenguinNotch からサインインし、国際と中国本土のどちらかの地域を選べます。"
           }
         }
       }
@@ -29288,13 +29288,13 @@
         }
       }
     },
-    "A web page cannot reach Codenotch's local servers": {
+    "A web page cannot reach PenguinNotch's local servers": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Web ページから Codenotch のローカルサーバーに到達できないように"
+            "value": "Web ページから PenguinNotch のローカルサーバーに到達できないように"
           }
         }
       }
@@ -29783,13 +29783,13 @@
         }
       }
     },
-    "Every build now produces an app bundle you can run, so trying Codenotch no longer starts with a developer setup.": {
+    "Every build now produces an app bundle you can run, so trying PenguinNotch no longer starts with a developer setup.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべてのビルドで実行可能なアプリバンドルが作られるようになり、Codenotch を試すのに開発環境の用意から始める必要がなくなりました。"
+            "value": "すべてのビルドで実行可能なアプリバンドルが作られるようになり、PenguinNotch を試すのに開発環境の用意から始める必要がなくなりました。"
           }
         }
       }
@@ -39474,6 +39474,18 @@
           }
         }
       }
+    },
+    "Penguin Notch is up to date.": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "PenguinNotch가 최신 버전입니다." } } }
+    },
+    "Couldn't reach the update server. Penguin Notch will try again on its own — nothing is wrong with this copy.": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "업데이트 서버에 연결할 수 없습니다. PenguinNotch가 나중에 다시 시도합니다." } } }
+    },
+    "The update check didn't finish. Try again, or download the latest Penguin Notch from GitHub.": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "업데이트 확인이 끝나지 않았습니다. 다시 시도하거나 GitHub에서 최신 PenguinNotch를 받으세요." } } }
     }
   },
   "version": "1.0"

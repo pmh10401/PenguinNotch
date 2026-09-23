@@ -1,6 +1,6 @@
 import XCTest
 import Sparkle
-@testable import Codenotch
+@testable import PenguinNotch
 
 /// Fixtures are the real thing: the keychain payload's shape and the actual
 /// `loadCodeAssist` response from a signed-in install.
@@ -1154,7 +1154,7 @@ final class AuthorCreditTests: XCTestCase {
     /// Pinned because a wrong handle in a credit is worse than none, and it is
     /// the kind of string nobody re-reads once it looks right.
     func testTheCreditPointsAtTheRightAccount() {
-        XCTAssertEqual(SettingsView.authorURL.absoluteString, "https://x.com/hivinz_")
+        XCTAssertEqual(SettingsView.authorURL.absoluteString, "https://github.com/vinzdg/codenotch")
         XCTAssertEqual(SettingsView.authorURL.scheme, "https")
     }
 }
@@ -1350,7 +1350,7 @@ final class StatusMenuTests: XCTestCase {
         XCTAssertTrue(titles[1].contains("29% Used · 71% left"), titles[1])
         XCTAssertTrue(titles.contains("Refresh all"))
         XCTAssertTrue(titles.contains("Settings…"))
-        XCTAssertTrue(titles.contains("Quit Codenotch"))
+        XCTAssertTrue(titles.contains("Quit PenguinNotch"))
         // The header re-reads its own provider.
         XCTAssertEqual(menu.items[0].representedObject as? String, "codex")
     }

@@ -96,10 +96,18 @@ struct StockSettings: View {
             }
         }
         HStack {
-            TextField(L10n.t("Symbol, such as 005930 or AAPL"), text: $symbol)
+            TextField("Company name or symbol · 삼성전자, 005930, AAPL", text: $symbol)
                 .onSubmit(add)
             Button(L10n.t("Add symbol"), action: add)
                 .disabled(symbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        if WatchedStock.parse(symbol) == nil {
+            ForEach(KoreanStockDirectory.shared.search(symbol)) { company in
+                Button("\(company.name) · \(company.code) (\(company.market))") {
+                    add(company.code)
+                }
+                .buttonStyle(.plain)
+            }
         }
         ForEach(WatchedStock.parseList(preferences.stockSymbols)) { stock in
             HStack {
@@ -118,11 +126,15 @@ struct StockSettings: View {
     }
 
     private func add() {
-        guard WatchedStock.parse(symbol) != nil else {
-            message = L10n.t("That symbol was not recognized. Use a 6-digit Korean code or a US ticker.")
+        add(symbol)
+    }
+
+    private func add(_ input: String) {
+        guard let stock = KoreanStockDirectory.shared.resolve(input) else {
+            message = "Company not found. Select a match or enter a Korean stock code or US ticker."
             return
         }
-        guard preferences.addStockSymbol(symbol) else {
+        guard preferences.addStockSymbol(stock.id) else {
             message = L10n.t("The stock list holds 30 symbols.")
             return
         }

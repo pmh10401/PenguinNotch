@@ -7,8 +7,8 @@ struct UsageResetCard: View {
     var tailOffset: CGFloat = 0
     var onDismiss: (() -> Void)? = nil
 
-    @Environment(\.codenotchAccentColor) private var accentColor
-    @Environment(\.codenotchReduceTransparency) private var reduceTransparency
+    @Environment(\.penguinnotchAccentColor) private var accentColor
+    @Environment(\.penguinnotchReduceTransparency) private var reduceTransparency
     @Environment(\.notchSurfaceStyle) private var surfaceStyle
     @Environment(\.colorScheme) private var colorScheme
 

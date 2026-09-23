@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import Codenotch
+@testable import PenguinNotch
 
 /// A MacBook's own notch, as this machine reports it.
 private let realNotch = HardwareNotch(width: 220, height: 38)
@@ -23,7 +23,7 @@ private let plain = FakeScreen(
     hardwareNotch: nil
 )
 
-/// On a Mac that has a notch of its own, a top-edge Codenotch runs up to meet
+/// On a Mac that has a notch of its own, a top-edge PenguinNotch runs up to meet
 /// it so the two read as one shape rather than as a bar parked underneath.
 final class HardwareNotchGeometryTests: XCTestCase {
     private let size = CGSize(width: 700, height: 200)
@@ -519,7 +519,7 @@ final class HardwareClearanceTests: XCTestCase {
                 // The system material is not renderable offscreen; the band
                 // over it is ours. See TASKS.md, "The hardware's band stays
                 // black".
-                .environment(\.codenotchHeadlessGlass, true)
+                .environment(\.penguinnotchHeadlessGlass, true)
         )
         renderer.scale = 1
         guard let image = renderer.cgImage, let rep = NSBitmapImageRep(cgImage: image).cgImage

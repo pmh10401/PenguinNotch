@@ -73,7 +73,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = Self.icon()
-        item.button?.toolTip = L10n.t("Codenotch")
+        item.button?.toolTip = "PenguinNotch"
 
         let menu = NSMenu()
         menu.delegate = self
@@ -112,7 +112,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         if next.entries.isEmpty {
             item.length = NSStatusItem.squareLength
             button.image = Self.icon()
-            button.toolTip = L10n.t("Codenotch")
+            button.toolTip = "PenguinNotch"
             button.setAccessibilityLabel(nil)
             return
         }
@@ -184,7 +184,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         ).target = self
         menu.addItem(.separator())
         menu.addItem(
-            withTitle: L10n.t("Quit Codenotch"), action: #selector(quit), keyEquivalent: "q"
+            withTitle: "Quit PenguinNotch", action: #selector(quit), keyEquivalent: "q"
         ).target = self
     }
 
