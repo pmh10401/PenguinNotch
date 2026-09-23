@@ -48,3 +48,23 @@ test('Other provider headline selection is unchanged', () => {
   assert.equal(pick([{ id: 'weekly_all' }, { id: 'session' }], 'claude'), 'session');
   assert.equal(pick([{ id: 'on_demand' }, { id: 'included' }], 'cursor'), 'included');
 });
+
+test('Selected providers and system widgets are listed together', () => {
+  const widgets = {
+    extraCells: () => [{ id: 'system-cpu' }],
+    arrange: cells => cells,
+  };
+  const absent = { status: 'absent' };
+  const selected = vm.createContext({
+    claudeCells: () => [{ id: 'claude', base: 'claude' }],
+    codexSnap: { status: 'ready' }, glmSnap: absent, cursorSnap: absent,
+    grokSnap: absent, agSnap: absent,
+    notchSlots: [{ provider: 'claude' }], slotFor: id => id === 'claude',
+    window: { PenguinNotchWidgets: widgets }, PenguinNotchWidgets: widgets,
+    systemPayload: { order: [] }, uiLang: 'en',
+  });
+  vm.runInContext(markedSource(html, 'PROVIDERS'), selected);
+  assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['claude', 'system-cpu']);
+  selected.notchSlots = [];
+  assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['claude', 'codex', 'system-cpu']);
+});
