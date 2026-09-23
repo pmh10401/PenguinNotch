@@ -40,7 +40,8 @@ enum NotchLayout {
     static let padTop       = Design.px(69.5)   // body top -> first ring
     static let padBottom    = Design.px(50.1)   // last label -> body bottom
     static let cellSpacing  = Design.px(83.5)   // label bottom -> next ring top
-    static let barCellSpacing = Design.px(24)
+    // Short names leave an unused second line, which already separates bar cells.
+    static let barCellSpacing: CGFloat = 0
 
     // The resting pill. Not in the design frame — it is the notch folded away,
     // sized to read as a deliberate handle rather than a sliver of chrome.
@@ -63,7 +64,7 @@ enum NotchLayout {
     static let glyphSize     = Design.px(46)
     static let ringLabelGap  = Design.px(26.9)
     static let barLabelGap = Design.px(10)
-    static var barMeterHeight: CGFloat { percentLineHeight + Design.px(20) }
+    static var barMeterHeight: CGFloat { 2 * stockNameLineHeight + Design.px(20) }
     static var barCellExtent: CGFloat { barMeterHeight + barLabelGap + percentLineHeight }
 
     // The activity indicator. Not in the design frame — sized to sit in the gap
@@ -200,6 +201,10 @@ enum NotchLayout {
         let font = NSFont.systemFont(ofSize: Design.fontSize(capPixels: 27), weight: .semibold)
         return ceil(font.ascender - font.descender + font.leading)
     }()
+
+    static let stockNameLineHeight: CGFloat = lineHeight(
+        NSFont.systemFont(ofSize: Design.fontSize(capPixels: 23), weight: .semibold)
+    )
 
     static let cardTitleLineHeight: CGFloat = lineHeight(
         NSFont.systemFont(ofSize: Design.fontSize(capPixels: 26), weight: .semibold)

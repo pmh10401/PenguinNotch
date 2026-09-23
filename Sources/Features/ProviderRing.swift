@@ -172,11 +172,11 @@ struct ProviderRing: View {
                 Group {
                     if let centerText {
                         Text(centerText)
-                            .font(.system(size: Design.px(13), weight: .semibold, design: .rounded))
+                            .font(.system(size: Design.fontSize(capPixels: 23), weight: .semibold, design: .rounded))
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.4)
-                            .frame(width: NotchLayout.ringDiameter * 0.72)
+                            .minimumScaleFactor(0.7)
+                            .frame(width: NotchLayout.ringDiameter * 0.8)
                             .foregroundStyle(Palette.textPrimary)
                     } else {
                         ProviderGlyphView(glyph: glyph, customIconFilename: customIconFilename)
@@ -321,11 +321,15 @@ private struct NotchMeterBar: View {
     var body: some View {
         VStack(spacing: Design.px(6)) {
             Text(name)
-                .font(isKoreanStock ? .system(size: Design.fontSize(capPixels: 12), weight: .semibold) : Typography.percent)
+                .font(isKoreanStock
+                      ? .system(size: Design.fontSize(capPixels: 23), weight: .semibold)
+                      : Typography.percent)
                 .lineLimit(isKoreanStock ? 2 : 1)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(isKoreanStock ? 0.7 : 0.4)
-                .frame(width: trackWidth, height: NotchLayout.percentLineHeight)
+                .frame(width: trackWidth,
+                       height: NotchLayout.stockNameLineHeight * 2,
+                       alignment: .bottom)
                 .foregroundStyle(Palette.textPrimary)
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.ringTrack)
