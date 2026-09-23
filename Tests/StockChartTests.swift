@@ -61,6 +61,24 @@ final class StockChartTests: XCTestCase {
         XCTAssertTrue(queries.allSatisfy { $0.url?.path == "/api/v1/candles" })
     }
 
+    func testDailyCandlesSurviveMinuteRequestFailure() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ChartCandlesEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        ChartCandlesEndpoint.reset()
+        ChartCandlesEndpoint.failMinute = true
+
+        let data = try await TossInvestAPI.chartCandles(token: "test-token",
+            stock: WatchedStock(symbol: "SOXL", market: .us), session: session)
+
+        XCTAssertEqual(data.days.count, 20)
+        XCTAssertTrue(data.minutes.isEmpty)
+        XCTAssertTrue(data.unavailable(for: .minute))
+        XCTAssertTrue(data.unavailable(for: .tenMinutes))
+        XCTAssertFalse(data.unavailable(for: .day))
+    }
+
     @MainActor
     func testChartCacheThrottlesEachStockForTenMinutes() async throws {
         let recorder = ChartFetchRecorder()
@@ -134,8 +152,13 @@ private actor ChartFetchRecorder {
 private final class ChartCandlesEndpoint: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     private static var recorded: [URLRequest] = []
+    private static var minuteFails = false
     static var requests: [URLRequest] { lock.withLock { recorded } }
-    static func reset() { lock.withLock { recorded = [] } }
+    static var failMinute: Bool {
+        get { lock.withLock { minuteFails } }
+        set { lock.withLock { minuteFails = newValue } }
+    }
+    static func reset() { lock.withLock { recorded = []; minuteFails = false } }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -145,6 +168,14 @@ private final class ChartCandlesEndpoint: URLProtocol, @unchecked Sendable {
         Self.lock.withLock { Self.recorded.append(request) }
         let interval = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "interval" })?.value
+        if interval == "1m", Self.failMinute {
+            let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil,
+                                           headerFields: ["Content-Type": "application/json"])!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(#"{"error":"not-found"}"#.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+            return
+        }
         let count = interval == "1m" ? 200 : 20
         let start = ISO8601DateFormatter().date(from: "2026-03-25T09:00:00Z")!
         let formatter = ISO8601DateFormatter()

@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.5",
+                headline: "More reliable stock charts",
+                changes: [
+                    ReleaseNote.Change(title: "Keep available candles when another interval fails",
+                                       detail: "A failed minute or daily request no longer hides the other chart interval.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.4",
                 headline: "Accurate Grok usage labels",
                 changes: [

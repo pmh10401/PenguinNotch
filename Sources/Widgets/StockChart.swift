@@ -13,6 +13,12 @@ struct StockChartData {
     let minutes: [StockCandle]
     let tenMinutes: [StockCandle]
     let days: [StockCandle]
+    var minuteUnavailable = false
+    var dayUnavailable = false
+
+    func unavailable(for interval: StockChartInterval) -> Bool {
+        interval == .day ? dayUnavailable : minuteUnavailable
+    }
 
     func candles(for interval: StockChartInterval) -> [StockCandle] {
         switch interval {
@@ -112,7 +118,11 @@ struct StockChartSection: View {
                 if candles.isEmpty {
                     Group {
                         if store.loading.contains(stock.id) { ProgressView().controlSize(.small) }
-                        else { Text(L10n.t(store.failed.contains(stock.id) ? "Chart unavailable" : "No recent candles")) }
+                        else {
+                            let unavailable = store.failed.contains(stock.id)
+                                || store.entries[stock.id]?.data.unavailable(for: preferences.stockChartInterval) == true
+                            Text(L10n.t(unavailable ? "Chart unavailable" : "No recent candles"))
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .foregroundStyle(secondaryInk)
