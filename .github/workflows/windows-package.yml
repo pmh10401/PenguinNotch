@@ -152,11 +152,11 @@ jobs:
       - name: Build the update feed
         if: steps.signing.outputs.signed == 'true'
         run: |
-          $zip = @(Get-ChildItem target/release/bundle/nsis/*-setup.nsis.zip -ErrorAction SilentlyContinue)
-          if ($zip.Count -ne 1) { throw "expected one updater archive, found $($zip.Count)" }
-          Copy-Item $zip[0].FullName PenguinNotch-Setup.nsis.zip
-          $sigPath = "$($zip[0].FullName).sig"
-          $signature = if (Test-Path $sigPath) { (Get-Content $sigPath -Raw).Trim() } else { '' }
+          $setup = @(Get-ChildItem target/release/bundle/nsis/*-setup.exe)
+          if ($setup.Count -ne 1) { throw "expected one signed installer, found $($setup.Count)" }
+          $sigPath = "$($setup[0].FullName).sig"
+          if (-not (Test-Path $sigPath)) { throw "missing installer signature: $sigPath" }
+          $signature = (Get-Content $sigPath -Raw).Trim()
           $version = (Get-Content penguinnotch/tauri.conf.json -Raw | ConvertFrom-Json).version
           $feed = [ordered]@{
             version = $version
@@ -164,7 +164,7 @@ jobs:
             platforms = [ordered]@{
               'windows-x86_64' = [ordered]@{
                 signature = $signature
-                url = "https://github.com/pmh10401/PenguinNotch/releases/download/v$version/PenguinNotch-Setup.nsis.zip"
+                url = "https://github.com/pmh10401/PenguinNotch/releases/download/v$version/PenguinNotch-Setup.exe"
               }
             }
           }
@@ -175,9 +175,7 @@ jobs:
         if: steps.signing.outputs.signed == 'true'
         with:
           name: PenguinNotch-update-feed-${{ github.sha }}
-          path: |
-            windows/latest.json
-            windows/PenguinNotch-Setup.nsis.zip
+          path: windows/latest.json
           if-no-files-found: error
 
       # v* only: the rolling `preview` release belongs to Package, which deletes
@@ -207,4 +205,4 @@ jobs:
           if (-not $feed.platforms.'windows-x86_64'.signature) {
             throw 'the updater archive was not signed; refusing to publish a feed every updater would reject'
           }
-          gh release upload $env:TAG PenguinNotch-Setup.nsis.zip latest.json --clobber
+          gh release upload $env:TAG latest.json --clobber
