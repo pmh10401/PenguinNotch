@@ -184,11 +184,12 @@ PenguinNotch는 [Sparkle](https://sparkle-project.org)로 [이 저장소의 릴�
 
 ```sh
 brew install xcodegen   # 처음 한 번
-make run                # 프로젝트 생성, Debug 빌드, 실행
+make run                # 프로젝트 생성 후 PenguinNotch Dev 실행
 make test               # 단위 테스트
+make install            # PenguinNotch 설치 후 중간 Release 앱을 휴지통으로 이동
 ```
 
-두 명령에 별도 코드 서명 인증서는 필요하지 않습니다. 아카이브·공증·서명된 자동 업데이트 피드 제작까지 하는 `make release`에는 Developer ID 인증서와 notarytool 키체인 프로필이 필요하며 공식 릴리스를 만드는 관리자가 실행합니다. [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요. CI는 `make test-ci`로 같은 단위 테스트를 서명 없이 실행합니다.
+`make run`과 `make test`에는 별도 코드 서명 인증서가 필요하지 않습니다. 아카이브·공증·서명된 자동 업데이트 피드 제작까지 하는 `make release`에는 Developer ID 인증서와 notarytool 키체인 프로필이 필요하며 공식 릴리스를 만드는 관리자가 실행합니다. [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요. CI는 `make test-ci`로 같은 단위 테스트를 서명 없이 실행합니다.
 
 Debug 빌드는 임시 서명되어 안정적인 코드 신원을 가지지 않습니다. 그래서 macOS 키체인이 이전의 ‘항상 허용’을 같은 앱으로 인식하지 못해 실행할 때마다 토큰 접근 안내가 다시 나올 수 있습니다. 로컬 개발 중 허용을 유지하려면 설치된 앱을 안정적인 자체 서명 신원으로 서명할 수 있습니다.
 

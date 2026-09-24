@@ -470,11 +470,12 @@ provide that guarantee.
 
 ```sh
 brew install xcodegen   # once
-make run                # generate, build, launch a Debug build
+make run                # generate and launch PenguinNotch Dev
 make test               # unit tests
+make install            # install PenguinNotch, then trash the intermediate Release app
 ```
 
-No signing identity is required for either. `make release` — which archives,
+No signing identity is required for `make run` or `make test`. `make release` — which archives,
 notarizes, and produces a signed auto-update feed — needs a Developer ID
 certificate and a notarytool keychain profile, and is only ever run by
 the maintainer to cut an official release. See

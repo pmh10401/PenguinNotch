@@ -85,7 +85,7 @@ verify-deps:
 run: build
 	@APP=$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DEST)' \
 		-configuration Debug -showBuildSettings 2>/dev/null \
-		| awk -F' = ' '/ BUILT_PRODUCTS_DIR/ {print $$2; exit}')/PenguinNotch.app; \
+		| awk -F' = ' '/ BUILT_PRODUCTS_DIR/ {print $$2; exit}')/PenguinNotch\ Dev.app; \
 	pkill -x PenguinNotch 2>/dev/null; sleep 0.5; \
 	open "$$APP"
 
@@ -103,9 +103,12 @@ install: gen
 	@APP=$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DEST)' \
 		-configuration Release -showBuildSettings 2>/dev/null \
 		| awk -F' = ' '/ BUILT_PRODUCTS_DIR/ {print $$2; exit}')/PenguinNotch.app; \
+	set -e; \
 	pkill -x PenguinNotch || true; \
 	cp -R "$$APP" /Applications/; \
-	open /Applications/PenguinNotch.app
+	codesign --verify --deep --strict /Applications/PenguinNotch.app; \
+	open /Applications/PenguinNotch.app; \
+	/usr/bin/trash "$$APP"
 
 clean:
 	rm -rf build DerivedData $(PROJECT)

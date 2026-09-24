@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.10",
+                headline: "Clearer development builds",
+                changes: [
+                    ReleaseNote.Change(title: "Distinguish the Debug app from the installed app",
+                                       detail: "Debug builds show PenguinNotch Dev and a DEV icon; local installation removes its intermediate Release app.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.9",
                 headline: "Fewer Keychain prompts for stock charts",
                 changes: [
