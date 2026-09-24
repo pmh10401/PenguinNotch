@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.7",
+                headline: "Matching Korean and English guides",
+                changes: [
+                    ReleaseNote.Change(title: "Read the same feature and setup details in both languages",
+                                       detail: "Both guides use the supplied stock-chart image and explain the Toss market-data flow.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.6",
                 headline: "Korean project guide",
                 changes: [

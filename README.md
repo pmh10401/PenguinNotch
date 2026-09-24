@@ -13,7 +13,9 @@
 of each coding assistant's usage limit you have burned — and whether it is
 still working, done, or waiting on you.**
 
-![Illustration of PenguinNotch's AI, system, and stock cells](docs/design/penguinnotch-overview.svg)
+<a href="docs/design/penguinnotch-stocks.png"><img src="docs/design/penguinnotch-stocks.png" alt="PenguinNotch showing AI usage, system meters, and a Toss Securities stock chart" width="480"></a>
+
+Screenshot from PenguinNotch. Usage and prices reflect the capture time; click for full size.
 
 </div>
 
@@ -401,6 +403,25 @@ with `python3 Scripts/update-krx-stocks.py`. Names are used for search and displ
 the stored identity remains the stock code. Enter a code for ETFs, preferred shares,
 and other instruments outside the company directory.
 
+![How Toss Securities Open API data reaches PenguinNotch](docs/design/toss-openapi-flow.svg)
+
+This original diagram explains the integration; it is not official Toss Securities artwork.
+In Toss Securities WTS, open **Settings → Open API** to issue a Client ID and client secret,
+then register this Mac's public IP in **Allowed IPs**. Enter both values under
+**PenguinNotch Settings → Appearance → Stocks**, save the keys, enable **Stocks** under
+**Notch items and order**, and add a Korean company name or code (`005930`) or a US ticker
+(`AAPL`, `SOXL`). The app stores the secret in the macOS Keychain, not preferences, and
+uses market-data endpoints only; it does not place orders.
+
+The app gets an OAuth token with `POST /oauth2/token`, batches current prices with
+`GET /api/v1/prices`, then updates prices from realtime trade messages. Hover charts
+request **1-minute** and **daily** candles from `GET /api/v1/candles`; the **10-minute**
+view is aggregated locally from 1-minute candles. Choose 1–20 visible candles and the
+default interval in Stocks settings. Each stock's chart refreshes at most once per
+10 minutes, independently of the realtime quote. If one interval fails, an available
+interval can still be shown. See the official [Open API guide](https://developers.tossinvest.com/)
+and [market-data reference](https://developers.tossinvest.com/docs/market-data).
+
 **TODO** shows completed/total tasks and a completion ring. Hover to check or
 reopen a task, add one through a native input dialog (up to 200 characters), or
 delete it. **Undo delete** restores the most recently deleted item while the card
@@ -411,7 +432,7 @@ or cloud sync. Long lists scroll within the card.
 
 Under **Appearance → Notch items and order**, use each row's switch to hide or
 show AI accounts, individual local models, CPU, RAM, GPU, DISK, NET, BAT, PWR,
-calendar, weather and TODO. Hidden rows remain in Settings so they can be shown
+stocks, calendar, weather and TODO. Hidden rows remain in Settings so they can be shown
 again. Visibility survives restarts, preserves colors, order, accounts and TODO
 data, and applies to every display. Calendar/weather/TODO switches share their
 existing enable settings. Individual system meters hide while collection stays
@@ -419,7 +440,7 @@ active; **Enable system monitoring** stops or resumes all system sampling and
 temporarily disables the meter switches without clearing their choices.
 
 Drag rows or use their up/down arrows to mix
-AI accounts, individual local models, system meters, calendar, weather and TODO in any
+AI accounts, individual local models, system meters, stocks, calendar, weather and TODO in any
 order. The order is saved and applies to all displays and the menu. Temporarily
 hidden widgets keep their saved slots when visible rows move. Existing
 account-only reordering preserves the positions of the other widgets. Calendar,
