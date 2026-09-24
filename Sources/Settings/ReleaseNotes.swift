@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.9",
+                headline: "Fewer Keychain prompts for stock charts",
+                changes: [
+                    ReleaseNote.Change(title: "Reuse Toss API credentials and access tokens while charts refresh",
+                                       detail: "Saving or removing API keys clears the cached values and refreshes open charts immediately.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.8",
                 headline: "Stock charts refresh at their selected interval",
                 changes: [

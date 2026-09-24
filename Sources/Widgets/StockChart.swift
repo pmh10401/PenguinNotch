@@ -52,18 +52,38 @@ final class StockChartStore: ObservableObject {
     @Published private(set) var failed: Set<Key> = []
     private var attemptedAt: [Key: Date] = [:]
     private var tasks: [Key: Task<Void, Never>] = [:]
-    private let fetch: Fetch
+    private let fetchOverride: Fetch?
+    private var token: TossInvestAPI.AccessToken?
+    private var tokenTask: Task<TossInvestAPI.AccessToken, Error>?
+    private var settingsRevision = 0
 
-    init(fetch: @escaping Fetch = { stock, interval in
+    init(fetch: Fetch? = nil) {
+        fetchOverride = fetch
+    }
+
+    private func fetchLive(_ stock: WatchedStock, _ interval: StockChartInterval) async throws -> [StockCandle] {
+        let token = try await accessToken()
+        try Task.checkCancellation()
+        return try await TossInvestAPI.chartCandles(token: token.value, stock: stock, interval: interval)
+    }
+
+    private func accessToken() async throws -> TossInvestAPI.AccessToken {
+        if let token, token.expiresAt > Date() { return token }
+        if let tokenTask { return try await tokenTask.value }
         let credentials = TossCredentials.load()
         guard !credentials.clientID.isEmpty, !credentials.clientSecret.isEmpty else {
             throw TossInvestAPI.Failure.invalidResponse
         }
-        let token = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
-                                                         clientSecret: credentials.clientSecret)
-        return try await TossInvestAPI.chartCandles(token: token.value, stock: stock, interval: interval)
-    }) {
-        self.fetch = fetch
+        let revision = settingsRevision
+        let task = Task {
+            try await TossInvestAPI.accessToken(clientID: credentials.clientID,
+                                                clientSecret: credentials.clientSecret)
+        }
+        tokenTask = task
+        defer { if settingsRevision == revision { tokenTask = nil } }
+        let token = try await task.value
+        if settingsRevision == revision { self.token = token }
+        return token
     }
 
     func secondsUntilRefresh(stock: WatchedStock, interval: StockChartInterval, now: Date = Date()) -> TimeInterval {
@@ -75,7 +95,20 @@ final class StockChartStore: ObservableObject {
         return max(0, refreshSeconds - elapsed)
     }
 
-    func load(stock: WatchedStock, interval: StockChartInterval, now: Date = Date()) async {
+    func load(stock: WatchedStock, interval: StockChartInterval, now: Date = Date(),
+              settingsRevision revision: Int = 0) async {
+        if revision != settingsRevision {
+            tasks.values.forEach { $0.cancel() }
+            tasks.removeAll()
+            entries.removeAll()
+            loading.removeAll()
+            failed.removeAll()
+            attemptedAt.removeAll()
+            token = nil
+            tokenTask?.cancel()
+            tokenTask = nil
+            settingsRevision = revision
+        }
         let key = Key(stock: stock, interval: interval)
         if let task = tasks[key] { await task.value; return }
         if secondsUntilRefresh(stock: stock, interval: interval, now: now) > 0 { return }
@@ -85,12 +118,22 @@ final class StockChartStore: ObservableObject {
         failed.remove(key)
         let task = Task { [weak self] in
             guard let self else { return }
-            defer { loading.remove(key); tasks[key] = nil }
+            defer {
+                if settingsRevision == revision {
+                    loading.remove(key)
+                    tasks[key] = nil
+                }
+            }
             do {
-                let candles = try await fetch(stock, key.source)
-                entries[key] = Entry(candles: candles, fetchedAt: now)
+                let candles: [StockCandle]
+                if let fetchOverride {
+                    candles = try await fetchOverride(stock, key.source)
+                } else {
+                    candles = try await fetchLive(stock, key.source)
+                }
+                if settingsRevision == revision { entries[key] = Entry(candles: candles, fetchedAt: now) }
             } catch {
-                failed.insert(key)
+                if settingsRevision == revision { failed.insert(key) }
             }
         }
         tasks[key] = task
@@ -189,10 +232,11 @@ struct StockChartSection: View {
         }
         .padding(.top, NotchLayout.blockSpacing)
         .frame(height: NotchLayout.stockChartSectionHeight, alignment: .top)
-        .task(id: "\(stock.id):\(preferences.stockChartInterval.rawValue)") {
+        .task(id: "\(stock.id):\(preferences.stockChartInterval.rawValue):\(preferences.stockSettingsRevision)") {
             while !Task.isCancelled {
                 let interval = preferences.stockChartInterval
-                await store.load(stock: stock, interval: interval)
+                await store.load(stock: stock, interval: interval,
+                                 settingsRevision: preferences.stockSettingsRevision)
                 let wait = store.secondsUntilRefresh(stock: stock, interval: interval)
                 do { try await Task.sleep(for: .seconds(max(wait, 1))) }
                 catch { return }

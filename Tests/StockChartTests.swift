@@ -130,6 +130,22 @@ final class StockChartTests: XCTestCase {
     }
 
     @MainActor
+    func testChangingAPIKeysInvalidatesChartCacheImmediately() async {
+        let recorder = ChartFetchRecorder()
+        let store = StockChartStore { stock, interval in await recorder.fetch(stock, interval) }
+        let stock = WatchedStock(symbol: "SOXL", market: .us)
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        await store.load(stock: stock, interval: .day, now: start)
+        await store.load(stock: stock, interval: .day, now: start.addingTimeInterval(1), settingsRevision: 1)
+
+        let calls = await recorder.calls()
+        XCTAssertEqual(calls.count, 2)
+        XCTAssertEqual(store.secondsUntilRefresh(stock: stock, interval: .day,
+                                                 now: start.addingTimeInterval(1)), 86_400)
+    }
+
+    @MainActor
     func testFailedDailyChartRequestRetriesAfterTenMinutes() async {
         let recorder = ChartFetchRecorder()
         let store = StockChartStore { stock, interval in try await recorder.fail(stock, interval) }

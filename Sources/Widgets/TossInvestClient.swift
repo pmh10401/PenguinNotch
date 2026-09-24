@@ -8,10 +8,11 @@ enum TossCredentials {
     static let service = "com.pmh10401.penguinnotch.tossinvest"
     private static let previousService = "com.vinz.codenotch.tossinvest"
     private static let migratedLegacyItems = migrateLegacyItems(from: previousService, to: service)
+    private static let cache = CredentialCache<(clientID: String, clientSecret: String)> { _ in false }
 
     static func load() -> (clientID: String, clientSecret: String) {
         _ = migratedLegacyItems
-        return (read("client-id"), read("client-secret"))
+        return (try? cache.value { (read("client-id"), read("client-secret")) }) ?? ("", "")
     }
 
     private static func read(_ account: String) -> String {
@@ -27,6 +28,7 @@ enum TossCredentials {
     /// client id does not wipe a key the field is no longer showing.
     static func save(clientID: String, clientSecret: String) {
         _ = migratedLegacyItems
+        defer { cache.forget() }
         let id = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
         if id.isEmpty {
             KeychainItem.delete(service: service, account: "client-id")
@@ -40,6 +42,7 @@ enum TossCredentials {
     }
 
     static func clear() {
+        defer { cache.forget() }
         KeychainItem.delete(service: service, account: "client-id")
         KeychainItem.delete(service: service, account: "client-secret")
         KeychainItem.delete(service: previousService, account: "client-id")
