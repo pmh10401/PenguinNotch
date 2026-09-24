@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.8",
+                headline: "Stock charts refresh at their selected interval",
+                changes: [
+                    ReleaseNote.Change(title: "Refresh minute charts every minute, ten-minute charts every ten minutes, and daily charts once a day",
+                                       detail: "Charts fetch only the selected source while open; minute views share data, and failed daily requests retry after ten minutes.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.7",
                 headline: "Matching Korean and English guides",
                 changes: [

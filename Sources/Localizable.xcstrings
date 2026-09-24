@@ -47768,9 +47768,9 @@
       "extractionState": "manual",
       "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "기본 차트 주기" } } }
     },
-    "1–20 candles · Refreshes per stock every 10 minutes": {
+    "1–20 candles · 1m every minute, 10m every 10 minutes, 1d daily": {
       "extractionState": "manual",
-      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "봉 1~20개 · 종목별 10분마다 갱신" } } }
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "봉 1~20개 · 1분봉 1분, 10분봉 10분, 일봉 24시간 간격" } } }
     },
     "Stock chart": {
       "extractionState": "manual",
@@ -47796,9 +47796,13 @@
       "extractionState": "manual",
       "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "10분 간격" } } }
     },
-    "Each stock refreshes every 10 minutes": {
+    "Every minute": {
       "extractionState": "manual",
-      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "종목마다 10분 간격으로 갱신됩니다" } } }
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "1분 간격" } } }
+    },
+    "Every day": {
+      "extractionState": "manual",
+      "localizations": { "ko": { "stringUnit": { "state": "translated", "value": "24시간 간격" } } }
     },
     "Realtime trades from Toss Securities. Turn Stocks on under Notch items and order. Register this Mac's public IP under WTS → Settings → Open API → Allowed IPs. The client secret stays in the Keychain.": {
       "extractionState": "manual",

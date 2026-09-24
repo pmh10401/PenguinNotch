@@ -37,19 +37,23 @@ final class StockChartTests: XCTestCase {
         XCTAssertEqual(candles[1].open, 99)
     }
 
-    func testChartFetchUsesOnlyOneMinuteAndOneDailyRequest() async throws {
+    func testChartFetchRequestsOnlySelectedSource() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [ChartCandlesEndpoint.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         ChartCandlesEndpoint.reset()
 
-        let data = try await TossInvestAPI.chartCandles(token: "test-token",
-            stock: WatchedStock(symbol: "005930", market: .kr), session: session)
+        let stock = WatchedStock(symbol: "005930", market: .kr)
+        let minutes = try await TossInvestAPI.chartCandles(token: "test-token", stock: stock,
+                                                           interval: .minute, session: session)
+        XCTAssertEqual(minutes.count, 200)
+        XCTAssertEqual(ChartCandlesEndpoint.requests.count, 1)
+        XCTAssertEqual(StockQuoteCodec.tenMinuteCandles(from: minutes).count, 20)
 
-        XCTAssertEqual(data.minutes.count, 200)
-        XCTAssertEqual(data.tenMinutes.count, 20)
-        XCTAssertEqual(data.days.count, 20)
+        let days = try await TossInvestAPI.chartCandles(token: "test-token", stock: stock,
+                                                        interval: .day, session: session)
+        XCTAssertEqual(days.count, 20)
         let queries = ChartCandlesEndpoint.requests.compactMap { URLComponents(url: $0.url!, resolvingAgainstBaseURL: false) }
         XCTAssertEqual(queries.count, 2)
         XCTAssertEqual(Set(queries.compactMap { components in
@@ -61,7 +65,7 @@ final class StockChartTests: XCTestCase {
         XCTAssertTrue(queries.allSatisfy { $0.url?.path == "/api/v1/candles" })
     }
 
-    func testDailyCandlesSurviveMinuteRequestFailure() async throws {
+    func testDailyCandlesCanLoadAfterMinuteRequestFailure() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [ChartCandlesEndpoint.self]
         let session = URLSession(configuration: configuration)
@@ -69,48 +73,77 @@ final class StockChartTests: XCTestCase {
         ChartCandlesEndpoint.reset()
         ChartCandlesEndpoint.failMinute = true
 
-        let data = try await TossInvestAPI.chartCandles(token: "test-token",
-            stock: WatchedStock(symbol: "SOXL", market: .us), session: session)
-
-        XCTAssertEqual(data.days.count, 20)
-        XCTAssertTrue(data.minutes.isEmpty)
-        XCTAssertTrue(data.unavailable(for: .minute))
-        XCTAssertTrue(data.unavailable(for: .tenMinutes))
-        XCTAssertFalse(data.unavailable(for: .day))
+        let stock = WatchedStock(symbol: "SOXL", market: .us)
+        do {
+            _ = try await TossInvestAPI.chartCandles(token: "test-token", stock: stock,
+                                                     interval: .minute, session: session)
+            XCTFail("Minute request should fail")
+        } catch {}
+        let days = try await TossInvestAPI.chartCandles(token: "test-token", stock: stock,
+                                                        interval: .day, session: session)
+        XCTAssertEqual(days.count, 20)
     }
 
     @MainActor
-    func testChartCacheThrottlesEachStockForTenMinutes() async throws {
+    func testChartCacheUsesSelectedIntervalPerStockAndSharedMinuteSource() async throws {
         let recorder = ChartFetchRecorder()
-        let store = StockChartStore { stock in await recorder.fetch(stock) }
+        let store = StockChartStore { stock, interval in await recorder.fetch(stock, interval) }
         let samsung = WatchedStock(symbol: "005930", market: .kr)
         let apple = WatchedStock(symbol: "AAPL", market: .us)
         let start = Date(timeIntervalSince1970: 1_800_000_000)
 
-        await store.load(stock: samsung, now: start)
-        await store.load(stock: samsung, now: start.addingTimeInterval(599))
-        await store.load(stock: apple, now: start.addingTimeInterval(599))
-        await store.load(stock: samsung, now: start.addingTimeInterval(600))
+        await store.load(stock: samsung, interval: .minute, now: start)
+        await store.load(stock: samsung, interval: .minute, now: start.addingTimeInterval(59))
+        await store.load(stock: apple, interval: .minute, now: start.addingTimeInterval(59))
+        await store.load(stock: samsung, interval: .tenMinutes, now: start.addingTimeInterval(59))
+        XCTAssertEqual(store.secondsUntilRefresh(stock: samsung, interval: .minute,
+                                                 now: start.addingTimeInterval(30)), 30)
+        XCTAssertEqual(store.secondsUntilRefresh(stock: samsung, interval: .tenMinutes,
+                                                 now: start.addingTimeInterval(30)), 570)
+        await store.load(stock: samsung, interval: .minute, now: start.addingTimeInterval(60))
+        await store.load(stock: samsung, interval: .tenMinutes, now: start.addingTimeInterval(660))
 
         let calls = await recorder.calls()
-        XCTAssertEqual(calls, [samsung.id, apple.id, samsung.id])
+        XCTAssertEqual(calls, ["\(samsung.id):1m", "\(apple.id):1m", "\(samsung.id):1m", "\(samsung.id):1m"])
+
+        await store.load(stock: samsung, interval: .day, now: start)
+        await store.load(stock: samsung, interval: .day, now: start.addingTimeInterval(86_399))
+        await store.load(stock: samsung, interval: .day, now: start.addingTimeInterval(86_400))
+        let dailyCalls = (await recorder.calls()).filter { $0 == "\(samsung.id):1d" }
+        XCTAssertEqual(dailyCalls.count, 2)
     }
 
     @MainActor
-    func testFailedChartRequestAlsoWaitsTenMinutes() async {
+    func testTenMinuteChartDoesNotFetchEveryMinute() async {
         let recorder = ChartFetchRecorder()
-        let store = StockChartStore { stock in try await recorder.fail(stock) }
+        let store = StockChartStore { stock, interval in await recorder.fetch(stock, interval) }
+        let stock = WatchedStock(symbol: "SOXL", market: .us)
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        await store.load(stock: stock, interval: .tenMinutes, now: start)
+        await store.load(stock: stock, interval: .tenMinutes, now: start.addingTimeInterval(599))
+        let beforeRefresh = await recorder.calls()
+        XCTAssertEqual(beforeRefresh.count, 1)
+        await store.load(stock: stock, interval: .tenMinutes, now: start.addingTimeInterval(600))
+        let afterRefresh = await recorder.calls()
+        XCTAssertEqual(afterRefresh.count, 2)
+    }
+
+    @MainActor
+    func testFailedDailyChartRequestRetriesAfterTenMinutes() async {
+        let recorder = ChartFetchRecorder()
+        let store = StockChartStore { stock, interval in try await recorder.fail(stock, interval) }
         let stock = WatchedStock(symbol: "AAPL", market: .us)
         let start = Date(timeIntervalSince1970: 1_800_000_000)
 
-        await store.load(stock: stock, now: start)
-        await store.load(stock: stock, now: start.addingTimeInterval(599))
+        await store.load(stock: stock, interval: .day, now: start)
+        await store.load(stock: stock, interval: .day, now: start.addingTimeInterval(599))
         let beforeRetry = await recorder.calls()
-        XCTAssertEqual(beforeRetry, [stock.id])
-        XCTAssertTrue(store.failed.contains(stock.id))
-        await store.load(stock: stock, now: start.addingTimeInterval(600))
+        XCTAssertEqual(beforeRetry, ["\(stock.id):1d"])
+        XCTAssertTrue(store.failed.contains(.init(stock: stock, interval: .day)))
+        await store.load(stock: stock, interval: .day, now: start.addingTimeInterval(600))
         let afterRetry = await recorder.calls()
-        XCTAssertEqual(afterRetry, [stock.id, stock.id])
+        XCTAssertEqual(afterRetry, ["\(stock.id):1d", "\(stock.id):1d"])
     }
 
     @MainActor
@@ -136,13 +169,13 @@ final class StockChartTests: XCTestCase {
 private actor ChartFetchRecorder {
     private var requested: [String] = []
 
-    func fetch(_ stock: WatchedStock) -> StockChartData {
-        requested.append(stock.id)
-        return StockChartData(minutes: [], tenMinutes: [], days: [])
+    func fetch(_ stock: WatchedStock, _ interval: StockChartInterval) -> [StockCandle] {
+        requested.append("\(stock.id):\(interval.rawValue)")
+        return []
     }
 
-    func fail(_ stock: WatchedStock) throws -> StockChartData {
-        requested.append(stock.id)
+    func fail(_ stock: WatchedStock, _ interval: StockChartInterval) throws -> [StockCandle] {
+        requested.append("\(stock.id):\(interval.rawValue)")
         throw TossInvestAPI.Failure.http(429)
     }
 

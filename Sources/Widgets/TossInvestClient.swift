@@ -114,21 +114,14 @@ enum TossInvestAPI {
                                              timeZone: StockQuoteCodec.timeZone(for: stock.market))
     }
 
-    static func chartCandles(token: String, stock: WatchedStock,
-                             session: URLSession = .shared) async throws -> StockChartData {
-        async let minuteData = try? candleData(token: token, symbol: stock.symbol, interval: "1m", count: 200,
-                                               session: session)
-        async let dailyData = try? candleData(token: token, symbol: stock.symbol, interval: "1d", count: 20,
-                                              session: session)
-        let minutes = await minuteData.flatMap { StockQuoteCodec.candles(from: $0) }
-        let days = await dailyData.flatMap { StockQuoteCodec.candles(from: $0) }
-        guard minutes != nil || days != nil else {
-            throw Failure.invalidResponse
-        }
-        return StockChartData(minutes: (minutes ?? []).sorted { $0.end < $1.end },
-                              tenMinutes: StockQuoteCodec.tenMinuteCandles(from: minutes ?? []),
-                              days: (days ?? []).sorted { $0.end < $1.end },
-                              minuteUnavailable: minutes == nil, dayUnavailable: days == nil)
+    static func chartCandles(token: String, stock: WatchedStock, interval: StockChartInterval,
+                             session: URLSession = .shared) async throws -> [StockCandle] {
+        let daily = interval == .day
+        let data = try await candleData(token: token, symbol: stock.symbol,
+                                        interval: daily ? "1d" : "1m", count: daily ? 20 : 200,
+                                        session: session)
+        guard let candles = StockQuoteCodec.candles(from: data) else { throw Failure.invalidResponse }
+        return candles.sorted { $0.end < $1.end }
     }
 
     private static func candleData(token: String, symbol: String, interval: String, count: Int,

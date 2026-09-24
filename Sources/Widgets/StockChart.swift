@@ -7,74 +7,93 @@ enum StockChartInterval: String, CaseIterable, Identifiable {
     case tenMinutes = "10m"
     case day = "1d"
     var id: String { rawValue }
-}
 
-struct StockChartData {
-    let minutes: [StockCandle]
-    let tenMinutes: [StockCandle]
-    let days: [StockCandle]
-    var minuteUnavailable = false
-    var dayUnavailable = false
-
-    func unavailable(for interval: StockChartInterval) -> Bool {
-        interval == .day ? dayUnavailable : minuteUnavailable
+    var source: StockChartInterval {
+        self == .tenMinutes ? .minute : self
     }
 
-    func candles(for interval: StockChartInterval) -> [StockCandle] {
-        switch interval {
-        case .minute: return minutes
-        case .tenMinutes: return tenMinutes
-        case .day: return days
+    var refreshSeconds: TimeInterval {
+        switch self {
+        case .minute: return 60
+        case .tenMinutes: return 600
+        case .day: return 86_400
+        }
+    }
+
+    var refreshLabel: String {
+        switch self {
+        case .minute: return L10n.t("Every minute")
+        case .tenMinutes: return L10n.t("Every 10 minutes")
+        case .day: return L10n.t("Every day")
         }
     }
 }
 
 @MainActor
 final class StockChartStore: ObservableObject {
+    struct Key: Hashable {
+        let stockID: String
+        let source: StockChartInterval
+
+        init(stock: WatchedStock, interval: StockChartInterval) {
+            stockID = stock.id
+            source = interval.source
+        }
+    }
+
     struct Entry {
-        let data: StockChartData
+        let candles: [StockCandle]
         let fetchedAt: Date
     }
 
-    typealias Fetch = (WatchedStock) async throws -> StockChartData
-    @Published private(set) var entries: [String: Entry] = [:]
-    @Published private(set) var loading: Set<String> = []
-    @Published private(set) var failed: Set<String> = []
-    private var attemptedAt: [String: Date] = [:]
-    private var tasks: [String: Task<Void, Never>] = [:]
+    typealias Fetch = (WatchedStock, StockChartInterval) async throws -> [StockCandle]
+    @Published private(set) var entries: [Key: Entry] = [:]
+    @Published private(set) var loading: Set<Key> = []
+    @Published private(set) var failed: Set<Key> = []
+    private var attemptedAt: [Key: Date] = [:]
+    private var tasks: [Key: Task<Void, Never>] = [:]
     private let fetch: Fetch
 
-    init(fetch: @escaping Fetch = { stock in
+    init(fetch: @escaping Fetch = { stock, interval in
         let credentials = TossCredentials.load()
         guard !credentials.clientID.isEmpty, !credentials.clientSecret.isEmpty else {
             throw TossInvestAPI.Failure.invalidResponse
         }
         let token = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
                                                          clientSecret: credentials.clientSecret)
-        return try await TossInvestAPI.chartCandles(token: token.value, stock: stock)
+        return try await TossInvestAPI.chartCandles(token: token.value, stock: stock, interval: interval)
     }) {
         self.fetch = fetch
     }
 
-    func load(stock: WatchedStock, now: Date = Date()) async {
-        let id = stock.id
-        if let task = tasks[id] { await task.value; return }
-        if let attempted = attemptedAt[id], (0..<600).contains(now.timeIntervalSince(attempted)) { return }
+    func secondsUntilRefresh(stock: WatchedStock, interval: StockChartInterval, now: Date = Date()) -> TimeInterval {
+        let key = Key(stock: stock, interval: interval)
+        guard let attempted = attemptedAt[key] else { return 0 }
+        let elapsed = now.timeIntervalSince(attempted)
+        guard elapsed >= 0 else { return 0 }
+        let refreshSeconds = failed.contains(key) ? min(interval.refreshSeconds, 600) : interval.refreshSeconds
+        return max(0, refreshSeconds - elapsed)
+    }
 
-        attemptedAt[id] = now
-        loading.insert(id)
-        failed.remove(id)
+    func load(stock: WatchedStock, interval: StockChartInterval, now: Date = Date()) async {
+        let key = Key(stock: stock, interval: interval)
+        if let task = tasks[key] { await task.value; return }
+        if secondsUntilRefresh(stock: stock, interval: interval, now: now) > 0 { return }
+
+        attemptedAt[key] = now
+        loading.insert(key)
+        failed.remove(key)
         let task = Task { [weak self] in
             guard let self else { return }
-            defer { loading.remove(id); tasks[id] = nil }
+            defer { loading.remove(key); tasks[key] = nil }
             do {
-                let data = try await fetch(stock)
-                entries[id] = Entry(data: data, fetchedAt: now)
+                let candles = try await fetch(stock, key.source)
+                entries[key] = Entry(candles: candles, fetchedAt: now)
             } catch {
-                failed.insert(id)
+                failed.insert(key)
             }
         }
-        tasks[id] = task
+        tasks[key] = task
         await task.value
     }
 }
@@ -85,9 +104,15 @@ struct StockChartSection: View {
     let stock: WatchedStock
     @Environment(\.tooltipSecondaryInk) private var secondaryInk
 
+    private var key: StockChartStore.Key {
+        StockChartStore.Key(stock: stock, interval: preferences.stockChartInterval)
+    }
+
     private var candles: [StockCandle] {
-        Array((store.entries[stock.id]?.data.candles(for: preferences.stockChartInterval) ?? [])
-            .suffix(preferences.stockChartCount))
+        let source = store.entries[key]?.candles ?? []
+        let displayed = preferences.stockChartInterval == .tenMinutes
+            ? StockQuoteCodec.tenMinuteCandles(from: source) : source
+        return Array(displayed.suffix(preferences.stockChartCount))
     }
 
     static func priceDomain(for candles: [StockCandle]) -> ClosedRange<Double> {
@@ -117,10 +142,9 @@ struct StockChartSection: View {
             Group {
                 if candles.isEmpty {
                     Group {
-                        if store.loading.contains(stock.id) { ProgressView().controlSize(.small) }
+                        if store.loading.contains(key) { ProgressView().controlSize(.small) }
                         else {
-                            let unavailable = store.failed.contains(stock.id)
-                                || store.entries[stock.id]?.data.unavailable(for: preferences.stockChartInterval) == true
+                            let unavailable = store.failed.contains(key)
                             Text(L10n.t(unavailable ? "Chart unavailable" : "No recent candles"))
                         }
                     }
@@ -158,17 +182,19 @@ struct StockChartSection: View {
                 }
             }
             .frame(height: NotchLayout.stockChartPlotHeight)
-            Text(store.entries[stock.id].map {
-                "\(L10n.t("Updated")) \($0.fetchedAt.formatted(date: .omitted, time: .shortened)) · \(L10n.t("Every 10 minutes"))"
-            } ?? L10n.t("Each stock refreshes every 10 minutes"))
+            Text(store.entries[key].map {
+                "\(L10n.t("Updated")) \($0.fetchedAt.formatted(date: .omitted, time: .shortened)) · \(preferences.stockChartInterval.refreshLabel)"
+            } ?? preferences.stockChartInterval.refreshLabel)
                 .font(.system(size: 10)).foregroundStyle(secondaryInk).lineLimit(1)
         }
         .padding(.top, NotchLayout.blockSpacing)
         .frame(height: NotchLayout.stockChartSectionHeight, alignment: .top)
-        .task(id: stock.id) {
+        .task(id: "\(stock.id):\(preferences.stockChartInterval.rawValue)") {
             while !Task.isCancelled {
-                await store.load(stock: stock)
-                do { try await Task.sleep(for: .seconds(600)) }
+                let interval = preferences.stockChartInterval
+                await store.load(stock: stock, interval: interval)
+                let wait = store.secondsUntilRefresh(stock: stock, interval: interval)
+                do { try await Task.sleep(for: .seconds(max(wait, 1))) }
                 catch { return }
             }
         }

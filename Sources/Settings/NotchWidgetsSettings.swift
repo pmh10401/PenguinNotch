@@ -110,7 +110,7 @@ struct StockSettings: View {
             }
         }
         .pickerStyle(.segmented)
-        Text(L10n.t("1–20 candles · Refreshes per stock every 10 minutes"))
+        Text(L10n.t("1–20 candles · 1m every minute, 10m every 10 minutes, 1d daily"))
             .font(.caption).foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: 10) {
             Label(L10n.t("Add symbol"), systemImage: "plus.circle.fill")

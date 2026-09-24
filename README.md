@@ -417,9 +417,11 @@ The app gets an OAuth token with `POST /oauth2/token`, batches current prices wi
 `GET /api/v1/prices`, then updates prices from realtime trade messages. Hover charts
 request **1-minute** and **daily** candles from `GET /api/v1/candles`; the **10-minute**
 view is aggregated locally from 1-minute candles. Choose 1–20 visible candles and the
-default interval in Stocks settings. Each stock's chart refreshes at most once per
-10 minutes, independently of the realtime quote. If one interval fails, an available
-interval can still be shown. See the official [Open API guide](https://developers.tossinvest.com/)
+default interval in Stocks settings. While the chart is open, the selected stock's
+1-minute view refreshes every minute, its 10-minute view every 10 minutes, and its
+daily view every 24 hours. Failed daily requests retry after 10 minutes. Switching
+intervals loads only the needed source; 1-minute and 10-minute views share the same
+minute candles. Realtime quotes refresh independently. See the official [Open API guide](https://developers.tossinvest.com/)
 and [market-data reference](https://developers.tossinvest.com/docs/market-data).
 
 **TODO** shows completed/total tasks and a completion ring. Hover to check or
