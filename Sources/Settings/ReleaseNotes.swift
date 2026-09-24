@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.6",
+                headline: "Korean project guide",
+                changes: [
+                    ReleaseNote.Change(title: "Read the Korean setup and stock API guide",
+                                       detail: "New diagrams explain the notch and Toss Securities market-data setup.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.5",
                 headline: "More reliable stock charts",
                 changes: [

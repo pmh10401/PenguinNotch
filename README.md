@@ -2,8 +2,10 @@
 
 ![PenguinNotch icon](docs/design/PenguinNotch-icon.png)
 
+[한국어](README.ko.md) · English
+
 [![CI](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml/badge.svg)](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml)
-![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-black)
+![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-black)
 ![Swift](https://img.shields.io/badge/swift-5-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -11,7 +13,7 @@
 of each coding assistant's usage limit you have burned — and whether it is
 still working, done, or waiting on you.**
 
-![Collapsed notch with hover tooltip](docs/design/frame-124-hover-tooltip.png)
+![Illustration of PenguinNotch's AI, system, and stock cells](docs/design/penguinnotch-overview.svg)
 
 </div>
 
@@ -46,11 +48,12 @@ instead, see [Building](#building).
 
 ## Windows
 
-[![Download for Windows](docs/design/download-windows.svg)](../../releases/latest/download/PenguinNotch-Setup.exe)
+[![Download for Windows](docs/design/download-windows.svg)](../../actions/workflows/windows-package.yml)
 
 A Windows port — Rust/Tauri 2, same design and providers — lives in [`windows/`](windows/README.md).
-The button is the installer itself, named `PenguinNotch-Setup.exe` in every release for the same
-reason the dmg keeps one name. It installs for the current user without administrator rights,
+Until a stable release is published, the button opens the Windows Package runs;
+download the installer artifact from the run for the commit you want. Stable releases
+use `PenguinNotch-Setup.exe`. It installs for the current user without administrator rights,
 and fetches WebView2 if Windows does not already have it.
 
 The installer is not code-signed, so the first time it runs SmartScreen says *Windows protected
