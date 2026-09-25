@@ -388,14 +388,23 @@ To include the opt-in live city-search/forecast test, run
 
 **Stocks** shows the last trade for symbols you add under Appearance. Korean
 codes such as `005930` and US tickers such as `AAPL` can share the list, up to
-30. The current price comes from `GET /api/v1/prices`, then each later trade
-arrives on `wss://openapi-ws.tossinvest.com/ws/v1`. The client id and secret
+30. With Toss Securities selected, the current price comes from `GET /api/v1/prices`,
+then later trades arrive on `wss://openapi-ws.tossinvest.com/ws/v1`. The client id and secret
 are issued in Toss Securities WTS → Settings → Open API and are stored in the
 Keychain. The same screen's allowed-IP list has to include this Mac. Each symbol is its own cell. Settings → Notch → Meter style chooses circles
 or horizontal bars for every cell, including accounts and system meters. A stock still
 measures the move from the previous close, and 30 percent fills the circle or
 the bar. A rise is green and a fall is red. A quiet market keeps the last price. The secret is never
 written to preferences.
+
+For a free US quote source, choose **Finnhub** under **Settings → Appearance → Stocks → US stock quotes**,
+[get your own API key](https://finnhub.io/register), and save it in the macOS Keychain.
+US quotes then use Finnhub `GET /api/v1/quote` with the key in a request header and refresh
+about once a minute per ticker. The app reads the quote and previous close, but does not
+request Finnhub candles. Korean stocks still use Toss Securities; hover candlestick charts
+for either market require Toss Securities API keys. Without those keys, the chart explains
+what is missing. The default US source remains Toss for existing users. Finnhub plan limits
+and [personal-use terms](https://finnhub.io/terms-of-service) apply; a missing or limited quote never appears as a zero price.
 
 Search by company name to add a Korean stock. Refresh the bundled
 [KRX KIND listed-company directory](https://kind.krx.co.kr/corpgeneral/corpList.do?method=download)

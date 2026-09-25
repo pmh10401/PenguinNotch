@@ -158,6 +158,12 @@ struct StockChartSection: View {
         return Array(displayed.suffix(preferences.stockChartCount))
     }
 
+    private var needsTossKeys: Bool {
+        guard stock.market == .us, preferences.usStockSource == .finnhub else { return false }
+        let credentials = TossCredentials.load()
+        return credentials.clientID.isEmpty || credentials.clientSecret.isEmpty
+    }
+
     static func priceDomain(for candles: [StockCandle]) -> ClosedRange<Double> {
         let low = candles.map { NSDecimalNumber(decimal: $0.low).doubleValue }.min() ?? 0
         let high = candles.map { NSDecimalNumber(decimal: $0.high).doubleValue }.max() ?? 0
@@ -183,7 +189,11 @@ struct StockChartSection: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             Group {
-                if candles.isEmpty {
+                if needsTossKeys {
+                    Text(L10n.t("Candlestick charts require Toss Securities API keys."))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .foregroundStyle(secondaryInk)
+                } else if candles.isEmpty {
                     Group {
                         if store.loading.contains(key) { ProgressView().controlSize(.small) }
                         else {
@@ -233,6 +243,7 @@ struct StockChartSection: View {
         .padding(.top, NotchLayout.blockSpacing)
         .frame(height: NotchLayout.stockChartSectionHeight, alignment: .top)
         .task(id: "\(stock.id):\(preferences.stockChartInterval.rawValue):\(preferences.stockSettingsRevision)") {
+            if needsTossKeys { return }
             while !Task.isCancelled {
                 let interval = preferences.stockChartInterval
                 await store.load(stock: stock, interval: interval,

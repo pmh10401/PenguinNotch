@@ -61,6 +61,32 @@ final class StockQuoteTests: XCTestCase {
             .queryItems?.first(where: { $0.name == "symbols" })?.value, symbols.joined(separator: ","))
     }
 
+    func testFinnhubQuoteUsesHeaderAndRejectsInvalidPrices() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FinnhubQuoteEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        FinnhubQuoteEndpoint.payload = #"{"c":243.26,"pc":240.5,"t":1770000000}"#
+        let (tick, close) = try await FinnhubAPI.quote(symbol: "AAPL", key: "test-key", session: session)
+        XCTAssertEqual(tick.price, Decimal(string: "243.26"))
+        XCTAssertEqual(close, Decimal(string: "240.5"))
+        XCTAssertEqual(tick.currency, "USD")
+        XCTAssertEqual(FinnhubQuoteEndpoint.lastRequest?.value(forHTTPHeaderField: "X-Finnhub-Token"), "test-key")
+        XCTAssertEqual(FinnhubQuoteEndpoint.lastRequest?.url?.query, "symbol=AAPL")
+        XCTAssertFalse(FinnhubQuoteEndpoint.lastRequest!.url!.absoluteString.contains("test-key"))
+
+        FinnhubQuoteEndpoint.payload = #"{"c":10,"pc":0,"t":1770000000}"#
+        let (newTick, missingClose) = try await FinnhubAPI.quote(symbol: "AAPL", key: "test-key", session: session)
+        XCTAssertEqual(newTick.price, 10)
+        XCTAssertNil(missingClose)
+
+        FinnhubQuoteEndpoint.payload = #"{"c":0,"pc":240.5,"t":0}"#
+        do {
+            _ = try await FinnhubAPI.quote(symbol: "AAPL", key: "test-key", session: session)
+            XCTFail("Zero price must not appear as a quote")
+        } catch FinnhubAPI.Failure.invalidResponse {}
+    }
+
     func testSubscriptionDeclaresEachMarketOnce() throws {
         let json = StockQuoteCodec.subscriptionJSON([
             WatchedStock(symbol: "005930", market: .kr),
@@ -205,6 +231,24 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+private final class FinnhubQuoteEndpoint: URLProtocol, @unchecked Sendable {
+    static var payload = ""
+    static var lastRequest: URLRequest?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+
+    override func startLoading() {
+        Self.lastRequest = request
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                       headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(Self.payload.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 }

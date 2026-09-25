@@ -69,10 +69,40 @@ struct StockSettings: View {
     @ObservedObject var preferences: Preferences
     @State private var clientID = ""
     @State private var clientSecret = ""
+    @State private var finnhubKey = ""
     @State private var symbol = ""
     @State private var message: String?
 
     var body: some View {
+        Picker(L10n.t("US stock quotes"), selection: $preferences.usStockSource) {
+            ForEach(USStockSource.allCases) { source in
+                Text(source.title).tag(source)
+            }
+        }
+        Text(L10n.t("Korean stocks always use Toss Securities. Select Finnhub for US quotes with your own free API key; quotes refresh about every minute. Candlestick charts still require Toss Securities keys."))
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        SecureField(L10n.t("Finnhub API key"), text: $finnhubKey)
+        HStack {
+            Button(L10n.t("Save Finnhub key")) {
+                if FinnhubCredentials.save(finnhubKey) {
+                    finnhubKey = ""
+                    preferences.stockSettingsRevision += 1
+                    message = L10n.t("Finnhub key saved")
+                } else {
+                    message = L10n.t("Could not save Finnhub key")
+                }
+            }
+            .disabled(finnhubKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button(L10n.t("Remove Finnhub key")) {
+                FinnhubCredentials.clear()
+                finnhubKey = ""
+                preferences.stockSettingsRevision += 1
+                message = nil
+            }
+        }
+        Link(L10n.t("Get a free Finnhub key"), destination: URL(string: "https://finnhub.io/register")!)
+            .font(.caption)
         Text(L10n.t("Realtime trades from Toss Securities. Turn Stocks on under Notch items and order. Register this Mac's public IP under WTS → Settings → Open API → Allowed IPs. The client secret stays in the Keychain."))
             .onAppear { if clientID.isEmpty { clientID = TossCredentials.load().clientID } }
             .font(.caption).foregroundStyle(.secondary)

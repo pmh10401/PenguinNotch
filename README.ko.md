@@ -156,7 +156,9 @@ CPU와 NET은 기준 표본을 잡는 동안 `—`로 시작합니다. 잠자기
 
 날씨는 15분마다, 잠자기에서 깨어날 때 요청하며 항목을 클릭해 수동 갱신할 수 있습니다. API 키와 기기 위치 권한이 필요하지 않습니다. 요청 실패 시 마지막 값을 오래된 값으로 표시하고 첫 조회부터 실패하면 `—`를 표시합니다. 선택한 도시의 날짜가 바뀌면 이전 날짜의 일별 예보를 제거합니다. 선택형 실시간 날씨 테스트는 `TEST_RUNNER_PENGUINNOTCH_LIVE_WEATHER_TEST=1 make test-ci`로 실행하며 일반 테스트에서는 건너뜁니다.
 
-**Stocks**는 Appearance에 추가한 종목의 최근 체결가를 보여줍니다. 한국 종목 코드(`005930`)와 미국 티커(`AAPL`)를 섞어 최대 30개를 등록할 수 있습니다. 현재가는 `GET /api/v1/prices`에서 읽고 이후 체결은 `wss://openapi-ws.tossinvest.com/ws/v1`에서 받습니다. `Client ID`와 `Client secret`은 토스증권 WTS의 **설정 → Open API**에서 발급받고 macOS 키체인에 저장합니다. 같은 화면의 허용 IP에 이 Mac의 공인 IP를 등록해야 합니다. 종목마다 노치 항목이 하나씩 생깁니다. **Settings → Notch → Meter style**에서 AI 계정·시스템 항목·주식을 원이나 가로 막대로 표시할 수 있습니다. 주식 변화량은 전일 종가 대비이며 30% 변화가 원이나 막대를 채웁니다. 상승은 초록, 하락은 빨강으로 표시하고 조용한 시장에서는 마지막 가격을 유지합니다. 비밀키는 일반 설정에 기록하지 않습니다.
+**Stocks**는 Appearance에 추가한 종목의 최근 체결가를 보여줍니다. 한국 종목 코드(`005930`)와 미국 티커(`AAPL`)를 섞어 최대 30개를 등록할 수 있습니다. 토스증권을 선택한 경우 현재가는 `GET /api/v1/prices`에서 읽고 이후 체결은 `wss://openapi-ws.tossinvest.com/ws/v1`에서 받습니다. `Client ID`와 `Client secret`은 토스증권 WTS의 **설정 → Open API**에서 발급받고 macOS 키체인에 저장합니다. 같은 화면의 허용 IP에 이 Mac의 공인 IP를 등록해야 합니다. 종목마다 노치 항목이 하나씩 생깁니다. **Settings → Notch → Meter style**에서 AI 계정·시스템 항목·주식을 원이나 가로 막대로 표시할 수 있습니다. 주식 변화량은 전일 종가 대비이며 30% 변화가 원이나 막대를 채웁니다. 상승은 초록, 하락은 빨강으로 표시하고 조용한 시장에서는 마지막 가격을 유지합니다. 비밀키는 일반 설정에 기록하지 않습니다.
+
+미국 주식 시세를 무료 API로 보려면 **Settings → Appearance → Stocks → US stock quotes**에서 **Finnhub**를 고르고, [개인 API 키를 발급](https://finnhub.io/register)받아 저장하세요. 앱은 이 키를 macOS 키체인에 저장하고 요청 헤더로만 전송합니다. 미국 종목마다 `GET /api/v1/quote`에서 현재가와 전일 종가를 읽으며 약 1분마다 갱신합니다. Finnhub 봉 데이터는 요청하지 않습니다. 한국 종목은 계속 토스증권을 사용하고, 두 시장의 호버 봉 차트에는 토스증권 API 키가 필요합니다. 키가 없으면 차트에 필요한 설정을 표시합니다. 기존 사용자의 미국 시세 제공처 기본값은 토스증권으로 유지됩니다. Finnhub 요금제 호출 한도와 [개인 사용 약관](https://finnhub.io/terms-of-service)이 적용되며, 조회 실패를 0원 시세로 표시하지 않습니다.
 
 한국 상장기업명으로 검색할 수 있습니다. 내장된 [KRX KIND 상장회사 목록](https://kind.krx.co.kr/corpgeneral/corpList.do?method=download)은 `python3 Scripts/update-krx-stocks.py`로 갱신합니다. 이름은 검색·표시에만 사용하고 저장하는 식별자는 종목 코드입니다. 목록 밖의 ETF·우선주 등은 코드를 직접 입력하세요.
 

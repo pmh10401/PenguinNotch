@@ -60,6 +60,12 @@ struct StockTick: Equatable {
     var currency: String
 }
 
+enum USStockSource: String, CaseIterable, Identifiable {
+    case toss, finnhub
+    var id: String { rawValue }
+    var title: String { self == .toss ? "Toss Securities" : "Finnhub" }
+}
+
 struct StockCandle {
     var end: Date
     var open: Decimal
@@ -360,14 +366,16 @@ enum StockBoard {
     static func cellID(_ stock: WatchedStock) -> String { "widget-stock:\(stock.id)" }
 
     static func snapshot(stock: WatchedStock, quote: StockTick?, previousClose: Decimal?, name: String?,
-                         link: StockLink, locale: Locale = L10n.locale) -> ProviderSnapshot {
+                         link: StockLink, locale: Locale = L10n.locale,
+                         source: USStockSource = .toss) -> ProviderSnapshot {
+        let provider = stock.market == .us ? source.title : USStockSource.toss.title
         let title = (stock.market == .kr ? KoreanStockDirectory.shared.name(for: stock.symbol) : nil)
             ?? name?.precomposedStringWithCanonicalMapping ?? stock.symbol
         let label = stock.market == .kr ? title : stock.symbol
         guard let quote else {
             return ProviderSnapshot(id: cellID(stock), displayName: title, glyph: .stock, fidelity: .official,
                                     status: .unsupported(emptyMessage(link)), windows: [], kind: .stocks,
-                                    ringLabel: label, plan: "Toss Securities")
+                                    ringLabel: label, plan: provider)
         }
         let priceText = StockQuoteCodec.format(price: quote.price, currency: quote.currency, locale: locale)
         var windows: [LimitWindow] = []
@@ -391,11 +399,11 @@ enum StockBoard {
         windows.append(LimitWindow(id: "traded", label: L10n.t("Last trade"),
                                    detail: "\(quote.currency) · \(StockQuoteCodec.clock(quote.timestamp, locale: locale))"))
         if link != .live {
-            windows.append(LimitWindow(id: "link", label: L10n.t("Connection"), detail: linkText(link)))
+            windows.append(LimitWindow(id: "link", label: L10n.t("Connection"), detail: linkText(link, source: source)))
         }
         return ProviderSnapshot(id: cellID(stock), displayName: title, glyph: .stock, fidelity: .official,
                                 status: .ok, windows: windows, headlineID: headline, kind: .stocks,
-                                ringLabel: label, plan: "Toss Securities")
+                                ringLabel: label, plan: provider)
     }
 
     static func orderSnapshots(stored: [String]) -> [ProviderSnapshot] {
@@ -414,9 +422,9 @@ enum StockBoard {
         return L10n.t("Waiting for the next trade.")
     }
 
-    private static func linkText(_ link: StockLink) -> String {
+    private static func linkText(_ link: StockLink, source: USStockSource) -> String {
         switch link {
-        case .idle: return L10n.t("Connecting to Toss Securities…")
+        case .idle: return source == .finnhub ? L10n.t("Connecting to Finnhub…") : L10n.t("Connecting to Toss Securities…")
         case .live: return L10n.t("Live")
         case .reconnecting: return L10n.t("Reconnecting…")
         case .failed(let message): return message

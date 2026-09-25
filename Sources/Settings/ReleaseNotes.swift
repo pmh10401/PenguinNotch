@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.11",
+                headline: "Free US stock quotes from Finnhub",
+                changes: [
+                    ReleaseNote.Change(title: "Choose Finnhub for US quotes using your own API key",
+                                       detail: "Korean stocks and candlestick charts continue to use Toss Securities; each source keeps its key in the Keychain.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.10",
                 headline: "Clearer development builds",
                 changes: [

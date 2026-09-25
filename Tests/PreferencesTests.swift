@@ -66,6 +66,7 @@ final class PreferencesMigrationTests: XCTestCase {
         let preferences = Preferences(defaults: fresh)
         XCTAssertTrue(preferences.isFirstLaunch)
         XCTAssertEqual(preferences.notchVisibility, .onHover)
+        XCTAssertEqual(preferences.usStockSource, .toss)
         XCTAssertTrue(preferences.foldsForFullScreen)
         XCTAssertEqual(preferences.appPresence, .dock)
         XCTAssertEqual(preferences.notchEdge, .right)
@@ -80,6 +81,14 @@ final class PreferencesMigrationTests: XCTestCase {
         XCTAssertFalse(preferences.isConnected("minimax"))
         XCTAssertTrue(preferences.deepSeekPricingEnabled)
         XCTAssertEqual(preferences.deepSeekPricingSchedule, .current)
+    }
+
+    func testUSStockSourcePersists() {
+        let (defaults, name) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.usStockSource = .finnhub
+        XCTAssertEqual(Preferences(defaults: defaults).usStockSource, .finnhub)
     }
 
     /// MiniMax is discovered like everyone else, and stays off until switched
