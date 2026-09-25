@@ -224,8 +224,13 @@ final class OllamaModelCellTests: XCTestCase {
                     location: CGPoint(x: point.x, y: panel.frame.height - point.y),
                     modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber,
                     context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+                let release = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp,
+                    location: event.locationInWindow,
+                    modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: 0))
                 var requestedIDs: [String] = []
                 controller.onRefreshProvider = { requestedIDs.append($0) }
+                NSApp.postEvent(release, atStart: true)
                 panel.mouseDown(with: event)
                 for _ in 0..<100 where requestedIDs.isEmpty { await Task.yield() }
                 XCTAssertEqual(requestedIDs, ["ollama-local"], edge.rawValue)

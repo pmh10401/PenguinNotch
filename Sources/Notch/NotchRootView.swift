@@ -330,6 +330,12 @@ struct NotchRootView: View {
                 meterStyle: model.notchMeterStyle,
                 stockDisplayInterval: model.stockDisplayInterval
             )
+                .background {
+                    if model.dragTargetID == snapshot.id {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.accentColor.opacity(0.28))
+                    }
+                }
                 // Pinned to what the cell claims along the stack, or the drawn
                 // rings stop lining up with the centres `ringCenter` hands to
                 // the hover bands and the tooltip tails. Across a horizontal

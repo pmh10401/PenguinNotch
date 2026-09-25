@@ -12,6 +12,10 @@ final class NotchPanel: NSPanel {
     /// A left click on the visible chrome. Handled here for the same reason the
     /// menu is: the hit test lands on a SwiftUI subview that may consume it.
     var onClick: ((CGPoint) -> Void)?
+    var canReorder: ((CGPoint) -> Bool)?
+    var onReorderHover: ((CGPoint, CGPoint) -> Void)?
+    var onReorderDrop: ((CGPoint, CGPoint) -> Void)?
+    var onReorderEnd: (() -> Void)?
     /// ⌥-drag on the chrome, reported as the raw pointer delta since the last
     /// event — not a cumulative offset, so the caller decides what "along the
     /// edge" means for the current one. Chosen over a plain click-and-hold
@@ -37,7 +41,11 @@ final class NotchPanel: NSPanel {
             return super.mouseDown(with: event)
         }
         guard event.modifierFlags.contains(.option), onDrag != nil else {
-            onClick?(event.locationInWindow)
+            if canReorder?(event.locationInWindow) == true {
+                trackCellDrag(from: event.locationInWindow)
+            } else {
+                onClick?(event.locationInWindow)
+            }
             return
         }
         onDragStart?()
@@ -56,6 +64,30 @@ final class NotchPanel: NSPanel {
                 onDrag?(event.deltaX, event.deltaY)
             case .leftMouseUp:
                 onDragEnd?()
+                return
+            default:
+                return
+            }
+        }
+    }
+
+    private func trackCellDrag(from start: CGPoint) {
+        var dragging = false
+        defer { if dragging { onReorderEnd?() } }
+        while let event = nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+            switch event.type {
+            case .leftMouseDragged:
+                let point = event.locationInWindow
+                if !dragging {
+                    dragging = hypot(point.x - start.x, point.y - start.y) >= 5
+                }
+                if dragging { onReorderHover?(start, point) }
+            case .leftMouseUp:
+                if dragging {
+                    onReorderDrop?(start, event.locationInWindow)
+                } else {
+                    onClick?(start)
+                }
                 return
             default:
                 return

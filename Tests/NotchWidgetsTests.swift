@@ -4,6 +4,56 @@ import XCTest
 
 final class NotchWidgetsTests: XCTestCase {
     @MainActor
+    func testDraggingNotchItemSavesOrderAndKeepsHiddenSlot() throws {
+        let name = "NotchDrag.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        let ai = Fixtures.snapshots()[0]
+        let cpu = SystemUsageReading().snapshots[0]
+        let stock = StockBoard.orderSnapshots(stored: ["AAPL"])[0]
+        preferences.providerOrder = [ai.id, "hidden-item", cpu.id, stock.id]
+        let controller = NotchWindowController()
+        controller.model.todoPreferences = preferences
+        controller.model.apply(order: preferences.providerOrder)
+        controller.model.updateSnapshots([ai, cpu, stock])
+        controller.model.isExpanded = true
+        controller.relocate()
+        defer { controller.stop() }
+        let panel = try XCTUnwrap(controller.panelContentViewForTesting?.window as? NotchPanel)
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let placement = NotchPlacement(edge: controller.model.edge, panelSize: panel.frame.size)
+        func location(_ index: Int) -> CGPoint {
+            let point = placement.point(
+                along: controller.model.slack + controller.model.ringCenter(index: index),
+                across: controller.model.contentInset + NotchLayout.bodyDepth(for: controller.model.edge) / 2
+            )
+            return CGPoint(x: point.x, y: panel.frame.height - point.y)
+        }
+        func mouse(_ type: NSEvent.EventType, at point: CGPoint) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1
+            ))
+        }
+        XCTAssertNotNil(panel.contentView?.hitTest(location(2)))
+        XCTAssertEqual(panel.canReorder?(location(2)), true)
+        XCTAssertEqual(panel.canReorder?(location(0)), true)
+        // AppKit translates queued synthetic events through the panel origin.
+        let target = CGPoint(x: location(0).x - panel.frame.minX,
+                             y: location(0).y + panel.frame.minY)
+        NSApp.postEvent(try mouse(.leftMouseUp, at: target), atStart: true)
+        NSApp.postEvent(try mouse(.leftMouseDragged, at: target), atStart: true)
+
+        panel.mouseDown(with: try mouse(.leftMouseDown, at: location(2)))
+
+        XCTAssertEqual(preferences.providerOrder, [stock.id, "hidden-item", ai.id, cpu.id])
+        controller.model.apply(order: preferences.providerOrder)
+        XCTAssertEqual(controller.model.snapshots.map(\.id), [stock.id, ai.id, cpu.id])
+    }
+
+    @MainActor
     func testCategoryReorderingPreservesOtherItemsAndUnseenSlots() {
         let ai = Fixtures.snapshots()[0]
         let cpu = SystemUsageReading().snapshots[0]

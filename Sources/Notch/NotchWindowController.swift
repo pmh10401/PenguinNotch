@@ -87,6 +87,7 @@ final class NotchWindowController {
     /// them as the panel follows it — so cursor tracking is suspended until
     /// the drag ends.
     private var isOptionDragging = false
+    private var isReordering = false
 
     /// Determines whether a full-screen application window is active on this notch's display.
     /// Default implementation queries WindowServer and NSWorkspace; overridable for testing.
@@ -313,6 +314,31 @@ final class NotchWindowController {
             let hosting = NotchHostingView(rootView: NotchRootView(model: model))
             panel.contextMenuProvider = { [weak self] in self?.contextMenu() }
             panel.onClick = { [weak self] point in self?.handleClick(at: point) }
+            panel.canReorder = { [weak self] point in self?.cellIndex(at: point) != nil }
+            panel.onReorderHover = { [weak self] start, point in
+                guard let self else { return }
+                self.isReordering = true
+                self.clearHoverWork?.cancel()
+                self.clearHoverWork = nil
+                self.foldWork?.cancel()
+                self.foldWork = nil
+                self.model.hoveredIndex = nil
+                let source = self.cellIndex(at: start)
+                let target = self.cellIndex(at: point)
+                self.model.dragTargetID = source != target
+                    ? target.map { self.model.snapshots[$0].id } : nil
+                self.updateInteractiveRects()
+            }
+            panel.onReorderDrop = { [weak self] start, point in
+                guard let self, let source = self.cellIndex(at: start),
+                      let target = self.cellIndex(at: point) else { return }
+                self.reorderCell(from: source, onto: target)
+            }
+            panel.onReorderEnd = { [weak self] in
+                self?.isReordering = false
+                self?.model.dragTargetID = nil
+                self?.cursorMoved()
+            }
             panel.onDragStart = { [weak self] in self?.beginOptionDrag() }
             panel.onDrag = { [weak self] dx, dy in self?.dragged(dx: dx, dy: dy) }
             panel.onDragEnd = { [weak self] in
@@ -602,7 +628,7 @@ final class NotchWindowController {
     // Not private: tests drive the hover fold through it, the same way they
     // drive the event fold through handleActiveSpaceOrAppChange.
     func cursorMoved() {
-        guard let panel, !isOptionDragging else { return }
+        guard let panel, !isOptionDragging, !isReordering else { return }
         let local = localCursor(in: panel.frame)
         let overTooltip = model.hoveredIndex
             .flatMap(tooltipRect(index:))
@@ -1178,6 +1204,22 @@ final class NotchWindowController {
             if abs(along - centre) <= pitch / 2 { return index }
         }
         return nil
+    }
+
+    private func cellIndex(at locationInWindow: CGPoint) -> Int? {
+        guard let panel, model.isExpanded else { return nil }
+        let local = CGPoint(x: locationInWindow.x, y: panel.frame.height - locationInWindow.y)
+        guard notchRect.contains(local), !isOverHandle(local), !isOverMoveHandle(local) else { return nil }
+        return cellIndex(along: placement.along(of: local))
+    }
+
+    func reorderCell(from source: Int, onto target: Int) {
+        guard model.snapshots.indices.contains(source), model.snapshots.indices.contains(target),
+              source != target else { return }
+        var ids = model.snapshots.map(\.id)
+        ids.insert(ids.remove(at: source), at: target)
+        guard let preferences = model.todoPreferences else { return }
+        preferences.providerOrder = ProviderOrder.keepingHiddenSlots(ids, in: preferences.providerOrder)
     }
 
     // MARK: - Odds and ends

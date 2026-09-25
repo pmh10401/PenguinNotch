@@ -85,6 +85,7 @@ final class NotchViewModel: ObservableObject {
     /// the cursor is over it, so SwiftUI cannot see the crossing that turns
     /// event handling on in the first place.
     @Published var hoveredIndex: Int?
+    @Published var dragTargetID: String?
     /// Ticked on refresh so the "Resets in N min" copy stays honest.
     @Published var now: Date = Date()
     @Published var resetTimeFormat: ResetTimeFormat = .automatic

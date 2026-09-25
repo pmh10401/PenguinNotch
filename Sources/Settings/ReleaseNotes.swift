@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.18",
+                headline: "Drag notch items into order",
+                changes: [
+                    ReleaseNote.Change(title: "Drag an item onto another item in the open notch",
+                                       detail: "The new order is saved across displays. A click still refreshes the item, and Option-drag still moves the notch.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.17",
                 headline: "Reorder stocks from the watchlist",
                 changes: [
