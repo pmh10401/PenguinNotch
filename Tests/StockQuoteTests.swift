@@ -75,6 +75,24 @@ final class StockQuoteTests: XCTestCase {
             .queryItems?.first(where: { $0.name == "symbols" })?.value, symbols.joined(separator: ","))
     }
 
+    func testUSPreviousCloseWhenNewestDailyBarIsAfterQuote() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        StockPricesEndpoint.reset()
+        let quoteTime = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-25T03:05:48Z"))
+
+        let close = try await TossInvestAPI.previousClose(
+            token: "test-token", stock: WatchedStock(symbol: "SOXL", market: .us),
+            priceTime: quoteTime, session: session)
+
+        XCTAssertEqual(close, 100)
+        let request = try XCTUnwrap(StockPricesEndpoint.requests.first)
+        XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "count" })?.value, "3")
+    }
+
     @MainActor
     func testTossQuoteAndChartShareOneTokenAndRenewAfterUnauthorizedResponse() async throws {
         let configuration = URLSessionConfiguration.ephemeral
@@ -283,10 +301,22 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         Self.lock.withLock { Self.recorded.append(request) }
-        let rows: [[String: String]] = (0..<200).map {
-            ["symbol": "T\($0)", "lastPrice": "\($0)", "currency": "USD"]
+        let data: Data
+        if request.url?.path == "/api/v1/candles" {
+            let count = Int(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "count" })?.value ?? "") ?? 0
+            let candles = [
+                ["timestamp": "2026-09-25T04:00:00Z", "closePrice": "102"],
+                ["timestamp": "2026-09-24T04:00:00Z", "closePrice": "101"],
+                ["timestamp": "2026-09-23T04:00:00Z", "closePrice": "100"]
+            ]
+            data = try! JSONSerialization.data(withJSONObject: ["result": ["candles": Array(candles.prefix(count))]])
+        } else {
+            let rows: [[String: String]] = (0..<200).map {
+                ["symbol": "T\($0)", "lastPrice": "\($0)", "currency": "USD"]
+            }
+            data = try! JSONSerialization.data(withJSONObject: ["result": rows])
         }
-        let data = try! JSONSerialization.data(withJSONObject: ["result": rows])
         let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.16",
+                headline: "Restore US stock changes in the notch",
+                changes: [
+                    ReleaseNote.Change(title: "Read one more daily candle for the previous close",
+                                       detail: "US daily candles can be dated after the latest quote. The extra older candle lets the notch calculate the correct change instead of showing a dash.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.15",
                 headline: "Reliable Toss Securities quotes and charts",
                 changes: [

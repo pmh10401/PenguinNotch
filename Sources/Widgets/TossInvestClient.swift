@@ -143,11 +143,11 @@ enum TossInvestAPI {
         return StockQuoteCodec.names(from: data)
     }
 
-    /// The close before the session that owns `priceTime`. One daily request
-    /// per symbol; a missing candle leaves that symbol without a ring.
+    /// The close before the session that owns `priceTime`. A daily candle can
+    /// already be dated after the latest quote, so keep one extra older bar.
     static func previousClose(token: String, stock: WatchedStock, priceTime: Date,
                               session: URLSession = .shared) async throws -> Decimal? {
-        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 2,
+        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 3,
                                         session: session)
         return StockQuoteCodec.previousClose(closes: StockQuoteCodec.dailyCloses(from: data),
                                              priceTime: priceTime,
