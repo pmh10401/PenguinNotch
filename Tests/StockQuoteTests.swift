@@ -146,12 +146,27 @@ final class StockQuoteTests: XCTestCase {
         XCTAssertEqual(falling.id, "widget-stock:us:AAPL")
         XCTAssertEqual(rising.ringLabel, "삼성전자")
         XCTAssertEqual(rising.headlineText, "+30.00%")
+        XCTAssertEqual(rising.windows.first(where: { $0.id == "price" })?.usedText, "78,000")
         XCTAssertEqual(rising.ringFraction, 1)
         XCTAssertEqual(rising.bandOverride, .ample)
         XCTAssertEqual(falling.headlineText, "-10.00%")
         XCTAssertEqual(falling.ringFraction ?? 0, 1.0 / 3.0, accuracy: 0.0001)
         XCTAssertEqual(falling.bandOverride, .critical)
         XCTAssertEqual(rising.displayName, "삼성전자")
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(StockBoard.displayText(for: falling, at: start, since: start, interval: 3), "-10.00%")
+        XCTAssertEqual(StockBoard.displayText(for: falling, at: start.addingTimeInterval(2.9), since: start, interval: 3), "-10.00%")
+        XCTAssertEqual(StockBoard.displayText(for: falling, at: start.addingTimeInterval(3), since: start, interval: 3), "$90.00")
+        XCTAssertEqual(StockBoard.displayText(for: falling, at: start.addingTimeInterval(6), since: start, interval: 3), "-10.00%")
+        let noClose = StockBoard.snapshot(stock: apple,
+                                          quote: StockTick(price: 90, volume: nil, timestamp: today, currency: "USD"),
+                                          previousClose: nil, name: nil, link: .live,
+                                          locale: Locale(identifier: "en_US_POSIX"))
+        XCTAssertEqual(noClose.headlineID, "change")
+        XCTAssertEqual(noClose.headlineText, "—")
+        XCTAssertEqual(noClose.windows.first(where: { $0.id == "price" })?.usedText, "$90.00")
+        XCTAssertEqual(StockBoard.displayText(for: noClose, at: start.addingTimeInterval(3),
+                                               since: start, interval: 3), "—")
         let payload = Data(#"{"result":{"candles":[{"timestamp":"2026-03-25T00:00:00+09:00","closePrice":"72000"},{"timestamp":"2026-03-24T00:00:00+09:00","closePrice":"71600"}]}}"#.utf8)
         let closes = StockQuoteCodec.dailyCloses(from: payload)
         let traded = ISO8601DateFormatter()
@@ -182,7 +197,10 @@ final class StockQuoteTests: XCTestCase {
         XCTAssertFalse(preferences.addStockSymbol("not a symbol"))
         for index in 0..<40 { preferences.addStockSymbol("US:T\(index)") }
         XCTAssertEqual(preferences.stockSymbols.count, 30)
+        XCTAssertEqual(preferences.stockDisplayInterval, 3)
+        preferences.stockDisplayInterval = 5
         let reloaded = Preferences(defaults: defaults)
+        XCTAssertEqual(reloaded.stockDisplayInterval, 5)
         XCTAssertEqual(reloaded.stockSymbols.first, "kr:005930")
         XCTAssertEqual(reloaded.stockSymbols.dropFirst().first, "us:AAPL")
         preferences.showsStocks = true

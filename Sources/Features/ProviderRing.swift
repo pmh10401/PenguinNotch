@@ -350,6 +350,8 @@ struct ProviderCell: View {
     var isRefreshing: Bool = false
     var weeklyRing: WeeklyRing = .off
     var meterStyle: NotchMeterStyle = .ring
+    var stockDisplayInterval: Int = 3
+    @State private var stockDisplayStartedAt = Date()
 
     /// A dash, not "0%": nothing read is not the same as nothing used.
     private var readingText: String {
@@ -410,7 +412,16 @@ struct ProviderCell: View {
                 centerText: snapshot.ringLabel
             )
             }
-            Text(readingText)
+            Group {
+                if snapshot.kind == .stocks && snapshot.headlineText != "—" {
+                    TimelineView(.periodic(from: stockDisplayStartedAt, by: TimeInterval(stockDisplayInterval))) { context in
+                        Text(StockBoard.displayText(for: snapshot, at: context.date,
+                                                    since: stockDisplayStartedAt, interval: stockDisplayInterval))
+                    }
+                } else {
+                    Text(readingText)
+                }
+            }
                 .font(Typography.percent)
                 .foregroundStyle(snapshot.showsLocalPerformance && snapshot.localPerformance == nil
                                  ? Palette.textSecondary : ringColor ?? Palette.textPrimary)
@@ -433,7 +444,9 @@ struct ProviderCell: View {
     var accessibilityText: String {
         snapshot.localModel.map {
             "\($0.brand.map { "\($0.displayName), " } ?? "")\($0.name), \(snapshot.displayName) local, \(snapshot.showsLocalPerformance ? (snapshot.localPerformance.map { "Last generation speed \($0.speedText), \($0.band.label)" } ?? "Speed not measured") : "Loaded"), \($0.detail)\(localActivityText)\(localLedgerText)"
-        } ?? "\(snapshot.displayName), \(readingText)"
+        } ?? (snapshot.kind == .stocks && snapshot.windows.contains(where: { $0.id == "price" })
+            ? "\(snapshot.displayName), \(readingText), \(snapshot.windows.first(where: { $0.id == "price" })?.usedText ?? "")"
+            : "\(snapshot.displayName), \(readingText)")
     }
 
     /// What the model is doing, the way the tooltip's header says it.

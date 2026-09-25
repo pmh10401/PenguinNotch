@@ -193,6 +193,7 @@ final class NotchViewModel: ObservableObject {
     /// Mirrored here for the same reason `accentColor` is: the notch is a
     /// separate window, and it has to redraw the moment Settings changes this.
     @Published var notchMeterStyle: NotchMeterStyle = .ring
+    @Published var stockDisplayInterval = 3
     @Published var weeklyRing: WeeklyRing = .off
     @Published var weeklyRingDashed: Bool = false
     @Published var watchLimit: Double = 0.50

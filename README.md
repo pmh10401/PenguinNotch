@@ -406,8 +406,11 @@ are issued in Toss Securities WTS → Settings → Open API and are stored in th
 Keychain. The same screen's allowed-IP list has to include this Mac. Each symbol is its own cell. Settings → Appearance → Meter style chooses circles
 or horizontal bars for every cell, including accounts and system meters. A stock still
 measures the move from the previous close, and 30 percent fills the circle or
-the bar. A rise is green and a fall is red. A quiet market keeps the last price. The secret is never
-written to preferences.
+the bar. A rise is green and a fall is red. The notch alternates the change and
+last price every three seconds by default; set a 1–10 second interval under
+Settings → Stocks → Notch quote display. If the previous close is unavailable,
+the change shows `—` while the last price remains in the hover card. A quiet
+market keeps the last price. The secret is never written to preferences.
 
 Choose **one provider** under **Settings → Stocks → Quote provider**. Only the selected
 provider’s settings and APIs are used; switching retains your watchlist and saved keys.

@@ -49533,6 +49533,39 @@
           }
         }
       }
+    },
+    "Notch quote display": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "노치 시세 표시"
+          }
+        }
+      }
+    },
+    "Switch every %d seconds": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d초마다 전환"
+          }
+        }
+      }
+    },
+    "Previous close unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전일 종가를 조회할 수 없습니다"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

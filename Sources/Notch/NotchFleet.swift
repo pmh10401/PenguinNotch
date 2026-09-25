@@ -84,6 +84,7 @@ final class NotchFleet {
     /// One choice for the whole fleet, like the edge and the size: a weekly
     /// ring on one display and not another would read as a bug.
     private var notchMeterStyle: NotchMeterStyle = .ring
+    private var stockDisplayInterval = 3
     private var weeklyRing: WeeklyRing = .off
     private var weeklyRingDashed: Bool = false
     private var showsMoveHandle = true
@@ -218,6 +219,13 @@ final class NotchFleet {
         self.notchMeterStyle = notchMeterStyle
         for controller in controllers.values {
             controller.apply(notchMeterStyle: notchMeterStyle)
+        }
+    }
+
+    func apply(stockDisplayInterval: Int) {
+        self.stockDisplayInterval = stockDisplayInterval
+        for controller in controllers.values {
+            controller.model.stockDisplayInterval = stockDisplayInterval
         }
     }
 
@@ -470,6 +478,7 @@ final class NotchFleet {
         controller.model.watchLimit = watchLimit
         controller.model.criticalLimit = criticalLimit
         controller.model.notchMeterStyle = notchMeterStyle
+        controller.model.stockDisplayInterval = stockDisplayInterval
         controller.model.weeklyRing = weeklyRing
         controller.model.weeklyRingDashed = weeklyRingDashed
         controller.model.showsMoveHandle = showsMoveHandle

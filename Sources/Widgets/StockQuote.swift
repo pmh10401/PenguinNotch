@@ -381,7 +381,6 @@ enum StockBoard {
         }
         let priceText = StockQuoteCodec.format(price: quote.price, currency: quote.currency, locale: locale)
         var windows: [LimitWindow] = []
-        var headline = "price"
         if let previousClose,
            let rate = StockQuoteCodec.changeRate(price: quote.price, previousClose: previousClose) {
             let percent = StockQuoteCodec.formatChange(rate, locale: locale)
@@ -389,23 +388,37 @@ enum StockBoard {
             windows.append(LimitWindow(id: "change", label: L10n.t("Change"),
                                        usedFraction: StockQuoteCodec.ringFraction(for: rate),
                                        usedText: percent,
-                                       detail: "\(percent) · \(priceText)",
+                                       detail: percent,
                                        bandOverride: band, prefersUsedText: true))
             windows.append(LimitWindow(id: "previous", label: L10n.t("Previous close"),
                                        detail: StockQuoteCodec.format(price: previousClose, currency: quote.currency, locale: locale)))
-            headline = "change"
         } else {
-            windows.append(LimitWindow(id: "price", label: L10n.t("Last price"),
-                                       usedText: priceText, detail: priceText, prefersUsedText: true))
+            windows.append(LimitWindow(id: "change", label: L10n.t("Change"),
+                                       usedText: "—", detail: L10n.t("Previous close unavailable"),
+                                       prefersUsedText: true))
         }
+        windows.append(LimitWindow(id: "price", label: L10n.t("Last price"),
+                                   usedText: priceText, detail: priceText, prefersUsedText: true))
         windows.append(LimitWindow(id: "traded", label: L10n.t("Last trade"),
                                    detail: "\(quote.currency) · \(StockQuoteCodec.clock(quote.timestamp, locale: locale))"))
         if link != .live {
             windows.append(LimitWindow(id: "link", label: L10n.t("Connection"), detail: linkText(link, source: source)))
         }
         return ProviderSnapshot(id: cellID(stock), displayName: title, glyph: .stock, fidelity: .official,
-                                status: .ok, windows: windows, headlineID: headline, kind: .stocks,
+                                status: .ok, windows: windows, headlineID: "change", kind: .stocks,
                                 ringLabel: label, plan: provider)
+    }
+
+    static func displayText(for snapshot: ProviderSnapshot, at date: Date,
+                            since start: Date, interval: Int) -> String {
+        guard interval > 0,
+              let change = snapshot.windows.first(where: { $0.id == "change" })?.usedText,
+              change != "—",
+              let price = snapshot.windows.first(where: { $0.id == "price" })?.usedText else {
+            return snapshot.headlineText
+        }
+        let phase = Int(max(0, date.timeIntervalSince(start)) / Double(interval))
+        return phase.isMultiple(of: 2) ? change : price
     }
 
     static func orderSnapshots(stored: [String]) -> [ProviderSnapshot] {

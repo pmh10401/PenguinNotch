@@ -136,6 +136,11 @@ struct StockSettings: View {
                     }
                 }
             }
+            Section(L10n.t("Notch quote display")) {
+                Stepper(value: $preferences.stockDisplayInterval, in: 1...10) {
+                    Text(String(format: L10n.t("Switch every %d seconds"), preferences.stockDisplayInterval))
+                }
+            }
             if preferences.stockQuoteSource == .toss {
                 Section(L10n.t("Hover chart")) {
                     HStack {

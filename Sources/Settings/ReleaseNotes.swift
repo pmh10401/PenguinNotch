@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.14",
+                headline: "Stock price and change alternate in the notch",
+                changes: [
+                    ReleaseNote.Change(title: "Switch between change and last price every three seconds by default",
+                                       detail: "Set the interval in Stocks settings. If the previous close is unavailable, the change shows a dash rather than a price or an invented percentage.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.13",
                 headline: "Compact Finnhub stock hover cards",
                 changes: [
