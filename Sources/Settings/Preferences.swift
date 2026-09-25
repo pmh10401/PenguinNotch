@@ -329,6 +329,11 @@ final class Preferences: ObservableObject {
         }
     }
 
+    var orderedStocks: [WatchedStock] {
+        ProviderOrder.arrange(WatchedStock.parseList(stockSymbols), by: providerOrder,
+                              id: { "widget-stock:\($0.id)" })
+    }
+
     @Published var stockQuoteSource: StockQuoteSource {
         didSet {
             defaults.set(stockQuoteSource.rawValue, forKey: "stockQuoteSource")
@@ -369,6 +374,23 @@ final class Preferences: ObservableObject {
 
     func removeStockSymbol(_ id: String) {
         stockSymbols = stockSymbols.filter { $0 != id }
+    }
+
+    @discardableResult
+    func moveStockSymbol(_ id: String, onto target: String) -> Bool {
+        let old = orderedStocks.map(\.id)
+        guard let from = old.firstIndex(of: id), let to = old.firstIndex(of: target) else { return false }
+        guard from != to else { return true }
+        var reordered = old
+        reordered.insert(reordered.remove(at: from), at: to)
+        let oldCells = old.map { "widget-stock:\($0)" }
+        if providerOrder.contains(where: { oldCells.contains($0) }) {
+            let newCells = reordered.map { "widget-stock:\($0)" }
+            let complete = ProviderOrder.keepingHiddenSlots(oldCells, in: providerOrder)
+            providerOrder = ProviderOrder.keepingHiddenSlots(newCells, in: complete)
+        }
+        stockSymbols = reordered
+        return true
     }
     /// Bumped when the Keychain credentials change. Not persisted: the secret
     /// itself is not a preference.

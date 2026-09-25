@@ -258,6 +258,29 @@ final class StockQuoteTests: XCTestCase {
         XCTAssertFalse(preferences.stockSymbols.contains("kr:005930"))
     }
 
+    @MainActor
+    func testStockReorderPersistsWithoutMovingOtherNotchItems() throws {
+        let name = "StockOrder.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        for symbol in ["005930", "AAPL", "SOXL"] { XCTAssertTrue(preferences.addStockSymbol(symbol)) }
+
+        XCTAssertTrue(preferences.moveStockSymbol("us:SOXL", onto: "kr:005930"))
+        XCTAssertEqual(preferences.stockSymbols, ["us:SOXL", "kr:005930", "us:AAPL"])
+        XCTAssertTrue(preferences.providerOrder.isEmpty)
+
+        preferences.providerOrder = ["claude", "widget-stock:us:SOXL", "system-cpu",
+                                     "widget-stock:kr:005930", "widget-calendar"]
+        XCTAssertEqual(preferences.orderedStocks.map(\.id), ["us:SOXL", "kr:005930", "us:AAPL"])
+        XCTAssertTrue(preferences.moveStockSymbol("us:AAPL", onto: "us:SOXL"))
+        XCTAssertEqual(preferences.stockSymbols, ["us:AAPL", "us:SOXL", "kr:005930"])
+        XCTAssertEqual(preferences.providerOrder, ["claude", "widget-stock:us:AAPL", "system-cpu",
+                                                   "widget-stock:us:SOXL", "widget-calendar", "widget-stock:kr:005930"])
+        XCTAssertFalse(preferences.moveStockSymbol("us:UNKNOWN", onto: "us:SOXL"))
+        XCTAssertEqual(Preferences(defaults: defaults).orderedStocks.map(\.id), preferences.stockSymbols)
+    }
+
     func testLegacyTossCredentialsMoveWithoutLosingValues() throws {
         let suffix = UUID().uuidString
         let oldService = "penguinnotch-test.old.\(suffix)"

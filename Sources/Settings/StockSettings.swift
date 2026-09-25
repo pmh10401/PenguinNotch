@@ -119,20 +119,39 @@ struct StockSettings: View {
                     Text(L10n.t("Your watchlist is empty. Add a company name, Korean code or US ticker above."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                ForEach(WatchedStock.parseList(preferences.stockSymbols)) { stock in
+                let stocks = preferences.orderedStocks
+                ForEach(stocks) { stock in
                     HStack(spacing: 12) {
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24, height: 30)
+                            .contentShape(Rectangle())
+                            .draggable(stock.id)
+                            .help(L10n.t("Drag to reorder"))
                         NotchItemAppearanceRow(preferences: preferences,
                             snapshot: StockBoard.snapshot(stock: stock, quote: nil, previousClose: nil,
                                                           name: nil, link: .idle, source: preferences.stockQuoteSource),
                             subtitle: preferences.stockQuoteSource.supports(stock)
                                 ? "\(stock.market.rawValue.uppercased()) · \(stock.symbol)"
                                 : L10n.t("Not supported by Finnhub"))
+                        Button { step(stock.id, by: -1) } label: { Image(systemName: "arrow.up") }
+                            .disabled(stocks.first?.id == stock.id)
+                            .accessibilityLabel(L10n.t("Move \(stock.symbol) up"))
+                        Button { step(stock.id, by: 1) } label: { Image(systemName: "arrow.down") }
+                            .disabled(stocks.last?.id == stock.id)
+                            .accessibilityLabel(L10n.t("Move \(stock.symbol) down"))
                         Button {
                             preferences.removeStockSymbol(stock.id)
                         } label: { Image(systemName: "minus.circle") }
                             .buttonStyle(.borderless)
                             .help(L10n.t("Remove \(stock.symbol)"))
                             .accessibilityLabel(L10n.t("Remove \(stock.symbol)"))
+                    }
+                    .buttonStyle(.borderless)
+                    .contentShape(Rectangle())
+                    .dropDestination(for: String.self) { ids, _ in
+                        guard ids.count == 1, let moved = ids.first else { return false }
+                        return preferences.moveStockSymbol(moved, onto: stock.id)
                     }
                 }
             }
@@ -175,6 +194,12 @@ struct StockSettings: View {
 
     private func add() {
         add(symbol)
+    }
+
+    private func step(_ id: String, by offset: Int) {
+        let ids = preferences.orderedStocks.map(\.id)
+        guard let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
+        preferences.moveStockSymbol(id, onto: ids[index + offset])
     }
 
     private func add(_ input: String) {

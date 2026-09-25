@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.17",
+                headline: "Reorder stocks from the watchlist",
+                changes: [
+                    ReleaseNote.Change(title: "Drag stocks or use the up and down buttons in Stocks settings",
+                                       detail: "The new order is saved and appears in the notch while the positions of other items stay intact.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.16",
                 headline: "Restore US stock changes in the notch",
                 changes: [
