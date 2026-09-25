@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.13",
+                headline: "Compact Finnhub stock hover cards",
+                changes: [
+                    ReleaseNote.Change(title: "Show quotes without an empty chart area",
+                                       detail: "Finnhub stock cards fit their price and change details. Toss Securities charts remain available when Toss is selected.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.12",
                 headline: "Settings organized around your daily tasks",
                 changes: [

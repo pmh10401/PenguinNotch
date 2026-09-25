@@ -417,7 +417,8 @@ and save it in the macOS Keychain. US quotes use `GET /api/v1/quote` with the ke
 request header and refresh about once a minute per ticker. Finnhub mode does not call
 Toss: Korean symbols stay in your list with an unsupported message, and candlestick
 charts are unavailable. Select Toss again to restore those features. Existing provider
-choices are retained; the default is Toss. Finnhub plan limits and
+choices are retained; the default is Toss. Finnhub hover cards show quote details without
+reserving an empty chart area. Finnhub plan limits and
 [personal-use terms](https://finnhub.io/terms-of-service) apply; a missing or limited quote
 never appears as a zero price.
 

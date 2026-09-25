@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import PenguinNotch
 
@@ -13,6 +14,35 @@ final class StockChartTests: XCTestCase {
         XCTAssertLessThan(domain.lowerBound, 99.5)
         XCTAssertGreaterThan(domain.upperBound, 102)
         XCTAssertLessThan(domain.upperBound, 110)
+    }
+
+    @MainActor
+    func testFinnhubHoverCardDoesNotReserveChartSpace() throws {
+        let domain = "StockChartHover.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let preferences = Preferences(defaults: defaults)
+        let stock = WatchedStock(symbol: "SOXL", market: .us)
+        let snapshot = StockBoard.snapshot(stock: stock, quote: nil, previousClose: nil,
+                                           name: nil, link: .idle)
+        let store = StockChartStore(fetch: { _, _ in [] })
+        let model = NotchViewModel()
+        model.todoPreferences = preferences
+        model.stockCharts = store
+
+        let tossHeight = model.cardHeight(for: snapshot)
+        let tossCard = ImageRenderer(content: TooltipCard(snapshot: snapshot, now: .now,
+                                                          stockCharts: store, stockPreferences: preferences))
+        let tossImage = try XCTUnwrap(tossCard.cgImage)
+
+        preferences.stockQuoteSource = .finnhub
+        let finnhubHeight = model.cardHeight(for: snapshot)
+        let finnhubCard = ImageRenderer(content: TooltipCard(snapshot: snapshot, now: .now,
+                                                             stockCharts: store, stockPreferences: preferences))
+        let finnhubImage = try XCTUnwrap(finnhubCard.cgImage)
+
+        XCTAssertEqual(tossHeight - finnhubHeight, NotchLayout.stockChartSectionHeight)
+        XCTAssertEqual(CGFloat(tossImage.height - finnhubImage.height), NotchLayout.stockChartSectionHeight)
     }
 
     func testTenMinuteCandlesUseMinuteEndsAndAggregateOHLCV() throws {

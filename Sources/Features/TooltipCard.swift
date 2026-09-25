@@ -1142,7 +1142,8 @@ struct TooltipCard: View {
     }
 
     private var chartStock: WatchedStock? {
-        guard snapshot.id.hasPrefix("widget-stock:") else { return nil }
+        guard stockPreferences?.stockQuoteSource == .toss,
+              snapshot.id.hasPrefix("widget-stock:") else { return nil }
         return WatchedStock.parse(String(snapshot.id.dropFirst("widget-stock:".count)))
     }
 

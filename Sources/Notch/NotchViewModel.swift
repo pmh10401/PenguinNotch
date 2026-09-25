@@ -619,7 +619,9 @@ final class NotchViewModel: ObservableObject {
             showsDeepSeekPricing: deepSeekPricingEnabled,
             hasNetworkSettings: snapshot.id == "system-network",
             cpuCoreCount: snapshot.cpuCores.count)
-        return height + (snapshot.id.hasPrefix("widget-stock:") ? NotchLayout.stockChartSectionHeight : 0)
+        let showsStockChart = snapshot.id.hasPrefix("widget-stock:")
+            && stockCharts != nil && todoPreferences?.stockQuoteSource == .toss
+        return height + (showsStockChart ? NotchLayout.stockChartSectionHeight : 0)
     }
 
     private func contentCardHeight(sessionCap: Int) -> CGFloat {
