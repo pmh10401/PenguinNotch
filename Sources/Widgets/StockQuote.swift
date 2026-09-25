@@ -106,17 +106,18 @@ enum StockQuoteCodec {
         return (token, expires)
     }
 
-    static func prices(from data: Data) -> [String: StockTick] {
+    static func prices(from data: Data, requireTimestamp: Bool = false) -> [String: StockTick] {
         guard let rows = rows(in: data) else { return [:] }
         var quotes: [String: StockTick] = [:]
         for row in rows {
             guard let symbol = row["symbol"] as? String,
                   let stock = WatchedStock.parse(symbol),
                   let price = decimal(row["lastPrice"]),
-                  let currency = row["currency"] as? String
+                  let currency = row["currency"] as? String,
+                  let timestamp = date(row["timestamp"]) ?? (requireTimestamp ? nil : Date())
             else { continue }
             quotes[stock.id] = StockTick(price: price, volume: nil,
-                                          timestamp: date(row["timestamp"]) ?? Date(),
+                                          timestamp: timestamp,
                                           currency: currency)
         }
         return quotes

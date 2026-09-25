@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.19",
+                headline: "Model estimates for Toss account holdings",
+                changes: [
+                    ReleaseNote.Change(title: "View experimental rise, fall, and closing-price estimates for actual holdings",
+                                       detail: "Opt in from Stocks settings. Estimates use fresh quotes, completed daily candles, and regular market hours; closed markets and missing data show no forecast.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.18",
                 headline: "Drag notch items into order",
                 changes: [

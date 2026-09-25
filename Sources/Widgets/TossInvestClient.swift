@@ -138,6 +138,42 @@ enum TossInvestAPI {
         return StockQuoteCodec.prices(from: data)
     }
 
+    /// Forecasts require an actual trade timestamp; the regular quote UI can
+    /// still show a price when the API leaves its nullable timestamp empty.
+    static func timestampedPrices(token: String, symbols: [String], session: URLSession = .shared) async throws -> [String: StockTick] {
+        let data = try await authorized(path: "/api/v1/prices", token: token, symbols: symbols, session: session)
+        return StockQuoteCodec.prices(from: data, requireTimestamp: true)
+    }
+
+    static func accounts(token: String, session: URLSession = .shared) async throws -> [TossAccount] {
+        var request = URLRequest(url: base.appending(path: "/api/v1/accounts"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return try JSONDecoder().decode(TossResult<[TossAccount]>.self, from: await body(for: request, session: session)).result
+    }
+
+    static func holdings(token: String, accountSeq: Int, session: URLSession = .shared) async throws -> [PortfolioHolding] {
+        var request = URLRequest(url: base.appending(path: "/api/v1/holdings"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(String(accountSeq), forHTTPHeaderField: "X-Tossinvest-Account")
+        return try JSONDecoder().decode(TossResult<PortfolioHoldings>.self, from: await body(for: request, session: session)).result.items
+    }
+
+    static func regularSession(token: String, market: WatchedStock.Market, at now: Date = Date(),
+                               session: URLSession = .shared) async throws -> TradingSession? {
+        var request = URLRequest(url: base.appending(path: "/api/v1/market-calendar/\(market.rawValue.uppercased())"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let calendar = try decoder.decode(TossResult<MarketSessions>.self, from: await body(for: request, session: session)).result
+        return [calendar.today, calendar.previousBusinessDay].compactMap { $0.regular(market: market) }
+            .first { $0.contains(now) }
+    }
+
+    static func forecastCloses(token: String, stock: WatchedStock, session: URLSession = .shared) async throws -> [(date: Date, close: Decimal)] {
+        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 64, session: session)
+        return StockQuoteCodec.dailyCloses(from: data)
+    }
+
     static func names(token: String, symbols: [String], session: URLSession = .shared) async throws -> [String: String] {
         let data = try await authorized(path: "/api/v1/stocks", token: token, symbols: symbols, session: session)
         return StockQuoteCodec.names(from: data)

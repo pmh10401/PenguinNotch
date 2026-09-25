@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StockSettings: View {
     @ObservedObject var preferences: Preferences
+    @StateObject private var portfolio = StockForecastStore()
     @State private var clientID = ""
     @State private var clientSecret = ""
     @State private var finnhubKey = ""
@@ -83,6 +84,57 @@ struct StockSettings: View {
                     }
                 }
                 if let apiMessage { Text(apiMessage).font(.caption).foregroundStyle(.secondary) }
+            }
+            if preferences.stockQuoteSource == .toss {
+                Section(L10n.t("My Toss holdings · model estimates")) {
+                    Toggle(L10n.t("Show estimates for my actual holdings"),
+                           isOn: $preferences.portfolioForecastEnabled)
+                    if preferences.portfolioForecastEnabled {
+                        Text(L10n.t("Read-only account access. Account numbers and holdings stay in memory; only the selected account identifier is saved."))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if portfolio.accounts.count > 1 {
+                            Picker(L10n.t("Toss Securities account"), selection: $preferences.tossAccountSeq) {
+                                Text(L10n.t("Select an account")).tag(0)
+                                ForEach(portfolio.accounts) { account in
+                                    Text(account.maskedNumber).tag(account.accountSeq)
+                                }
+                            }
+                        } else if let account = portfolio.accounts.first {
+                            LabeledContent(L10n.t("Toss Securities account"), value: account.maskedNumber)
+                        }
+                        if portfolio.loading { ProgressView(L10n.t("Loading holdings…")) }
+                        if let message = portfolio.message {
+                            Text(message).font(.caption).foregroundStyle(.secondary)
+                        }
+                        ForEach(portfolio.holdings) { holding in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(holding.name.isEmpty ? holding.symbol : holding.name)
+                                    .font(.headline)
+                                Text("\(holding.marketCountry) · \(holding.symbol)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if let estimate = portfolio.forecasts[holding.id] {
+                                    let up = Int((estimate.riseProbability * 100).rounded())
+                                    HStack(spacing: 16) {
+                                        Text("\(L10n.t("Rise")) ≈\(up)%")
+                                            .foregroundStyle(.green)
+                                        Text("\(L10n.t("Fall")) ≈\(100 - up)%")
+                                            .foregroundStyle(.red)
+                                    }
+                                    Text("\(L10n.t("Estimated close")): \(StockQuoteCodec.format(price: estimate.expectedClose, currency: holding.currency, locale: .current))")
+                                        .font(.subheadline)
+                                } else if let reason = portfolio.reasons[holding.id] {
+                                    Text(reason).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 4)
+                        }
+                        Text(L10n.t("Experimental, uncalibrated model: 20–60 completed daily returns set volatility. Today's fresh price is the expected close; rise/fall odds assume zero drift until the regular close. Not an investment signal."))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             Section(L10n.t("Watchlist")) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -184,7 +236,21 @@ struct StockSettings: View {
             }
         }
         .formStyle(.grouped)
+        .task(id: "\(preferences.portfolioForecastEnabled):\(preferences.stockQuoteSource.rawValue):\(preferences.tossAccountSeq):\(preferences.stockSettingsRevision)") {
+            guard preferences.portfolioForecastEnabled, preferences.stockQuoteSource == .toss else { return }
+            while !Task.isCancelled {
+                await portfolio.refresh(preferences: preferences)
+                do { try await Task.sleep(for: .seconds(60)) }
+                catch { break }
+            }
+        }
+        .onChange(of: preferences.portfolioForecastEnabled) { _, enabled in
+            if !enabled { portfolio.clear() }
+        }
+        .onChange(of: preferences.tossAccountSeq) { _, _ in portfolio.clearSelection() }
+        .onChange(of: preferences.stockSettingsRevision) { _, _ in portfolio.clear() }
         .onChange(of: preferences.stockQuoteSource) { _, _ in
+            portfolio.clear()
             apiMessage = nil
             message = nil
             showsFinnhubKeys = false

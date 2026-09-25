@@ -341,6 +341,14 @@ final class Preferences: ObservableObject {
         }
     }
 
+    @Published var portfolioForecastEnabled: Bool {
+        didSet { defaults.set(portfolioForecastEnabled, forKey: "portfolioForecastEnabled") }
+    }
+    /// An opaque selector, never the account number or positions.
+    @Published var tossAccountSeq: Int {
+        didSet { defaults.set(tossAccountSeq, forKey: "tossAccountSeq") }
+    }
+
     @Published var stockChartCount: Int {
         didSet {
             let clamped = min(max(stockChartCount, 1), 20)
@@ -971,6 +979,8 @@ final class Preferences: ObservableObject {
         self.notchMeterStyle = NotchMeterStyle(rawValue: defaults.string(forKey: "notchMeterStyle") ?? "") ?? .ring
         self.stockSymbols = defaults.stringArray(forKey: "stockSymbols") ?? []
         self.stockQuoteSource = StockQuoteSource(rawValue: defaults.string(forKey: "stockQuoteSource") ?? defaults.string(forKey: "usStockSource") ?? "") ?? .toss
+        self.portfolioForecastEnabled = defaults.bool(forKey: "portfolioForecastEnabled")
+        self.tossAccountSeq = defaults.integer(forKey: "tossAccountSeq")
         self.stockChartCount = min(max(defaults.object(forKey: "stockChartCount") as? Int ?? 20, 1), 20)
         self.stockChartInterval = StockChartInterval(rawValue: defaults.string(forKey: "stockChartInterval") ?? "") ?? .tenMinutes
         self.stockDisplayInterval = min(max(defaults.object(forKey: "stockDisplayInterval") as? Int ?? 3, 1), 10)
