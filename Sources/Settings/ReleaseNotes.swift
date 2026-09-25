@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.15",
+                headline: "Reliable Toss Securities quotes and charts",
+                changes: [
+                    ReleaseNote.Change(title: "Share one Toss access token for stock quotes and hover charts",
+                                       detail: "Opening a chart no longer invalidates the quote connection. Unauthorized responses renew the token and retry.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.14",
                 headline: "Stock price and change alternate in the notch",
                 changes: [

@@ -443,7 +443,9 @@ code (`005930`) or a US ticker
 uses market-data endpoints only; it does not place orders.
 
 The app gets an OAuth token with `POST /oauth2/token`, batches current prices with
-`GET /api/v1/prices`, then updates prices from realtime trade messages. Hover charts
+`GET /api/v1/prices`, then updates prices from realtime trade messages. Quotes
+and charts reuse the same token: Toss invalidates the old token when a new one
+is issued. An unauthorized request causes the app to renew it. Hover charts
 request **1-minute** and **daily** candles from `GET /api/v1/candles`; the **10-minute**
 view is aggregated locally from 1-minute candles. Choose 1–20 visible candles and the
 default interval in Stocks settings. While the chart is open, the selected stock's

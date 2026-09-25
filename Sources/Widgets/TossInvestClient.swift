@@ -72,6 +72,11 @@ enum TossInvestAPI {
     static let base = URL(string: "https://openapi.tossinvest.com")!
     static let socket = URL(string: "wss://openapi-ws.tossinvest.com/ws/v1")!
 
+    @MainActor private static var tokenCredentials: (clientID: String, clientSecret: String)?
+    @MainActor private static var cachedToken: AccessToken?
+    @MainActor private static var tokenTask: Task<AccessToken, Error>?
+    @MainActor private static var tokenGeneration = UUID()
+
     enum Failure: Error { case invalidResponse, http(Int) }
 
     struct AccessToken {
@@ -79,8 +84,36 @@ enum TossInvestAPI {
         var expiresAt: Date
     }
 
+    @MainActor
     static func accessToken(clientID: String, clientSecret: String, now: Date = Date(),
                             session: URLSession = .shared) async throws -> AccessToken {
+        if tokenCredentials?.clientID != clientID || tokenCredentials?.clientSecret != clientSecret {
+            tokenTask?.cancel()
+            tokenTask = nil
+            cachedToken = nil
+            tokenCredentials = (clientID, clientSecret)
+            tokenGeneration = UUID()
+        }
+        if let cachedToken, cachedToken.expiresAt > now { return cachedToken }
+        if let tokenTask { return try await tokenTask.value }
+        let generation = tokenGeneration
+        let task = Task { try await requestAccessToken(clientID: clientID, clientSecret: clientSecret,
+                                                        now: now, session: session) }
+        tokenTask = task
+        do {
+            let token = try await task.value
+            guard generation == tokenGeneration else { throw CancellationError() }
+            cachedToken = token
+            tokenTask = nil
+            return token
+        } catch {
+            if generation == tokenGeneration { tokenTask = nil }
+            throw error
+        }
+    }
+
+    private static func requestAccessToken(clientID: String, clientSecret: String, now: Date,
+                                           session: URLSession) async throws -> AccessToken {
         var request = URLRequest(url: base.appending(path: "/oauth2/token"))
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -94,6 +127,10 @@ enum TossInvestAPI {
         let data = try await body(for: request, session: session)
         guard let token = StockQuoteCodec.token(from: data) else { throw Failure.invalidResponse }
         return AccessToken(value: token.accessToken, expiresAt: now.addingTimeInterval(max(token.expiresIn - 60, 30)))
+    }
+
+    @MainActor private static func invalidate(_ token: String) {
+        if cachedToken?.value == token { cachedToken = nil }
     }
 
     static func prices(token: String, symbols: [String], session: URLSession = .shared) async throws -> [String: StockTick] {
@@ -196,7 +233,14 @@ enum TossInvestAPI {
     private static func body(for request: URLRequest, session: URLSession) async throws -> Data {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw Failure.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw Failure.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401,
+               let authorization = request.value(forHTTPHeaderField: "Authorization"),
+               authorization.hasPrefix("Bearer ") {
+                await invalidate(String(authorization.dropFirst("Bearer ".count)))
+            }
+            throw Failure.http(http.statusCode)
+        }
         return data
     }
 }

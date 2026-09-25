@@ -75,6 +75,34 @@ final class StockQuoteTests: XCTestCase {
             .queryItems?.first(where: { $0.name == "symbols" })?.value, symbols.joined(separator: ","))
     }
 
+    @MainActor
+    func testTossQuoteAndChartShareOneTokenAndRenewAfterUnauthorizedResponse() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TossTokenEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        TossTokenEndpoint.reset()
+        let clientID = "test-\(UUID().uuidString)"
+
+        async let quoteToken = TossInvestAPI.accessToken(clientID: clientID, clientSecret: "test-secret", session: session)
+        async let chartToken = TossInvestAPI.accessToken(clientID: clientID, clientSecret: "test-secret", session: session)
+        let (quote, chart) = try await (quoteToken, chartToken)
+        XCTAssertEqual(quote.value, chart.value)
+        XCTAssertEqual(TossTokenEndpoint.tokenRequests, 1)
+
+        TossTokenEndpoint.rejectNextPrice()
+        do {
+            _ = try await TossInvestAPI.prices(token: quote.value, symbols: ["SOXL"], session: session)
+            XCTFail("An unauthorized quote must invalidate the shared token")
+        } catch TossInvestAPI.Failure.http(401) {}
+
+        let renewed = try await TossInvestAPI.accessToken(clientID: clientID, clientSecret: "test-secret", session: session)
+        XCTAssertNotEqual(renewed.value, quote.value)
+        XCTAssertEqual(TossTokenEndpoint.tokenRequests, 2)
+        let prices = try await TossInvestAPI.prices(token: renewed.value, symbols: ["SOXL"], session: session)
+        XCTAssertEqual(prices["us:SOXL"]?.price, Decimal(string: "35.81"))
+    }
+
     func testFinnhubQuoteUsesHeaderAndRejectsInvalidPrices() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [FinnhubQuoteEndpoint.self]
@@ -281,6 +309,39 @@ private final class FinnhubQuoteEndpoint: URLProtocol, @unchecked Sendable {
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(Self.payload.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+private final class TossTokenEndpoint: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    private static var issues = 0
+    private static var rejectsPrice = false
+    static var tokenRequests: Int { lock.withLock { issues } }
+
+    static func reset() { lock.withLock { issues = 0; rejectsPrice = false } }
+    static func rejectNextPrice() { lock.withLock { rejectsPrice = true } }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+
+    override func startLoading() {
+        let (status, payload): (Int, String) = Self.lock.withLock {
+            if request.url?.path == "/oauth2/token" {
+                Self.issues += 1
+                return (200, #"{"access_token":"token-\#(Self.issues)","expires_in":3600}"#)
+            }
+            if Self.rejectsPrice {
+                Self.rejectsPrice = false
+                return (401, #"{"error":{"code":"unauthorized"}}"#)
+            }
+            return (200, #"{"result":[{"symbol":"SOXL","lastPrice":"35.81","currency":"USD"}]}"#)
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil,
+                                       headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(payload.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 }

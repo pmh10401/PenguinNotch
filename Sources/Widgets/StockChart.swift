@@ -53,8 +53,6 @@ final class StockChartStore: ObservableObject {
     private var attemptedAt: [Key: Date] = [:]
     private var tasks: [Key: Task<Void, Never>] = [:]
     private let fetchOverride: Fetch?
-    private var token: TossInvestAPI.AccessToken?
-    private var tokenTask: Task<TossInvestAPI.AccessToken, Error>?
     private var settingsRevision = 0
     private var quoteSource: StockQuoteSource = .toss
 
@@ -63,28 +61,21 @@ final class StockChartStore: ObservableObject {
     }
 
     private func fetchLive(_ stock: WatchedStock, _ interval: StockChartInterval) async throws -> [StockCandle] {
-        let token = try await accessToken()
-        try Task.checkCancellation()
-        return try await TossInvestAPI.chartCandles(token: token.value, stock: stock, interval: interval)
-    }
-
-    private func accessToken() async throws -> TossInvestAPI.AccessToken {
-        if let token, token.expiresAt > Date() { return token }
-        if let tokenTask { return try await tokenTask.value }
         let credentials = TossCredentials.load()
         guard !credentials.clientID.isEmpty, !credentials.clientSecret.isEmpty else {
             throw TossInvestAPI.Failure.invalidResponse
         }
-        let revision = settingsRevision
-        let task = Task {
-            try await TossInvestAPI.accessToken(clientID: credentials.clientID,
-                                                clientSecret: credentials.clientSecret)
+        let token = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
+                                                         clientSecret: credentials.clientSecret)
+        try Task.checkCancellation()
+        do {
+            return try await TossInvestAPI.chartCandles(token: token.value, stock: stock, interval: interval)
+        } catch TossInvestAPI.Failure.http(401) {
+            let renewed = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
+                                                               clientSecret: credentials.clientSecret)
+            try Task.checkCancellation()
+            return try await TossInvestAPI.chartCandles(token: renewed.value, stock: stock, interval: interval)
         }
-        tokenTask = task
-        defer { if settingsRevision == revision, !Task.isCancelled { tokenTask = nil } }
-        let token = try await task.value
-        if settingsRevision == revision, !Task.isCancelled { self.token = token }
-        return token
     }
 
     func secondsUntilRefresh(stock: WatchedStock, interval: StockChartInterval, now: Date = Date()) -> TimeInterval {
@@ -104,9 +95,6 @@ final class StockChartStore: ObservableObject {
             loading.removeAll()
             failed.removeAll()
             attemptedAt.removeAll()
-            token = nil
-            tokenTask?.cancel()
-            tokenTask = nil
             settingsRevision = revision
             quoteSource = source
         }
