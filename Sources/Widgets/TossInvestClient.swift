@@ -161,18 +161,23 @@ enum TossInvestAPI {
             ping.cancel()
             socketTask.cancel(with: .normalClosure, reason: nil)
         }
-        try await socketTask.send(.string(StockQuoteCodec.subscriptionJSON(stocks)))
-        while !Task.isCancelled {
-            let message = try await socketTask.receive()
-            let text: String
-            switch message {
-            case .string(let value): text = value
-            case .data(let value): text = String(decoding: value, as: UTF8.self)
-            @unknown default: continue
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await socketTask.send(.string(StockQuoteCodec.subscriptionJSON(stocks)))
+            while !Task.isCancelled {
+                let message = try await socketTask.receive()
+                let text: String
+                switch message {
+                case .string(let value): text = value
+                case .data(let value): text = String(decoding: value, as: UTF8.self)
+                @unknown default: continue
+                }
+                if let event = StockQuoteCodec.event(from: text) {
+                    await onEvent(event)
+                }
             }
-            if let event = StockQuoteCodec.event(from: text) {
-                await onEvent(event)
-            }
+        } onCancel: {
+            socketTask.cancel(with: .goingAway, reason: nil)
         }
     }
 
@@ -204,13 +209,12 @@ final class StockQuotesMonitor: ObservableObject {
     private var quotes: [String: StockTick] = [:]
     private var closes: [String: Decimal] = [:]
     private var names: [String: String] = [:]
-    private var tossLink: StockLink = .idle
-    private var finnhubLink: StockLink = .idle
+    private var link: StockLink = .idle
     private var stockLinks: [String: StockLink] = [:]
     private var enabled = false
     private var stocks: [WatchedStock] = []
-    private var usSource: USStockSource = .toss
-    private var tasks: [Task<Void, Never>] = []
+    private var source: StockQuoteSource = .toss
+    private var task: Task<Void, Never>?
     private var generation = UUID()
     private var cancellables = Set<AnyCancellable>()
 
@@ -218,26 +222,29 @@ final class StockQuotesMonitor: ObservableObject {
         preferences.$showsStocks.combineLatest(preferences.$stockSymbols, preferences.$stockSettingsRevision)
             .sink { [weak self] shows, symbols, _ in
                 self?.restart(shows: shows, symbols: WatchedStock.parseList(symbols),
-                              source: preferences.usStockSource)
+                              source: preferences.stockQuoteSource)
             }
             .store(in: &cancellables)
     }
 
     func stop() {
-        tasks.forEach { $0.cancel() }
-        tasks = []
+        task?.cancel()
+        task = nil
+        generation = UUID()
         cancellables.removeAll()
     }
 
-    func refresh() { restart(shows: enabled, symbols: stocks, source: usSource) }
+    func refresh() { restart(shows: enabled, symbols: stocks, source: source) }
 
-    private func restart(shows: Bool, symbols: [WatchedStock], source: USStockSource) {
-        tasks.forEach { $0.cancel() }
-        tasks = []
-        if usSource != source {
-            quotes = quotes.filter { !$0.key.hasPrefix("us:") }
-            closes = closes.filter { !$0.key.hasPrefix("us:") }
-            usSource = source
+    private func restart(shows: Bool, symbols: [WatchedStock], source: StockQuoteSource) {
+        task?.cancel()
+        task = nil
+        generation = UUID()
+        if self.source != source {
+            quotes.removeAll()
+            closes.removeAll()
+            names.removeAll()
+            self.source = source
         }
         enabled = shows
         stocks = symbols
@@ -250,30 +257,38 @@ final class StockQuotesMonitor: ObservableObject {
             return
         }
         guard !symbols.isEmpty else {
-            snapshots = [StockBoard.placeholder(message: L10n.t("Add a stock symbol in Settings → Appearance."))]
+            snapshots = [StockBoard.placeholder(message: L10n.t("Add a stock symbol in Settings → Stocks."), source: source)]
             return
         }
-        let tossStocks = symbols.filter { $0.market == .kr || source == .toss }
-        let finnhubStocks = symbols.filter { $0.market == .us && source == .finnhub }
-        let credentials = tossStocks.isEmpty ? (clientID: "", clientSecret: "") : TossCredentials.load()
-        let finnhubKey = finnhubStocks.isEmpty ? "" : FinnhubCredentials.load()
-        tossLink = credentials.clientID.isEmpty || credentials.clientSecret.isEmpty
-            ? .failed(L10n.t("Add Toss Securities API keys in Settings → Appearance.")) : .idle
-        finnhubLink = finnhubKey.isEmpty
-            ? .failed(L10n.t("Add a Finnhub API key in Settings → Appearance.")) : .idle
+        let supported = symbols.filter { source.supports($0) }
+        for stock in symbols where !source.supports(stock) {
+            stockLinks[stock.id] = .failed(L10n.t("Finnhub supports US quotes only. Select Toss Securities for Korean stocks."))
+        }
+        link = .idle
+        let token = generation
+        if !supported.isEmpty {
+            switch source {
+            case .toss:
+                let credentials = TossCredentials.load()
+                if credentials.clientID.isEmpty || credentials.clientSecret.isEmpty {
+                    link = .failed(L10n.t("Add Toss Securities API keys in Settings → Stocks."))
+                } else {
+                    task = Task { [weak self] in
+                        await self?.run(supported, credentials: credentials, generation: token)
+                    }
+                }
+            case .finnhub:
+                let key = FinnhubCredentials.load()
+                if key.isEmpty {
+                    link = .failed(L10n.t("Add a Finnhub API key in Settings → Stocks."))
+                } else {
+                    task = Task { [weak self] in
+                        await self?.runFinnhub(supported, key: key, generation: token)
+                    }
+                }
+            }
+        }
         publish()
-        let token = UUID()
-        generation = token
-        if !tossStocks.isEmpty, !credentials.clientID.isEmpty, !credentials.clientSecret.isEmpty {
-            tasks.append(Task { [weak self] in
-                await self?.run(tossStocks, credentials: credentials, generation: token)
-            })
-        }
-        if !finnhubStocks.isEmpty, !finnhubKey.isEmpty {
-            tasks.append(Task { [weak self] in
-                await self?.runFinnhub(finnhubStocks, key: finnhubKey, generation: token)
-            })
-        }
     }
 
     private func run(_ symbols: [WatchedStock], credentials: (clientID: String, clientSecret: String),
@@ -289,9 +304,10 @@ final class StockQuotesMonitor: ObservableObject {
                 guard generation == token else { return }
                 quotes.merge(prices) { _, new in new }
                 publish()
-                names.merge((try? await fetchedNames) ?? [:]) { _, new in new }
+                let resolvedNames = (try? await fetchedNames) ?? [:]
                 guard generation == token else { return }
-                tossLink = .live
+                names.merge(resolvedNames) { _, new in new }
+                link = .live
                 publish()
                 // Daily candles are per-symbol; let trades start while rings fill in.
                 let candles = Task {
@@ -310,17 +326,18 @@ final class StockQuotesMonitor: ObservableObject {
                     guard let self, self.generation == token else { return }
                     self.absorb(event)
                 }
+                guard generation == token, !Task.isCancelled else { return }
                 delay = 1
-                tossLink = .reconnecting
+                link = .reconnecting
             } catch let error as TossInvestAPI.Failure {
                 guard generation == token else { return }
-                tossLink = .failed(message(for: error))
+                link = .failed(message(for: error))
                 publish()
                 try? await Task.sleep(for: .seconds(delay))
                 delay = min(delay * 2, 30)
             } catch {
                 guard generation == token, !Task.isCancelled else { return }
-                tossLink = .reconnecting
+                link = .reconnecting
                 publish()
                 try? await Task.sleep(for: .seconds(delay))
                 delay = min(delay * 2, 30)
@@ -332,13 +349,13 @@ final class StockQuotesMonitor: ObservableObject {
         switch event {
         case .tick(let id, let tick):
             quotes[id] = tick
-            tossLink = .live
+            link = .live
         case .subscribed:
-            tossLink = .live
+            link = .live
         case .rejected, .pong:
             break
         case .failure:
-            tossLink = .reconnecting
+            link = .reconnecting
         }
         publish()
     }
@@ -354,15 +371,15 @@ final class StockQuotesMonitor: ObservableObject {
                     quotes[stock.id] = tick
                     closes[stock.id] = previous
                     stockLinks[stock.id] = nil
-                    finnhubLink = .live
+                    link = .live
                 } catch let error as FinnhubAPI.Failure {
                     guard !Task.isCancelled, generation == token else { return }
                     switch error {
                     case .http(401), .http(403):
-                        finnhubLink = .failed(L10n.t("Finnhub refused the API key."))
+                        link = .failed(L10n.t("Finnhub refused the API key."))
                         limited = true
                     case .http(429):
-                        finnhubLink = .failed(L10n.t("Finnhub rate limit reached. Retrying later."))
+                        link = .failed(L10n.t("Finnhub rate limit reached. Retrying later."))
                         limited = true
                     default:
                         stockLinks[stock.id] = .failed(L10n.t("Finnhub quote unavailable."))
@@ -381,8 +398,7 @@ final class StockQuotesMonitor: ObservableObject {
 
     private func publish() {
         let next = stocks.map { stock in
-            let source: USStockSource = stock.market == .us ? usSource : .toss
-            let link = stockLinks[stock.id] ?? (source == .finnhub ? finnhubLink : tossLink)
+            let link = stockLinks[stock.id] ?? self.link
             return StockBoard.snapshot(stock: stock, quote: quotes[stock.id], previousClose: closes[stock.id],
                                        name: names[stock.id], link: link, source: source)
         }

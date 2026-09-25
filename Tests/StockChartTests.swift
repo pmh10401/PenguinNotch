@@ -146,6 +146,45 @@ final class StockChartTests: XCTestCase {
     }
 
     @MainActor
+    func testFinnhubNeverFetchesTossChartsAndClearsPreviousProviderCache() async {
+        let recorder = ChartFetchRecorder()
+        let store = StockChartStore { stock, interval in await recorder.fetch(stock, interval) }
+        let stock = WatchedStock(symbol: "SOXL", market: .us)
+        await store.load(stock: stock, interval: .minute)
+        XCTAssertFalse(store.entries.isEmpty)
+        for interval in StockChartInterval.allCases {
+            await store.load(stock: stock, interval: interval, source: .finnhub)
+        }
+        XCTAssertTrue(store.entries.isEmpty)
+        let calls = await recorder.calls()
+        XCTAssertEqual(calls, ["us:SOXL:1m"])
+        await store.load(stock: stock, interval: .minute, source: .toss)
+        let resumed = await recorder.calls()
+        XCTAssertEqual(resumed.count, 2)
+    }
+
+    @MainActor
+    func testSwitchingProviderCancelsInFlightChartWithoutRepopulatingCache() async {
+        let started = expectation(description: "Toss chart started")
+        let cancelled = expectation(description: "Toss chart cancelled")
+        let store = StockChartStore { _, _ in
+            started.fulfill()
+            do { try await Task.sleep(for: .seconds(60)) }
+            catch { cancelled.fulfill() }
+            return []
+        }
+        let stock = WatchedStock(symbol: "SOXL", market: .us)
+        let pending = Task { await store.load(stock: stock, interval: .minute) }
+        await fulfillment(of: [started], timeout: 2)
+        store.configure(source: .finnhub, settingsRevision: 1)
+        await fulfillment(of: [cancelled], timeout: 2)
+        await pending.value
+        XCTAssertTrue(store.entries.isEmpty)
+        XCTAssertTrue(store.loading.isEmpty)
+        XCTAssertTrue(store.failed.isEmpty)
+    }
+
+    @MainActor
     func testFailedDailyChartRequestRetriesAfterTenMinutes() async {
         let recorder = ChartFetchRecorder()
         let store = StockChartStore { stock, interval in try await recorder.fail(stock, interval) }

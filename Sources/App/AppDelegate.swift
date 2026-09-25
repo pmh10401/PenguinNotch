@@ -103,6 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fleet = NotchFleet(scope: preferences.notchScope, edge: preferences.notchEdge)
         self.notchFleet = fleet
         fleet.todoPreferences = preferences
+        preferences.$stockSettingsRevision
+            .sink { [weak fleet] revision in
+                fleet?.stockCharts.configure(source: preferences.stockQuoteSource, settingsRevision: revision)
+            }
+            .store(in: &cancellables)
 
         preferences.$providerOrder
             .sink { [weak fleet] in fleet?.apply(order: $0) }

@@ -90,7 +90,7 @@ final class NotchWidgetsMonitor: ObservableObject {
     }
 
     static func weatherPlaceholder(location: WeatherLocation? = nil, failed: Bool = false) -> ProviderSnapshot {
-        let message = location == nil ? L10n.t("Choose a weather city in Settings → Appearance.")
+        let message = location == nil ? L10n.t("Choose a weather city in Settings → Daily widgets.")
             : failed ? L10n.t("Weather is unavailable. It will retry automatically.") : L10n.t("Loading weather…")
         return ProviderSnapshot(id: "widget-weather", displayName: location?.name ?? L10n.t("Weather"),
                                 glyph: .weatherPartlyCloudy, fidelity: .official,

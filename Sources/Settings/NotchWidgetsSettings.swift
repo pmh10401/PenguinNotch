@@ -65,152 +65,62 @@ struct WeatherSettings: View {
     }
 }
 
-struct StockSettings: View {
-    @ObservedObject var preferences: Preferences
-    @State private var clientID = ""
-    @State private var clientSecret = ""
-    @State private var finnhubKey = ""
-    @State private var symbol = ""
-    @State private var message: String?
-
-    var body: some View {
-        Picker(L10n.t("US stock quotes"), selection: $preferences.usStockSource) {
-            ForEach(USStockSource.allCases) { source in
-                Text(source.title).tag(source)
-            }
+enum NotchItemCategory: String, CaseIterable, Identifiable {
+    case ai, stocks, computer, widgets
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .ai: return L10n.t("AI subscriptions")
+        case .stocks: return L10n.t("Stocks")
+        case .computer: return L10n.t("Computer monitoring")
+        case .widgets: return L10n.t("Daily widgets")
         }
-        Text(L10n.t("Korean stocks always use Toss Securities. Select Finnhub for US quotes with your own free API key; quotes refresh about every minute. Candlestick charts still require Toss Securities keys."))
-            .font(.caption).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        SecureField(L10n.t("Finnhub API key"), text: $finnhubKey)
-        HStack {
-            Button(L10n.t("Save Finnhub key")) {
-                if FinnhubCredentials.save(finnhubKey) {
-                    finnhubKey = ""
-                    preferences.stockSettingsRevision += 1
-                    message = L10n.t("Finnhub key saved")
-                } else {
-                    message = L10n.t("Could not save Finnhub key")
-                }
-            }
-            .disabled(finnhubKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button(L10n.t("Remove Finnhub key")) {
-                FinnhubCredentials.clear()
-                finnhubKey = ""
-                preferences.stockSettingsRevision += 1
-                message = nil
-            }
-        }
-        Link(L10n.t("Get a free Finnhub key"), destination: URL(string: "https://finnhub.io/register")!)
-            .font(.caption)
-        Text(L10n.t("Realtime trades from Toss Securities. Turn Stocks on under Notch items and order. Register this Mac's public IP under WTS → Settings → Open API → Allowed IPs. The client secret stays in the Keychain."))
-            .onAppear { if clientID.isEmpty { clientID = TossCredentials.load().clientID } }
-            .font(.caption).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        TextField(L10n.t("Client ID"), text: $clientID)
-        SecureField(L10n.t("Client secret"), text: $clientSecret)
-        HStack {
-            Button(L10n.t("Save API keys")) {
-                TossCredentials.save(clientID: clientID, clientSecret: clientSecret)
-                clientSecret = ""
-                preferences.stockSettingsRevision += 1
-                message = L10n.t("API keys saved")
-            }
-            .disabled(clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button(L10n.t("Remove API keys")) {
-                TossCredentials.clear()
-                clientID = ""
-                clientSecret = ""
-                preferences.stockSettingsRevision += 1
-                message = nil
-            }
-        }
-        HStack {
-            Text(L10n.t("Stock candles to show"))
-            Spacer()
-            TextField(L10n.t("Candles"), value: $preferences.stockChartCount, format: .number)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 54)
-            Stepper(L10n.t("Candles"), value: $preferences.stockChartCount, in: 1...20)
-                .labelsHidden()
-        }
-        Picker(L10n.t("Default chart interval"), selection: $preferences.stockChartInterval) {
-            ForEach(StockChartInterval.allCases) { interval in
-                Text(interval.rawValue).tag(interval)
-            }
-        }
-        .pickerStyle(.segmented)
-        Text(L10n.t("1–20 candles · 1m every minute, 10m every 10 minutes, 1d daily"))
-            .font(.caption).foregroundStyle(.secondary)
-        VStack(alignment: .leading, spacing: 10) {
-            Label(L10n.t("Add symbol"), systemImage: "plus.circle.fill")
-                .font(.headline)
-            HStack {
-                TextField("Company name or symbol · 삼성전자, 005930, AAPL", text: $symbol)
-                    .textFieldStyle(.roundedBorder)
-                    .controlSize(.large)
-                    .onSubmit(add)
-                Button(L10n.t("Add symbol"), action: add)
-                    .buttonStyle(SettingsButtonStyle(kind: .prominent))
-                    .disabled(symbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            if WatchedStock.parse(symbol) == nil {
-                ForEach(KoreanStockDirectory.shared.search(symbol)) { company in
-                    Button("\(company.name) · \(company.code) (\(company.market))") {
-                        add(company.code)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.06)))
-        ForEach(WatchedStock.parseList(preferences.stockSymbols)) { stock in
-            HStack {
-                Text(stock.market == .kr ? "KR \(stock.symbol)" : "US \(stock.symbol)")
-                Spacer()
-                Button {
-                    preferences.removeStockSymbol(stock.id)
-                } label: {
-                    Image(systemName: "minus.circle")
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(L10n.t("Remove \(stock.symbol)"))
-            }
-        }
-        if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
     }
-
-    private func add() {
-        add(symbol)
-    }
-
-    private func add(_ input: String) {
-        guard let stock = KoreanStockDirectory.shared.resolve(input) else {
-            message = "Company not found. Select a match or enter a Korean stock code or US ticker."
-            return
+    func contains(_ snapshot: ProviderSnapshot) -> Bool {
+        switch snapshot.kind {
+        case .usage, .localRuntime: return self == .ai
+        case .stocks: return self == .stocks
+        case .system: return self == .computer
+        case .calendar, .weather, .todo: return self == .widgets
         }
-        guard preferences.addStockSymbol(stock.id) else {
-            message = L10n.t("The stock list holds 30 symbols.")
-            return
-        }
-        symbol = ""
-        message = nil
     }
 }
 
 struct NotchOrderSettings: View {
     @ObservedObject var preferences: Preferences
     let snapshots: [ProviderSnapshot]
+    @State private var category: NotchItemCategory?
 
-    private var ordered: [ProviderSnapshot] {
+    private var allOrdered: [ProviderSnapshot] {
         ProviderOrder.arrange(snapshots, by: preferences.providerOrder, id: \.id)
+    }
+    private var ordered: [ProviderSnapshot] {
+        allOrdered.filter { category?.contains($0) ?? true }
     }
 
     var body: some View {
         Text(L10n.t("Choose what appears in the notch. Hidden items keep their data, color and position. Drag rows or use the arrows to reorder."))
             .font(.caption).foregroundStyle(.secondary)
+        HStack {
+            Picker(L10n.t("Category"), selection: $category) {
+                Text(L10n.t("All items")).tag(nil as NotchItemCategory?)
+                ForEach(NotchItemCategory.allCases) { item in
+                    Text(item.title).tag(Optional(item))
+                }
+            }
+            Button(L10n.t("Group by category")) {
+                let grouped = NotchItemCategory.allCases.flatMap { item in allOrdered.filter(item.contains) }
+                preferences.providerOrder = ProviderOrder.keepingHiddenSlots(grouped.map(\.id), in: preferences.providerOrder)
+            }
+        }
+        if ordered.isEmpty {
+            Text(L10n.t("No items in this category."))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        if !preferences.showsSystemUsage, category == nil || category == .computer {
+            Text(L10n.t("Hardware switches are paused. Enable monitoring on the Computer monitoring page."))
+                .font(.caption).foregroundStyle(.secondary)
+        }
         ForEach(ordered) { snapshot in
             let title = snapshot.localModel?.name ?? snapshot.displayName
             HStack {
@@ -257,7 +167,8 @@ struct NotchOrderSettings: View {
         var ids = ordered.map(\.id)
         guard let from = ids.firstIndex(of: id), let to = ids.firstIndex(of: target), from != to else { return false }
         ids.insert(ids.remove(at: from), at: to)
-        preferences.providerOrder = ProviderOrder.keepingHiddenSlots(ids, in: preferences.providerOrder)
+        let completeOrder = ProviderOrder.keepingHiddenSlots(allOrdered.map(\.id), in: preferences.providerOrder)
+        preferences.providerOrder = ProviderOrder.keepingHiddenSlots(ids, in: completeOrder)
         return true
     }
 }

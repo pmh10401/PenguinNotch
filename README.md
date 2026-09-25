@@ -120,7 +120,7 @@ usage polling and forgets its readings; borrowed accounts stay signed in to
 the tools that own them.
 
 **Local Ollama is detected automatically.** Configure its address or stop monitoring in **Settings → Ollama**.
-Each loaded model gets a notch cell; reorder or hide it in **Settings → Accounts**.
+Each loaded model gets a notch cell; reorder or hide it in **Settings → AI subscriptions**.
 Hover for RAM/VRAM, unload time, context limit and quantization.
 
 For generation speed (**tok/s**) and live **Thinking**, enable **Measure speed and thinking**
@@ -235,6 +235,18 @@ stays crossed, and again only after the window has genuinely rolled over.
 Each provider can be muted from its own row in Settings, and macOS permission
 is asked on the first real alert rather than at launch.
 
+## Settings by task
+
+The macOS sidebar separates **AI subscriptions**, **Stocks**, **Computer monitoring**,
+**Daily widgets**, and **Appearance**. Stocks, computer monitoring and daily widgets
+have their own visibility and color controls. Stocks starts with one quote-provider choice
+and keeps API credentials collapsed until needed; AI usage formatting and thresholds live with AI accounts. App language, accent
+color and Dock/menu-bar settings are under **General**.
+
+Under **Appearance → Notch items and order → Manage visible items and order**, filter
+by category or choose **Group by category** to gather related cells. Filtering and moving
+rows preserves other categories’ positions; existing visibility, colors and order are kept.
+
 ## Placement
 
 The notch lives on any of the four screen edges. Right and left keep a
@@ -266,17 +278,17 @@ the surer way to release one that was kept open by accident. The item is
 greyed out when Settings says Always show, because that choice is Settings' to
 change.
 
-In Settings → Appearance → Reset time, choose **Time remaining** for countdowns
+In Settings → AI subscriptions → Usage display → Reset time, choose **Time remaining** for countdowns
 like "Resets in 3 Days 3h". **Reset date** keeps the reset date and time, with
 minutes shown when less than an hour remains.
 
-Appearance also carries the ring's accent colour. The device accent is the
+General carries the app's accent colour. The device accent is the
 default; fixed presets are available for pink, red, orange, yellow, green,
 teal, blue, indigo, purple and off-white.
 
 The app itself can show a Dock icon, a menu bar item, or neither. The menu bar
 item is the PenguinNotch icon until you switch on **Show limit information in
-menu bar** under Settings → Appearance → App; then it shows the five-hour
+menu bar** under Settings → General → App; then it shows the five-hour
 limits of the providers you choose there — the provider's mark, the share used
 and the time until it resets, like `72% · 2h 18m | 41% · 4h 05m`. Choosing
 what the bar shows never changes what PenguinNotch reads, and with nothing chosen
@@ -285,7 +297,7 @@ the icon comes back. Its menu has the full readings either way.
 ## System usage (local development)
 
 The macOS notch, and the Windows notch, also show **CPU, RAM, GPU, DISK, NET, BAT and PWR** as seven cells,
-refreshed about once a second. **Settings → Appearance → System usage** hides
+refreshed about once a second. On macOS, **Settings → Computer monitoring** hides
 the cells and stops sampling. These readings also work with no connected AI
 accounts and do not trigger quota alerts or get saved to the usage archive.
 
@@ -386,25 +398,28 @@ forecasts disappear when the date changes in the selected city's time zone.
 To include the opt-in live city-search/forecast test, run
 `TEST_RUNNER_PENGUINNOTCH_LIVE_WEATHER_TEST=1 make test-ci`; ordinary tests skip it.
 
-**Stocks** shows the last trade for symbols you add under Appearance. Korean
+**Stocks** shows the last trade for symbols you add under Settings → Stocks. Korean
 codes such as `005930` and US tickers such as `AAPL` can share the list, up to
 30. With Toss Securities selected, the current price comes from `GET /api/v1/prices`,
 then later trades arrive on `wss://openapi-ws.tossinvest.com/ws/v1`. The client id and secret
 are issued in Toss Securities WTS → Settings → Open API and are stored in the
-Keychain. The same screen's allowed-IP list has to include this Mac. Each symbol is its own cell. Settings → Notch → Meter style chooses circles
+Keychain. The same screen's allowed-IP list has to include this Mac. Each symbol is its own cell. Settings → Appearance → Meter style chooses circles
 or horizontal bars for every cell, including accounts and system meters. A stock still
 measures the move from the previous close, and 30 percent fills the circle or
 the bar. A rise is green and a fall is red. A quiet market keeps the last price. The secret is never
 written to preferences.
 
-For a free US quote source, choose **Finnhub** under **Settings → Appearance → Stocks → US stock quotes**,
-[get your own API key](https://finnhub.io/register), and save it in the macOS Keychain.
-US quotes then use Finnhub `GET /api/v1/quote` with the key in a request header and refresh
-about once a minute per ticker. The app reads the quote and previous close, but does not
-request Finnhub candles. Korean stocks still use Toss Securities; hover candlestick charts
-for either market require Toss Securities API keys. Without those keys, the chart explains
-what is missing. The default US source remains Toss for existing users. Finnhub plan limits
-and [personal-use terms](https://finnhub.io/terms-of-service) apply; a missing or limited quote never appears as a zero price.
+Choose **one provider** under **Settings → Stocks → Quote provider**. Only the selected
+provider’s settings and APIs are used; switching retains your watchlist and saved keys.
+**Toss Securities** supports Korean and US quotes plus hover candlestick charts.
+For free US quotes, choose **Finnhub**, [get your own API key](https://finnhub.io/register),
+and save it in the macOS Keychain. US quotes use `GET /api/v1/quote` with the key in a
+request header and refresh about once a minute per ticker. Finnhub mode does not call
+Toss: Korean symbols stay in your list with an unsupported message, and candlestick
+charts are unavailable. Select Toss again to restore those features. Existing provider
+choices are retained; the default is Toss. Finnhub plan limits and
+[personal-use terms](https://finnhub.io/terms-of-service) apply; a missing or limited quote
+never appears as a zero price.
 
 Search by company name to add a Korean stock. Refresh the bundled
 [KRX KIND listed-company directory](https://kind.krx.co.kr/corpgeneral/corpList.do?method=download)
@@ -417,8 +432,9 @@ and other instruments outside the company directory.
 This original diagram explains the integration; it is not official Toss Securities artwork.
 In Toss Securities WTS, open **Settings → Open API** to issue a Client ID and client secret,
 then register this Mac's public IP in **Allowed IPs**. Enter both values under
-**PenguinNotch Settings → Appearance → Stocks**, save the keys, enable **Stocks** under
-**Notch items and order**, and add a Korean company name or code (`005930`) or a US ticker
+**PenguinNotch Settings → Stocks**, select Toss Securities, expand the API-key section,
+save the keys, and enable **Show stocks in notch**. Then add a Korean company name or
+code (`005930`) or a US ticker
 (`AAPL`, `SOXL`). The app stores the secret in the macOS Keychain, not preferences, and
 uses market-data endpoints only; it does not place orders.
 

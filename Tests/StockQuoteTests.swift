@@ -3,6 +3,20 @@ import XCTest
 @testable import PenguinNotch
 
 final class StockQuoteTests: XCTestCase {
+    func testQuoteProviderSupportDoesNotFallBackToAnotherProvider() {
+        let korean = WatchedStock(symbol: "005930", market: .kr)
+        let us = WatchedStock(symbol: "AAPL", market: .us)
+        XCTAssertTrue(StockQuoteSource.toss.supports(korean))
+        XCTAssertTrue(StockQuoteSource.toss.supports(us))
+        XCTAssertTrue(StockQuoteSource.finnhub.supports(us))
+        XCTAssertFalse(StockQuoteSource.finnhub.supports(korean))
+        let snapshot = StockBoard.snapshot(stock: korean, quote: nil, previousClose: nil,
+                                           name: nil, link: .failed("Unsupported"), source: .finnhub)
+        XCTAssertEqual(snapshot.plan, "Finnhub")
+        XCTAssertEqual(snapshot.status, .unsupported("Unsupported"))
+        XCTAssertEqual(StockBoard.placeholder(message: "Add a stock", source: .finnhub).plan, "Finnhub")
+    }
+
     func testKrxCompanyNamesResolveToStoredCodes() {
         let directory = KoreanStockDirectory.shared
         XCTAssertGreaterThan(directory.companies.count, 2_000)

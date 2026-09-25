@@ -23,16 +23,16 @@ enum AccentColorChoice: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .system:   return L10n.t("Device accent color")
-        case .pink:     return "#FF33E1"
-        case .red:      return "#EB4236"
-        case .orange:   return "#EB8436"
-        case .yellow:   return "#FFD400"
-        case .green:    return "#00FF88"
-        case .teal:     return "#00E5CC"
-        case .blue:     return "#36A8EB"
-        case .indigo:   return "#6C5CE7"
-        case .purple:   return "#B026FF"
-        case .offWhite: return "#F7F6F5"
+        case .pink:     return L10n.t("Pink")
+        case .red:      return L10n.t("Red")
+        case .orange:   return L10n.t("Orange")
+        case .yellow:   return L10n.t("Yellow")
+        case .green:    return L10n.t("Green")
+        case .teal:     return L10n.t("Teal")
+        case .blue:     return L10n.t("Blue")
+        case .indigo:   return L10n.t("Indigo")
+        case .purple:   return L10n.t("Purple")
+        case .offWhite: return L10n.t("Off-white")
         }
     }
 

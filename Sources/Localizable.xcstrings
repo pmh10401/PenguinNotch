@@ -48928,7 +48928,612 @@
             }
           }
         }
+      },
+    "AI subscriptions": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 구독"
+          }
+        }
       }
+    },
+    "Computer monitoring": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컴퓨터 모니터링"
+          }
+        }
+      }
+    },
+    "Daily widgets": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "생활 위젯"
+          }
+        }
+      }
+    },
+    "Manage AI accounts, usage display and limits.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 계정 연결, 사용량 표시와 한도를 관리합니다."
+          }
+        }
+      }
+    },
+    "Manage your watchlist, quote sources and charts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "관심 종목, 시세 제공처와 차트를 관리합니다."
+          }
+        }
+      }
+    },
+    "Choose hardware meters, visibility and colors.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하드웨어 지표의 표시 여부와 색상을 설정합니다."
+          }
+        }
+      }
+    },
+    "Calendar, weather and today’s tasks.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "달력, 날씨와 오늘의 할 일을 관리합니다."
+          }
+        }
+      }
+    },
+    "No AI accounts are connected. Stocks, hardware meters and daily widgets can still appear.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결된 AI 계정이 없습니다. 주식, 컴퓨터 지표와 생활 위젯은 계속 사용할 수 있습니다."
+          }
+        }
+      }
+    },
+    "Usage display": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용량 표시"
+          }
+        }
+      }
+    },
+    "Manage visible items and order": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표시 항목과 순서 편집"
+          }
+        }
+      }
+    },
+    "Manage each feature in its own sidebar page. Use this list to arrange items across categories.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 기능은 사이드바의 전용 페이지에서 설정합니다. 여기서는 종류에 관계없이 노치 항목의 순서를 배치할 수 있습니다."
+          }
+        }
+      }
+    },
+    "Color": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상"
+          }
+        }
+      }
+    },
+    "Samples every second. Turn monitoring off to stop collection; your meter choices and colors are kept.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1초마다 측정합니다. 모니터링을 끄면 수집을 중지하며 항목별 표시 선택과 색상은 유지합니다."
+          }
+        }
+      }
+    },
+    "Hardware meters": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하드웨어 지표"
+          }
+        }
+      }
+    },
+    "Choose a color and switch each meter on or off.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 지표의 색상과 노치 표시 여부를 선택하세요."
+          }
+        }
+      }
+    },
+    "See today’s date and hover to open the monthly calendar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘 날짜를 표시하고 마우스를 올리면 월간 달력을 엽니다."
+          }
+        }
+      }
+    },
+    "Today’s tasks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘의 할 일"
+          }
+        }
+      }
+    },
+    "Hover over TODO to add tasks, mark them done or remove them. Unfinished tasks carry over to tomorrow.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "노치의 TODO에 마우스를 올려 할 일을 추가·완료·삭제합니다. 미완료 항목은 다음 날에도 유지됩니다."
+          }
+        }
+      }
+    },
+    "Show stocks in notch": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "노치에 주식 표시"
+          }
+        }
+      }
+    },
+    "Keep a watchlist of up to 30 Korean or US stocks. Turning this off keeps your list and keys.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한국·미국 종목을 최대 30개 등록할 수 있습니다. 표시를 꺼도 관심 목록과 API 키는 유지합니다."
+          }
+        }
+      }
+    },
+    "Watchlist": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "관심 종목"
+          }
+        }
+      }
+    },
+    "Your watchlist is empty. Add a company name, Korean code or US ticker above.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "관심 종목이 없습니다. 위에서 한국 종목명·코드 또는 미국 티커를 추가하세요."
+          }
+        }
+      }
+    },
+    "Quote sources": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시세 제공처"
+          }
+        }
+      }
+    },
+    "Toss Securities API keys": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "토스증권 API 키"
+          }
+        }
+      }
+    },
+    "For Korean stocks and candlestick charts, register this Mac’s public IP in Toss Securities WTS → Settings → Open API → Allowed IPs. Keys stay in the Keychain.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한국 시세와 봉 차트는 토스증권을 사용합니다. WTS → 설정 → Open API → 허용 IP에 이 Mac의 공인 IP를 등록하세요. 키는 키체인에 저장합니다."
+          }
+        }
+      }
+    },
+    "Hover chart": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "호버 차트"
+          }
+        }
+      }
+    },
+    "Company not found. Select a match or enter a Korean stock code or US ticker.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "종목을 찾지 못했습니다. 검색 결과를 선택하거나 한국 종목 코드·미국 티커를 입력하세요."
+          }
+        }
+      }
+    },
+    "Company name or symbol · 삼성전자, 005930, AAPL": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "종목명 또는 코드 · 삼성전자, 005930, AAPL"
+          }
+        }
+      }
+    },
+    "Category": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "카테고리"
+          }
+        }
+      }
+    },
+    "All items": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 항목"
+          }
+        }
+      }
+    },
+    "Group by category": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "카테고리별로 모으기"
+          }
+        }
+      }
+    },
+    "No items in this category.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 카테고리에 항목이 없습니다."
+          }
+        }
+      }
+    },
+    "Hardware switches are paused. Enable monitoring on the Computer monitoring page.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컴퓨터 지표의 표시 스위치가 일시 중지되어 있습니다. 컴퓨터 모니터링 페이지에서 수집을 켜세요."
+          }
+        }
+      }
+    },
+    "Add a stock symbol in Settings → Stocks.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 → 주식에서 종목을 추가하세요."
+          }
+        }
+      }
+    },
+    "Add Toss Securities API keys in Settings → Stocks.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 → 주식에서 토스증권 API 키를 추가하세요."
+          }
+        }
+      }
+    },
+    "Add a Finnhub API key in Settings → Stocks.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 → 주식에서 Finnhub API 키를 추가하세요."
+          }
+        }
+      }
+    },
+    "Choose a weather city in Settings → Daily widgets.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 → 생활 위젯에서 날씨 도시를 선택하세요."
+          }
+        }
+      }
+    },
+    "Pink": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "분홍"
+          }
+        }
+      }
+    },
+    "Red": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "빨강"
+          }
+        }
+      }
+    },
+    "Orange": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주황"
+          }
+        }
+      }
+    },
+    "Yellow": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "노랑"
+          }
+        }
+      }
+    },
+    "Green": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초록"
+          }
+        }
+      }
+    },
+    "Teal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "청록"
+          }
+        }
+      }
+    },
+    "Blue": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파랑"
+          }
+        }
+      }
+    },
+    "Indigo": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "남색"
+          }
+        }
+      }
+    },
+    "Purple": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보라"
+          }
+        }
+      }
+    },
+    "Off-white": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "밝은 흰색"
+          }
+        }
+      }
+    },
+    "Quote provider": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시세 제공처"
+          }
+        }
+      }
+    },
+    "Only the selected provider is used. Switching keeps your watchlist and saved keys.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 업체만 사용합니다. 업체를 바꿔도 관심 목록과 저장된 키는 유지합니다."
+          }
+        }
+      }
+    },
+    "US quotes refresh about every minute. Korean stocks and candlestick charts are not supported with Finnhub.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미국 시세를 약 1분마다 갱신합니다. Finnhub에서는 한국 종목과 봉 차트를 지원하지 않습니다."
+          }
+        }
+      }
+    },
+    "For Korean and US quotes and charts, register this Mac’s public IP in Toss Securities WTS → Settings → Open API → Allowed IPs. Keys stay in the Keychain.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한국·미국 시세와 차트를 조회하려면 토스증권 WTS → 설정 → Open API → 허용 IP에 이 Mac의 공인 IP를 등록하세요. 키는 키체인에 저장합니다."
+          }
+        }
+      }
+    },
+    "US ticker · AAPL, SOXL": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미국 티커 · AAPL, SOXL"
+          }
+        }
+      }
+    },
+    "Not supported by Finnhub": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finnhub 미지원"
+          }
+        }
+      }
+    },
+    "Finnhub supports US quotes only. Select Toss Securities for Korean stocks.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finnhub는 미국 시세만 지원합니다. 한국 종목을 조회하려면 토스증권을 선택하세요."
+          }
+        }
+      }
+    },
+    "Candlestick charts are not available with Finnhub.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finnhub에서는 봉 차트를 지원하지 않습니다."
+          }
+        }
+      }
+    }
   },
   "version": "1.0"
 }

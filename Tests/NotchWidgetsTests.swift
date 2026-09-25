@@ -3,6 +3,23 @@ import XCTest
 @testable import PenguinNotch
 
 final class NotchWidgetsTests: XCTestCase {
+    @MainActor
+    func testCategoryReorderingPreservesOtherItemsAndUnseenSlots() {
+        let ai = Fixtures.snapshots()[0]
+        let cpu = SystemUsageReading().snapshots[0]
+        let stocks = StockBoard.orderSnapshots(stored: ["AAPL", "SOXL"])
+        let calendar = CalendarMonth.snapshot()
+        let all = [ai, stocks[0], cpu, stocks[1], calendar]
+        for snapshot in all {
+            XCTAssertEqual(NotchItemCategory.allCases.filter { $0.contains(snapshot) }.count, 1)
+        }
+        let reversedStocks = all.filter(NotchItemCategory.stocks.contains).reversed().map(\.id)
+        let remembered = [ai.id, stocks[0].id, "temporarily-absent", cpu.id, stocks[1].id]
+        let completeOrder = ProviderOrder.keepingHiddenSlots(all.map(\.id), in: remembered)
+        XCTAssertEqual(ProviderOrder.keepingHiddenSlots(reversedStocks, in: completeOrder),
+                       [ai.id, stocks[1].id, "temporarily-absent", cpu.id, stocks[0].id, calendar.id])
+    }
+
     static let weatherJSON = Data(#"{"timezone":"Asia/Seoul","current":{"time":1790035200,"temperature_2m":23.4,"weather_code":61,"is_day":1,"relative_humidity_2m":65,"wind_speed_10m":2.3},"daily":{"time":[1790002800],"temperature_2m_min":[18],"temperature_2m_max":[26],"precipitation_probability_max":[75]}}"#.utf8)
     static let city = WeatherLocation(id: 1835848, name: "Seoul", latitude: 37.566, longitude: 126.978)
 

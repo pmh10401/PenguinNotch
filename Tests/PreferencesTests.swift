@@ -66,7 +66,7 @@ final class PreferencesMigrationTests: XCTestCase {
         let preferences = Preferences(defaults: fresh)
         XCTAssertTrue(preferences.isFirstLaunch)
         XCTAssertEqual(preferences.notchVisibility, .onHover)
-        XCTAssertEqual(preferences.usStockSource, .toss)
+        XCTAssertEqual(preferences.stockQuoteSource, .toss)
         XCTAssertTrue(preferences.foldsForFullScreen)
         XCTAssertEqual(preferences.appPresence, .dock)
         XCTAssertEqual(preferences.notchEdge, .right)
@@ -83,12 +83,22 @@ final class PreferencesMigrationTests: XCTestCase {
         XCTAssertEqual(preferences.deepSeekPricingSchedule, .current)
     }
 
-    func testUSStockSourcePersists() {
+    func testLegacyUSStockSourceMigratesAndExplicitChoiceWins() {
+        let (defaults, name) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("finnhub", forKey: "usStockSource")
+        let preferences = Preferences(defaults: defaults)
+        XCTAssertEqual(preferences.stockQuoteSource, .finnhub)
+        preferences.stockQuoteSource = .toss
+        XCTAssertEqual(Preferences(defaults: defaults).stockQuoteSource, .toss)
+    }
+
+    func testStockQuoteSourcePersists() {
         let (defaults, name) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = Preferences(defaults: defaults)
-        preferences.usStockSource = .finnhub
-        XCTAssertEqual(Preferences(defaults: defaults).usStockSource, .finnhub)
+        preferences.stockQuoteSource = .finnhub
+        XCTAssertEqual(Preferences(defaults: defaults).stockQuoteSource, .finnhub)
     }
 
     /// MiniMax is discovered like everyone else, and stays off until switched

@@ -32,6 +32,14 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.12",
+                headline: "Settings organized around your daily tasks",
+                changes: [
+                    ReleaseNote.Change(title: "Separate AI subscriptions, stocks, hardware monitoring and daily widgets",
+                                       detail: "Each page brings together its controls. Choose one stock quote provider; only its settings and APIs are used. API keys expand only when needed. The notch layout keeps your order and adds category filtering and grouping.")
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.11",
                 headline: "Free US stock quotes from Finnhub",
                 changes: [

@@ -60,10 +60,12 @@ struct StockTick: Equatable {
     var currency: String
 }
 
-enum USStockSource: String, CaseIterable, Identifiable {
+enum StockQuoteSource: String, CaseIterable, Identifiable {
     case toss, finnhub
     var id: String { rawValue }
     var title: String { self == .toss ? "Toss Securities" : "Finnhub" }
+
+    func supports(_ stock: WatchedStock) -> Bool { self == .toss || stock.market == .us }
 }
 
 struct StockCandle {
@@ -367,8 +369,8 @@ enum StockBoard {
 
     static func snapshot(stock: WatchedStock, quote: StockTick?, previousClose: Decimal?, name: String?,
                          link: StockLink, locale: Locale = L10n.locale,
-                         source: USStockSource = .toss) -> ProviderSnapshot {
-        let provider = stock.market == .us ? source.title : USStockSource.toss.title
+                         source: StockQuoteSource = .toss) -> ProviderSnapshot {
+        let provider = source.title
         let title = (stock.market == .kr ? KoreanStockDirectory.shared.name(for: stock.symbol) : nil)
             ?? name?.precomposedStringWithCanonicalMapping ?? stock.symbol
         let label = stock.market == .kr ? title : stock.symbol
@@ -412,9 +414,9 @@ enum StockBoard {
         return stocks.map { snapshot(stock: $0, quote: nil, previousClose: nil, name: nil, link: .idle) }
     }
 
-    static func placeholder(message: String) -> ProviderSnapshot {
+    static func placeholder(message: String, source: StockQuoteSource = .toss) -> ProviderSnapshot {
         ProviderSnapshot(id: snapshotID, displayName: L10n.t("Stocks"), glyph: .stock, fidelity: .official,
-                         status: .unsupported(message), windows: [], kind: .stocks, plan: "Toss Securities")
+                         status: .unsupported(message), windows: [], kind: .stocks, plan: source.title)
     }
 
     private static func emptyMessage(_ link: StockLink) -> String {
@@ -422,7 +424,7 @@ enum StockBoard {
         return L10n.t("Waiting for the next trade.")
     }
 
-    private static func linkText(_ link: StockLink, source: USStockSource) -> String {
+    private static func linkText(_ link: StockLink, source: StockQuoteSource) -> String {
         switch link {
         case .idle: return source == .finnhub ? L10n.t("Connecting to Finnhub…") : L10n.t("Connecting to Toss Securities…")
         case .live: return L10n.t("Live")

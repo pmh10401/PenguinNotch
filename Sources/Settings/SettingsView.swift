@@ -26,7 +26,7 @@ extension View {
 /// crossing-and-notification machinery it switches is Notifications' to
 /// explain.
 private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
-    case accounts, phone, deepseek, ollama, lmstudio, customEndpoints, appearance, notifications, general
+    case accounts, stocks, monitoring, widgets, phone, deepseek, ollama, lmstudio, customEndpoints, appearance, notifications, general
 
     /// The sections the sidebar lists; Phone only once pairing is offered.
     static var visible: [SettingsSection] {
@@ -47,7 +47,10 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .accounts:      return L10n.t("Accounts")
+        case .accounts:      return L10n.t("AI subscriptions")
+        case .stocks:        return L10n.t("Stocks")
+        case .monitoring:    return L10n.t("Computer monitoring")
+        case .widgets:       return L10n.t("Daily widgets")
         case .phone:         return L10n.t("Phone")
         case .deepseek:      return "DeepSeek"
         case .ollama:        return "Ollama"   // a product name, the same in every language
@@ -73,7 +76,10 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     /// The line under the pane's title.
     var subtitle: String {
         switch self {
-        case .accounts:      return L10n.t("Choose which providers the notch reads.")
+        case .accounts:      return L10n.t("Manage AI accounts, usage display and limits.")
+        case .stocks:        return L10n.t("Manage your watchlist, quote sources and charts.")
+        case .monitoring:    return L10n.t("Choose hardware meters, visibility and colors.")
+        case .widgets:       return L10n.t("Calendar, weather and today’s tasks.")
         case .phone:         return L10n.t("See your usage on your phone.")
         case .deepseek:      return L10n.t("Peak and off-peak pricing for your DeepSeek spend.")
         case .ollama:        return L10n.t("Models running in Ollama on this Mac.")
@@ -88,6 +94,9 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .accounts:      return "person.crop.circle.fill"
+        case .stocks:        return "chart.line.uptrend.xyaxis"
+        case .monitoring:    return "desktopcomputer"
+        case .widgets:       return "square.grid.2x2"
         case .phone:         return "iphone"
         case .deepseek:      return "chart.line.uptrend.xyaxis"
         case .ollama:        return "desktopcomputer"
@@ -105,6 +114,9 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     var tint: Color {
         switch self {
         case .accounts:      return .blue
+        case .stocks:        return .green
+        case .monitoring:    return .orange
+        case .widgets:       return .teal
         case .phone:         return .green
         case .deepseek:      return .orange
         case .ollama:        return .teal
@@ -670,6 +682,9 @@ struct SettingsView: View {
     private func paneContent(for section: SettingsSection) -> some View {
         switch section {
         case .accounts:      accountsPane
+        case .stocks:        StockSettings(preferences: preferences)
+        case .monitoring:    SystemMonitoringSettings(preferences: preferences)
+        case .widgets:       DailyWidgetSettings(preferences: preferences)
         case .phone:         phonePane
         case .deepseek:      DeepSeekPricingSettingsView(preferences: preferences)
         case .ollama:
@@ -718,7 +733,7 @@ struct SettingsView: View {
                                didConnect: { connect(account.id) })
                 }
                 if connected.isEmpty {
-                    Text(L10n.t("Nothing is connected, so the notch has no rings to draw."))
+                    Text(L10n.t("No AI accounts are connected. Stocks, hardware meters and daily widgets can still appear."))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -760,69 +775,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-        }
-        .formStyle(.grouped)
-        // A row switched off jumps from one group to the other. Scoped to that
-        // one value so nothing else on the page inherits an animation.
-        .animation(.snappy(duration: 0.25), value: preferences.connectedProviders)
-        .animation(.snappy(duration: 0.25), value: preferences.disabledModels)
-    }
-
-    // One pane, because they are one question: what PenguinNotch looks like and
-    // where it turns up. Split across several it read as unrelated settings,
-    // and "Where PenguinNotch appears" was a header long enough to look like a
-    // warning.
-    private var appearancePane: some View {
-        Form {
-            Section(L10n.t("Notch items and order")) {
-                Toggle(L10n.t("Enable system monitoring"), isOn: $preferences.showsSystemUsage)
-                NotchOrderSettings(preferences: preferences, snapshots: notchOrderSnapshots)
-            }
-            Section(L10n.t("Weather city")) {
-                WeatherSettings(preferences: preferences)
-            }
-            Section(L10n.t("Stocks")) {
-                StockSettings(preferences: preferences)
-            }
-            Section(L10n.t("System usage")) {
-                Text(L10n.t("System monitoring refreshes every second. Hiding individual meters keeps monitoring active. Turn off Enable system monitoring above to stop sampling. Choose each item's color below."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(SystemUsageReading().snapshots + [CalendarMonth.snapshot(), NotchWidgetsMonitor.weatherPlaceholder(), TodoItem.snapshot([])] + StockBoard.orderSnapshots(stored: preferences.stockSymbols)) { snapshot in
-                    LabeledContent(snapshot.displayName) {
-                        HStack(spacing: 2) {
-                            ForEach(AccentColorChoice.allCases) { choice in
-                                AccentColorSwatch(choice: choice,
-                                                  isSelected: preferences.systemUsageColors[snapshot.id] == choice) {
-                                    preferences.systemUsageColors[snapshot.id] = choice
-                                }
-                                .accessibilityLabel("\(snapshot.displayName), \(choice.title)")
-                            }
-                            Button {
-                                preferences.systemUsageColors[snapshot.id] = nil
-                            } label: {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .frame(width: 22, height: 22)
-                            }
-                            .buttonStyle(.plain)
-                            .help(L10n.t("Reset to defaults"))
-                            .accessibilityLabel("\(snapshot.displayName), \(L10n.t("Reset to defaults"))")
-                            .disabled(preferences.systemUsageColors[snapshot.id] == nil)
-                        }
-                    }
-                }
-            }
-            Section(L10n.t("Notch")) {
-                Picker(L10n.t("Meter style"), selection: $preferences.notchMeterStyle) {
-                    ForEach(NotchMeterStyle.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                Text(L10n.t("Circles are the ordinary cells. Bars draw the same readings, including accounts, system meters and stocks. A stock bar still fills at 30 percent and stays green or red."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
+            Section(L10n.t("Usage display")) {
                 Picker(L10n.t("Reset time"), selection: $preferences.resetTimeFormat) {
                     ForEach(ResetTimeFormat.allCases) { Text($0.title).tag($0) }
                 }
@@ -866,6 +819,62 @@ struct SettingsView: View {
 
                 Toggle(L10n.t("Claude daily pace ring"), isOn: $preferences.claudeDailyPaceRing)
                 Text(L10n.t("Claude's main ring shows today's share of the weekly limit — a seventh a day, counted from the weekly reset — instead of the session. The session moves to the thin ring and the card; alerts follow the daily ring."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+            }
+            Section(L10n.t("Usage Limits")) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(L10n.t("Watch limit"))
+                        Spacer()
+                        Text("\(Int(preferences.watchLimit * 100))%")
+                    }
+                    Slider(value: $preferences.watchLimit, in: 0.01...0.99)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(L10n.t("Critical limit"))
+                        Spacer()
+                        Text("\(Int(preferences.criticalLimit * 100))%")
+                    }
+                    Slider(value: $preferences.criticalLimit, in: 0.01...1.00)
+                }
+                Button(L10n.t("Reset to defaults")) {
+                    // Critical first: `watchLimit` clamps itself below critical,
+                    // so resetting watch against a low stored critical would pin
+                    // it there and the reset would quietly do nothing.
+                    preferences.criticalLimit = 0.70
+                    preferences.watchLimit = 0.50
+                }
+                .padding(.top, 4)
+            }
+
+
+        }
+        .formStyle(.grouped)
+        // A row switched off jumps from one group to the other. Scoped to that
+        // one value so nothing else on the page inherits an animation.
+        .animation(.snappy(duration: 0.25), value: preferences.connectedProviders)
+        .animation(.snappy(duration: 0.25), value: preferences.disabledModels)
+    }
+
+    private var appearancePane: some View {
+        Form {
+            Section(L10n.t("Notch items and order")) {
+                DisclosureGroup(L10n.t("Manage visible items and order")) {
+                    NotchOrderSettings(preferences: preferences, snapshots: notchOrderSnapshots)
+                }
+                Text(L10n.t("Manage each feature in its own sidebar page. Use this list to arrange items across categories."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section(L10n.t("Notch")) {
+                Picker(L10n.t("Meter style"), selection: $preferences.notchMeterStyle) {
+                    ForEach(NotchMeterStyle.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text(L10n.t("Circles are the ordinary cells. Bars draw the same readings, including accounts, system meters and stocks. A stock bar still fills at 30 percent and stays green or red."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1028,82 +1037,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section(L10n.t("Usage Limits")) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(L10n.t("Watch limit"))
-                        Spacer()
-                        Text("\(Int(preferences.watchLimit * 100))%")
-                    }
-                    Slider(value: $preferences.watchLimit, in: 0.01...0.99)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(L10n.t("Critical limit"))
-                        Spacer()
-                        Text("\(Int(preferences.criticalLimit * 100))%")
-                    }
-                    Slider(value: $preferences.criticalLimit, in: 0.01...1.00)
-                }
-                Button(L10n.t("Reset to defaults")) {
-                    // Critical first: `watchLimit` clamps itself below critical,
-                    // so resetting watch against a low stored critical would pin
-                    // it there and the reset would quietly do nothing.
-                    preferences.criticalLimit = 0.70
-                    preferences.watchLimit = 0.50
-                }
-                .padding(.top, 4)
-            }
 
-            // Apart from the notch's own group: these are about the app, not
-            // the thing it draws on the screen edge.
-            Section(L10n.t("App")) {
-                LabeledContent(L10n.t("Accent color")) {
-                    // 2pt, not 7: each swatch is now sized to its own
-                    // selection ring, so the gap the eye sees is this plus
-                    // the 6pt of ring standing clear of the dot inside it.
-                    HStack(spacing: 2) {
-                        ForEach(AccentColorChoice.allCases) { choice in
-                            AccentColorSwatch(
-                                choice: choice,
-                                isSelected: preferences.accentColor == choice
-                            ) {
-                                preferences.accentColor = choice
-                            }
-                        }
-                    }
-                }
-
-                // "App icon", not "Icon": the picker above is about the
-                // notch, and on its own the word would read as another of it.
-                Picker(L10n.t("App icon"), selection: $preferences.appPresence) {
-                    ForEach(AppPresence.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-
-                Text(preferences.appPresence.explanation)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Only while there is a menu bar item for it to change. With
-                // the app in the Dock or nowhere, a switch here would do
-                // nothing anyone could see; the choice is kept for when the
-                // item comes back.
-                if preferences.appPresence == .menuBar {
-                    menuBarLimitRows
-                }
-
-                Picker(L10n.t("Language"), selection: $preferences.language) {
-                    ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.menu)
-
-                Text(preferences.language.explanation)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .formStyle(.grouped)
     }
@@ -1283,6 +1217,55 @@ struct SettingsView: View {
     // like an oversight rather than a section.
     private var generalPane: some View {
         Form {
+            // Apart from the notch's own group: these are about the app, not
+            // the thing it draws on the screen edge.
+            Section(L10n.t("App")) {
+                LabeledContent(L10n.t("Accent color")) {
+                    // 2pt, not 7: each swatch is now sized to its own
+                    // selection ring, so the gap the eye sees is this plus
+                    // the 6pt of ring standing clear of the dot inside it.
+                    HStack(spacing: 2) {
+                        ForEach(AccentColorChoice.allCases) { choice in
+                            AccentColorSwatch(
+                                choice: choice,
+                                isSelected: preferences.accentColor == choice
+                            ) {
+                                preferences.accentColor = choice
+                            }
+                        }
+                    }
+                }
+
+                // "App icon", not "Icon": the picker above is about the
+                // notch, and on its own the word would read as another of it.
+                Picker(L10n.t("App icon"), selection: $preferences.appPresence) {
+                    ForEach(AppPresence.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+
+                Text(preferences.appPresence.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Only while there is a menu bar item for it to change. With
+                // the app in the Dock or nowhere, a switch here would do
+                // nothing anyone could see; the choice is kept for when the
+                // item comes back.
+                if preferences.appPresence == .menuBar {
+                    menuBarLimitRows
+                }
+
+                Picker(L10n.t("Language"), selection: $preferences.language) {
+                    ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.menu)
+
+                Text(preferences.language.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             // No title on the group: the pane's own header above already
             // says "General", and repeating it here would say it twice.
             Section {

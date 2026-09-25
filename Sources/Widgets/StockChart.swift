@@ -56,6 +56,7 @@ final class StockChartStore: ObservableObject {
     private var token: TossInvestAPI.AccessToken?
     private var tokenTask: Task<TossInvestAPI.AccessToken, Error>?
     private var settingsRevision = 0
+    private var quoteSource: StockQuoteSource = .toss
 
     init(fetch: Fetch? = nil) {
         fetchOverride = fetch
@@ -80,9 +81,9 @@ final class StockChartStore: ObservableObject {
                                                 clientSecret: credentials.clientSecret)
         }
         tokenTask = task
-        defer { if settingsRevision == revision { tokenTask = nil } }
+        defer { if settingsRevision == revision, !Task.isCancelled { tokenTask = nil } }
         let token = try await task.value
-        if settingsRevision == revision { self.token = token }
+        if settingsRevision == revision, !Task.isCancelled { self.token = token }
         return token
     }
 
@@ -95,9 +96,8 @@ final class StockChartStore: ObservableObject {
         return max(0, refreshSeconds - elapsed)
     }
 
-    func load(stock: WatchedStock, interval: StockChartInterval, now: Date = Date(),
-              settingsRevision revision: Int = 0) async {
-        if revision != settingsRevision {
+    func configure(source: StockQuoteSource, settingsRevision revision: Int) {
+        if revision != settingsRevision || source != quoteSource {
             tasks.values.forEach { $0.cancel() }
             tasks.removeAll()
             entries.removeAll()
@@ -108,7 +108,14 @@ final class StockChartStore: ObservableObject {
             tokenTask?.cancel()
             tokenTask = nil
             settingsRevision = revision
+            quoteSource = source
         }
+    }
+
+    func load(stock: WatchedStock, interval: StockChartInterval, now: Date = Date(),
+              settingsRevision revision: Int = 0, source: StockQuoteSource = .toss) async {
+        configure(source: source, settingsRevision: revision)
+        guard source == .toss else { return }
         let key = Key(stock: stock, interval: interval)
         if let task = tasks[key] { await task.value; return }
         if secondsUntilRefresh(stock: stock, interval: interval, now: now) > 0 { return }
@@ -119,7 +126,7 @@ final class StockChartStore: ObservableObject {
         let task = Task { [weak self] in
             guard let self else { return }
             defer {
-                if settingsRevision == revision {
+                if settingsRevision == revision, !Task.isCancelled {
                     loading.remove(key)
                     tasks[key] = nil
                 }
@@ -131,9 +138,9 @@ final class StockChartStore: ObservableObject {
                 } else {
                     candles = try await fetchLive(stock, key.source)
                 }
-                if settingsRevision == revision { entries[key] = Entry(candles: candles, fetchedAt: now) }
+                if settingsRevision == revision, !Task.isCancelled { entries[key] = Entry(candles: candles, fetchedAt: now) }
             } catch {
-                if settingsRevision == revision { failed.insert(key) }
+                if settingsRevision == revision, !Task.isCancelled { failed.insert(key) }
             }
         }
         tasks[key] = task
@@ -158,11 +165,7 @@ struct StockChartSection: View {
         return Array(displayed.suffix(preferences.stockChartCount))
     }
 
-    private var needsTossKeys: Bool {
-        guard stock.market == .us, preferences.usStockSource == .finnhub else { return false }
-        let credentials = TossCredentials.load()
-        return credentials.clientID.isEmpty || credentials.clientSecret.isEmpty
-    }
+    private var chartsAvailable: Bool { preferences.stockQuoteSource == .toss }
 
     static func priceDomain(for candles: [StockCandle]) -> ClosedRange<Double> {
         let low = candles.map { NSDecimalNumber(decimal: $0.low).doubleValue }.min() ?? 0
@@ -178,7 +181,7 @@ struct StockChartSection: View {
                 Text(L10n.t("Stock chart"))
                     .font(Typography.cardBody).fontWeight(.semibold)
                 Spacer()
-                Text("\(candles.count)/\(preferences.stockChartCount)")
+                Text(chartsAvailable ? "\(candles.count)/\(preferences.stockChartCount)" : "—")
                     .font(Typography.cardBody).foregroundStyle(secondaryInk)
             }
             Picker(L10n.t("Chart interval"), selection: $preferences.stockChartInterval) {
@@ -188,9 +191,10 @@ struct StockChartSection: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .disabled(!chartsAvailable)
             Group {
-                if needsTossKeys {
-                    Text(L10n.t("Candlestick charts require Toss Securities API keys."))
+                if !chartsAvailable {
+                    Text(L10n.t("Candlestick charts are not available with Finnhub."))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .foregroundStyle(secondaryInk)
                 } else if candles.isEmpty {
@@ -235,7 +239,7 @@ struct StockChartSection: View {
                 }
             }
             .frame(height: NotchLayout.stockChartPlotHeight)
-            Text(store.entries[key].map {
+            Text(!chartsAvailable ? "" : store.entries[key].map {
                 "\(L10n.t("Updated")) \($0.fetchedAt.formatted(date: .omitted, time: .shortened)) · \(preferences.stockChartInterval.refreshLabel)"
             } ?? preferences.stockChartInterval.refreshLabel)
                 .font(.system(size: 10)).foregroundStyle(secondaryInk).lineLimit(1)
@@ -243,11 +247,11 @@ struct StockChartSection: View {
         .padding(.top, NotchLayout.blockSpacing)
         .frame(height: NotchLayout.stockChartSectionHeight, alignment: .top)
         .task(id: "\(stock.id):\(preferences.stockChartInterval.rawValue):\(preferences.stockSettingsRevision)") {
-            if needsTossKeys { return }
             while !Task.isCancelled {
                 let interval = preferences.stockChartInterval
                 await store.load(stock: stock, interval: interval,
-                                 settingsRevision: preferences.stockSettingsRevision)
+                                 settingsRevision: preferences.stockSettingsRevision, source: preferences.stockQuoteSource)
+                guard chartsAvailable else { return }
                 let wait = store.secondsUntilRefresh(stock: stock, interval: interval)
                 do { try await Task.sleep(for: .seconds(max(wait, 1))) }
                 catch { return }

@@ -329,9 +329,9 @@ final class Preferences: ObservableObject {
         }
     }
 
-    @Published var usStockSource: USStockSource {
+    @Published var stockQuoteSource: StockQuoteSource {
         didSet {
-            defaults.set(usStockSource.rawValue, forKey: "usStockSource")
+            defaults.set(stockQuoteSource.rawValue, forKey: "stockQuoteSource")
             stockSettingsRevision += 1
         }
     }
@@ -941,7 +941,7 @@ final class Preferences: ObservableObject {
         self.showsStocks = defaults.object(forKey: "showsStocks") as? Bool ?? false
         self.notchMeterStyle = NotchMeterStyle(rawValue: defaults.string(forKey: "notchMeterStyle") ?? "") ?? .ring
         self.stockSymbols = defaults.stringArray(forKey: "stockSymbols") ?? []
-        self.usStockSource = USStockSource(rawValue: defaults.string(forKey: "usStockSource") ?? "") ?? .toss
+        self.stockQuoteSource = StockQuoteSource(rawValue: defaults.string(forKey: "stockQuoteSource") ?? defaults.string(forKey: "usStockSource") ?? "") ?? .toss
         self.stockChartCount = min(max(defaults.object(forKey: "stockChartCount") as? Int ?? 20, 1), 20)
         self.stockChartInterval = StockChartInterval(rawValue: defaults.string(forKey: "stockChartInterval") ?? "") ?? .tenMinutes
         self.weatherLocation = defaults.data(forKey: "weatherLocation")
