@@ -27,6 +27,7 @@ struct StockForecastRecord: Codable, Identifiable {
     let upperClose: Decimal
     let riseProbability: Double
     let observations: Int
+    let evidence: StockForecastEvidence?
     var actualClose: Decimal?
     var evaluatedAt: Date?
 
@@ -62,10 +63,12 @@ struct StockForecastRecord: Codable, Identifiable {
             }
             && lowerClose <= upperClose && (0...1).contains(riseProbability)
             && (20...60).contains(observations)
+            && [createdAt, quoteAt, sessionStart, sessionEnd].allSatisfy { $0.timeIntervalSince1970.isFinite }
             && sessionStart <= createdAt && createdAt < sessionEnd
             && sessionStart <= quoteAt && quoteAt <= createdAt
             && createdAt.timeIntervalSince(quoteAt) <= 120
             && (capture != .scheduled || (3300...3600).contains(sessionEnd.timeIntervalSince(createdAt)))
+            && (evidence.map { $0.isValid(for: self) } ?? true)
             && ((actualClose == nil && evaluatedAt == nil)
                 || (actualClose.map { $0 > 0 && NSDecimalNumber(decimal: $0).doubleValue.isFinite } == true
                     && evaluatedAt.map { $0 >= evaluationAfter } == true))
@@ -96,6 +99,86 @@ struct StockForecastScore {
         baselineError = average(completed.compactMap(\.baselineError))
         rangeCoverage = average(completed.compactMap(\.rangeHit).map { $0 ? 100 : 0 })
         brier = average(completed.compactMap(\.brierScore))
+    }
+}
+
+/// Every compared model must have the same information and the same resolved target.
+/// Old records can still be compared with their own price-hold baseline, but their
+/// missing candle inputs cannot establish a fair comparison with another model.
+struct StockForecastComparison {
+    struct Row: Identifiable {
+        let model: String
+        let available: StockForecastScore
+        let paired: StockForecastScore
+        var id: String { model }
+    }
+    private struct Inputs: Hashable {
+        let stockID: String
+        let currency: String
+        let capture: String
+        let quoteAt: Date
+        let sessionStart: Date
+        let sessionEnd: Date
+        let previousClose: Decimal
+        let inputPrice: Decimal
+        let observations: Int
+        let evidence: StockForecastEvidence?
+    }
+    let rows: [Row]
+    let pairedCount: Int
+    let baselineError: Double?
+
+    init(_ records: [StockForecastRecord]) {
+        let valid = records.filter(\.isValid)
+        let models = Set(valid.map(\.model))
+        let groups = Dictionary(grouping: valid.filter { $0.actualClose != nil && (models.count == 1 || $0.evidence != nil) }) {
+            Inputs(stockID: $0.stockID, currency: $0.currency, capture: $0.capture.rawValue,
+                   quoteAt: $0.quoteAt, sessionStart: $0.sessionStart, sessionEnd: $0.sessionEnd,
+                   previousClose: $0.previousClose, inputPrice: $0.inputPrice,
+                   observations: $0.observations, evidence: $0.evidence)
+        }
+        let matched = groups.values.filter {
+            $0.count == models.count && Set($0.map(\.model)) == models
+                && Set($0.compactMap(\.actualClose)).count == 1
+        }
+        pairedCount = matched.count
+        let paired = matched.flatMap { $0 }
+        baselineError = StockForecastScore(matched.compactMap(\.first)).baselineError
+        rows = models.sorted().map { model in
+            Row(model: model, available: StockForecastScore(valid.filter { $0.model == model }),
+                paired: StockForecastScore(paired.filter { $0.model == model }))
+        }
+    }
+}
+
+/// Reliability bins describe observed frequencies; they never retune saved probabilities.
+struct StockForecastCalibration: Identifiable {
+    let id: Int
+    let count: Int
+    let rises: Int
+    let meanProbability: Double
+    var observedRate: Double { Double(rises) / Double(count) }
+    var label: String { id == 9 ? "90–100%" : "\(id * 10)–<\((id + 1) * 10)%" }
+
+    // Wilson 95% interval. Descriptive only: stocks/dates may be correlated.
+    // Formula: https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm
+    var interval: ClosedRange<Double> {
+        let n = Double(count), z = 1.959963984540054
+        let denominator = 1 + z * z / n
+        let center = (observedRate + z * z / (2 * n)) / denominator
+        let radius = z * sqrt(observedRate * (1 - observedRate) / n + z * z / (4 * n * n)) / denominator
+        return max(0, center - radius)...min(1, center + radius)
+    }
+
+    static func bins(_ records: [StockForecastRecord]) -> [Self] {
+        let completed = records.filter { $0.isValid && $0.actualClose != nil }
+        let groups = Dictionary(grouping: completed) { min(9, Int($0.riseProbability * 10)) }
+        return groups.keys.sorted().map { index in
+            let records = groups[index]!
+            return Self(id: index, count: records.count,
+                        rises: records.filter { $0.actualClose! > $0.previousClose }.count,
+                        meanProbability: records.reduce(0) { $0 + $1.riseProbability } / Double(records.count))
+        }
     }
 }
 
@@ -214,15 +297,21 @@ final class StockForecastJournal: ObservableObject {
             return "\"" + safe.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
         func number(_ value: Decimal?) -> String { value.map { NSDecimalNumber(decimal: $0).stringValue } ?? "" }
-        let header = "symbol,name,currency,model,capture,predicted_at,quote_at,session_start,session_end,previous_close,input_price,expected_close,lower_80,upper_80,rise_probability,observations,actual_close,evaluated_at,direction_hit,absolute_percentage_error,brier_score"
+        let header = "symbol,name,currency,model,capture,predicted_at,quote_at,session_start,session_end,previous_close,input_price,expected_close,lower_80,upper_80,rise_probability,observations,actual_close,evaluated_at,direction_hit,absolute_percentage_error,brier_score,evidence_source,daily_log_return_volatility,completed_closes,history_adjusted"
         let rows = records.map { r in
-            [text(r.stockID), text(r.name), text(r.currency), text(r.model), text(r.capture.rawValue),
+            let closes = r.evidence.map { evidence in
+                evidence.closes.map { "\(date.string(from: $0.date))=\(number($0.price))" }.joined(separator: ";")
+            }
+            return [text(r.stockID), text(r.name), text(r.currency), text(r.model), text(r.capture.rawValue),
              date.string(from: r.createdAt), date.string(from: r.quoteAt), date.string(from: r.sessionStart),
              date.string(from: r.sessionEnd), number(r.previousClose), number(r.inputPrice), number(r.expectedClose),
              number(r.lowerClose), number(r.upperClose), String(r.riseProbability), String(r.observations),
              number(r.actualClose), r.evaluatedAt.map { date.string(from: $0) } ?? "",
              r.directionHit.map { $0 ? "1" : "0" } ?? "",
-             r.absolutePercentageError.map { String($0) } ?? "", r.brierScore.map { String($0) } ?? ""].joined(separator: ",")
+             r.absolutePercentageError.map { String($0) } ?? "", r.brierScore.map { String($0) } ?? "",
+             r.evidence == nil ? "" : text("Toss Securities"),
+             r.evidence?.dailyVolatility.map { String($0) } ?? "", closes.map(text) ?? "",
+             r.evidence.map { $0.adjusted ? "true" : "false" } ?? ""].joined(separator: ",")
         }
         return ([header] + rows).joined(separator: "\r\n") + "\r\n"
     }

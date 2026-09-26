@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import SwiftUI
 @testable import PenguinNotch
 
 @MainActor
@@ -9,14 +10,135 @@ final class StockForecastJournalTests: XCTestCase {
                         expected: Decimal = 104, previous: Decimal = 100, probability: Double = 0.8,
                         actual: Decimal? = nil, name: String = "Example, Inc.",
                         createdAt: String = "2026-09-25T19:00:00Z",
-                        quoteAt: String = "2026-09-25T19:00:00Z") -> StockForecastRecord {
+                        quoteAt: String = "2026-09-25T19:00:00Z",
+                        model: String = StockForecastRecord.modelVersion,
+                        evidence: StockForecastEvidence? = nil) -> StockForecastRecord {
         StockForecastRecord(stockID: "us:TEST", name: name, currency: "USD",
-            model: StockForecastRecord.modelVersion, capture: capture, createdAt: date(createdAt),
+            model: model, capture: capture, createdAt: date(createdAt),
             quoteAt: date(quoteAt), sessionStart: date("2026-09-25T13:30:00Z"),
             sessionEnd: date("2026-09-25T20:00:00Z"), previousClose: previous, inputPrice: price,
             expectedClose: expected, lowerClose: 100, upperClose: 106, riseProbability: probability,
-            observations: 60, actualClose: actual,
+            observations: 60, evidence: evidence, actualClose: actual,
             evaluatedAt: actual == nil ? nil : date("2026-09-26T04:01:00Z"))
+    }
+
+    private var evidence: StockForecastEvidence {
+        StockForecastEvidence(closes: (0..<61).map { index in
+            .init(date: date("2026-09-24T04:00:00Z").addingTimeInterval(-Double(index) * 86400),
+                  price: index.isMultiple(of: 2) ? 100 : 101)
+        })
+    }
+
+    func testEvidenceRoundTripsAndLegacyRecordsRemainReadableWithoutInventedInputs() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "history.json")
+        let journal = StockForecastJournal(url: file)
+        XCTAssertEqual(journal.record([record(evidence: evidence), record(capture: .manual)]), 2)
+        let loaded = StockForecastJournal(url: file)
+        XCTAssertEqual(loaded.records.first?.evidence, evidence)
+        XCTAssertEqual(loaded.records.first?.evidence?.adjusted, true)
+        XCTAssertNil(loaded.records.last?.evidence)
+        XCTAssertNotNil(evidence.dailyVolatility)
+        XCTAssertEqual(try XCTUnwrap(evidence.historicalReturn(sessions: 5)), 100.0 / 101 - 1, accuracy: 1e-10)
+        XCTAssertEqual(evidence.historicalReturn(sessions: 20), 0)
+        XCTAssertNil(evidence.historicalReturn(sessions: 61))
+        let csv = StockForecastJournal.csv(loaded.records)
+        XCTAssertTrue(csv.contains("daily_log_return_volatility,completed_closes"))
+        XCTAssertTrue(csv.contains("2026-09-24T04:00:00Z=100;"))
+    }
+
+    func testEvidenceRejectsFutureCandlesDuplicateDaysAndMismatchedPreviousClose() {
+        XCTAssertTrue(record(evidence: evidence).isValid)
+        var closes = evidence.closes
+        closes[0] = .init(date: date("2026-09-25T04:00:00Z"), price: 100)
+        XCTAssertFalse(record(evidence: .init(closes: closes)).isValid)
+        closes = evidence.closes
+        closes[1] = .init(date: closes[0].date, price: 101)
+        XCTAssertFalse(record(evidence: .init(closes: closes)).isValid)
+        XCTAssertFalse(record(previous: 99, evidence: evidence).isValid)
+        XCTAssertFalse(record(evidence: .init(closes: Array(evidence.closes.dropLast()))).isValid)
+    }
+
+    func testModelComparisonUsesIdenticalInputsAndTargetsIncludingHistory() throws {
+        let a = record(actual: 105, evidence: evidence)
+        let b = record(expected: 103, actual: 105, createdAt: "2026-09-25T19:01:00Z",
+                       model: "Test model v1", evidence: evidence)
+        let comparison = StockForecastComparison([a, b])
+        XCTAssertEqual(comparison.pairedCount, 1)
+        XCTAssertEqual(comparison.rows.count, 2)
+        XCTAssertTrue(comparison.rows.allSatisfy { $0.paired.evaluated == 1 })
+        XCTAssertEqual(try XCTUnwrap(comparison.baselineError), 3.0 / 105 * 100, accuracy: 1e-10)
+        for mismatch in [
+            record(actual: 105, quoteAt: "2026-09-25T18:59:59Z", model: "Test model v1", evidence: evidence),
+            record(price: 103, actual: 105, model: "Test model v1", evidence: evidence),
+            record(capture: .manual, actual: 105, model: "Test model v1", evidence: evidence),
+            record(actual: 106, model: "Test model v1", evidence: evidence),
+            record(model: "Test model v1", evidence: evidence),
+            record(actual: 105, model: "Test model v1")
+        ] {
+            XCTAssertEqual(StockForecastComparison([a, mismatch]).pairedCount, 0)
+        }
+        var closes = evidence.closes
+        closes[1] = .init(date: closes[1].date, price: 102)
+        XCTAssertEqual(StockForecastComparison([a, record(actual: 105, model: "Test model v1",
+            evidence: .init(closes: closes))]).pairedCount, 0)
+        XCTAssertEqual(StockForecastComparison([a, a, b]).pairedCount, 0, "Ambiguous duplicates cannot be paired")
+        XCTAssertEqual(StockForecastComparison([record(actual: 105)]).pairedCount, 1,
+                       "Legacy inputs still support their own price-hold baseline")
+        XCTAssertTrue(StockForecastComparison([]).rows.isEmpty)
+    }
+
+    func testCalibrationBoundariesPendingAndTiesWithWilsonIntervals() throws {
+        let bins = StockForecastCalibration.bins([
+            record(probability: 0, actual: 99), record(probability: 0.1, actual: 105),
+            record(probability: 0.5, actual: 100), record(probability: 1, actual: 105),
+            record(probability: 0.8), record(probability: .nan, actual: 105),
+            record(probability: -0.1, actual: 105)
+        ])
+        XCTAssertEqual(bins.map(\.id), [0, 1, 5, 9])
+        XCTAssertEqual(bins.reduce(0) { $0 + $1.count }, 4)
+        XCTAssertEqual(bins[2].rises, 0, "Unchanged closes count as not rising even at 50%")
+        XCTAssertEqual(bins[1].meanProbability, 0.1)
+        XCTAssertEqual(bins[0].interval.lowerBound, 0, accuracy: 1e-10)
+        XCTAssertEqual(bins[0].interval.upperBound, 0.7934506856, accuracy: 1e-9)
+        XCTAssertEqual(bins[3].interval.lowerBound, 0.2065493144, accuracy: 1e-9)
+        XCTAssertEqual(bins[3].interval.upperBound, 1, accuracy: 1e-10)
+        XCTAssertTrue(StockForecastCalibration.bins([record()]).isEmpty)
+    }
+
+    func testEvidenceComparisonAndCalibrationRenderInEnglishAndKorean() throws {
+        let previousLocale = L10n.testLocale
+        defer { L10n.testLocale = previousLocale }
+        let sample = record(expected: 102, actual: 105, evidence: evidence)
+        for language in ["en", "ko"] {
+            L10n.testLocale = Locale(identifier: language)
+            let views: [(String, AnyView)] = [
+                ("evidence", AnyView(ForecastEvidenceView(record: sample))),
+                ("comparison", AnyView(ForecastComparisonView(records: [sample]))),
+                ("calibration", AnyView(ForecastCalibrationView(records: [sample])))
+            ]
+            for (name, view) in views {
+                let renderer = ImageRenderer(content: view.padding(20).frame(width: 800)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    .environment(\.colorScheme, .light))
+                renderer.scale = 2
+                let image = try XCTUnwrap(renderer.nsImage)
+                XCTAssertEqual(image.size.width, 800)
+                XCTAssertGreaterThan(image.size.height, 100)
+                let png = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(image.tiffRepresentation))?
+                    .representation(using: .png, properties: [:]))
+                let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+                attachment.name = "forecast-\(name)-\(language)"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+                if let directory = ProcessInfo.processInfo.environment["FORECAST_RENDER_PATH"] {
+                    let folder = URL(fileURLWithPath: directory)
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try png.write(to: folder.appending(path: "\(name)-\(language).png"))
+                }
+            }
+        }
     }
 
     func testImmutableDailyCohortsPersistAndCorruptionIsNeverOverwritten() throws {
@@ -112,7 +234,7 @@ final class StockForecastJournalTests: XCTestCase {
         let csv = StockForecastJournal.csv([record(name: " =HYPERLINK(\"bad\")\n삼성전자")])
         XCTAssertTrue(csv.contains("\"' =HYPERLINK(\"\"bad\"\")\n삼성전자\""))
         XCTAssertTrue(csv.contains("actual_close,evaluated_at,direction_hit"))
-        XCTAssertTrue(csv.hasSuffix(",,,,,\r\n"))
+        XCTAssertTrue(csv.hasSuffix(",,,,,,,,,\r\n"))
         XCTAssertFalse(csv.contains("account"))
     }
 }

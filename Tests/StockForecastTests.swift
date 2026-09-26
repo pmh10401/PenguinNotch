@@ -55,6 +55,11 @@ final class StockForecastTests: XCTestCase {
         XCTAssertEqual(store.holdings.map(\.id), ["KR:005930"])
         XCTAssertNotNil(store.forecasts["KR:005930"])
         XCTAssertEqual(store.forecasts["KR:005930"]?.expectedClose, 100)
+        let candidate = try XCTUnwrap(store.candidates.first)
+        XCTAssertTrue(candidate.isValid)
+        XCTAssertEqual(candidate.evidence?.closes.count, 30)
+        XCTAssertEqual(candidate.evidence?.closes.first?.price, candidate.previousClose)
+        XCTAssertTrue(candidate.evidence?.closes.allSatisfy { $0.date < candidate.sessionStart } == true)
         XCTAssertNil(defaults.object(forKey: "holdings"))
         XCTAssertEqual(defaults.integer(forKey: "tossAccountSeq"), 7)
         let requests = ForecastEndpoint.requests
@@ -65,6 +70,9 @@ final class StockForecastTests: XCTestCase {
             .allSatisfy { $0.value(forHTTPHeaderField: "X-Tossinvest-Account") == nil })
         XCTAssertTrue(requests.filter { $0.url?.path != "/oauth2/token" }
             .allSatisfy { $0.httpMethod == "GET" })
+        let historyURL = try XCTUnwrap(requests.first { $0.url?.path == "/api/v1/candles" }?.url)
+        XCTAssertEqual(URLComponents(url: historyURL, resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "adjusted" }?.value, "true")
 
         await store.refresh(preferences: preferences, session: session, now: now.addingTimeInterval(60),
                             credentials: credentials)

@@ -47,6 +47,43 @@ struct TradingSession: Decodable {
     var duration: TimeInterval { endTime.timeIntervalSince(startTime) }
 }
 
+/// The completed daily candles that were actually available to the prediction.
+/// Newest first; no positions, credentials, or subsequently fetched prices.
+struct StockForecastEvidence: Codable, Hashable {
+    struct Close: Codable, Hashable {
+        let date: Date
+        let price: Decimal
+    }
+    let closes: [Close]
+    let adjusted: Bool
+
+    init(closes: [Close]) {
+        self.closes = closes
+        adjusted = true
+    }
+
+    var dailyVolatility: Double? {
+        StockForecast.dailyVariance(closes.map(\.price)).map { sqrt($0) }
+    }
+
+    func historicalReturn(sessions: Int) -> Double? {
+        guard sessions > 0, closes.count > sessions, closes[sessions].price > 0 else { return nil }
+        let value = NSDecimalNumber(decimal: closes[0].price / closes[sessions].price - 1).doubleValue
+        return value.isFinite ? value : nil
+    }
+
+    func isValid(for record: StockForecastRecord) -> Bool {
+        guard adjusted, closes.count == record.observations + 1, closes.first?.price == record.previousClose,
+              dailyVolatility != nil,
+              closes.allSatisfy({ $0.date.timeIntervalSince1970.isFinite && $0.price > 0
+                  && NSDecimalNumber(decimal: $0.price).doubleValue.isFinite }) else { return false }
+        let calendar = record.marketCalendar
+        let days = closes.map { calendar.startOfDay(for: $0.date) }
+        return days[0] < calendar.startOfDay(for: record.sessionStart)
+            && zip(days, days.dropFirst()).allSatisfy { $0 > $1 }
+    }
+}
+
 /// Zero-drift lognormal continuation. The current quote is the conditional
 /// expected close; daily close-to-close variance only sizes the remaining risk.
 /// These are model probabilities, not calibrated forecasts or trading signals.
@@ -62,11 +99,7 @@ struct StockForecast {
         guard trading.contains(now), trading.duration > 0, price > 0,
               completedCloses.count >= 21,
               let previous = completedCloses.first, previous > 0 else { return nil }
-        let values = completedCloses.map { NSDecimalNumber(decimal: $0).doubleValue }
-        guard values.allSatisfy({ $0.isFinite && $0 > 0 }) else { return nil }
-        let returns = zip(values, values.dropFirst()).map { log($0.0 / $0.1) }
-        let mean = returns.reduce(0, +) / Double(returns.count)
-        let variance = returns.reduce(0) { $0 + pow($1 - mean, 2) } / Double(returns.count - 1)
+        guard let variance = dailyVariance(completedCloses) else { return nil }
         let remaining = trading.endTime.timeIntervalSince(now) / trading.duration
         let sigma = sqrt(variance * remaining)
         guard sigma.isFinite, sigma > 0 else { return nil }
@@ -80,7 +113,16 @@ struct StockForecast {
         let upper = current * exp(medianLogMove + 1.2815515655446004 * sigma)
         guard lower.isFinite, upper.isFinite, lower > 0 else { return nil }
         return StockForecast(riseProbability: probability, expectedClose: price,
-                             observations: returns.count, lowerClose: Decimal(lower), upperClose: Decimal(upper))
+                             observations: completedCloses.count - 1, lowerClose: Decimal(lower), upperClose: Decimal(upper))
+    }
+
+    static func dailyVariance(_ closes: [Decimal]) -> Double? {
+        let values = closes.map { NSDecimalNumber(decimal: $0).doubleValue }
+        guard values.count >= 21, values.allSatisfy({ $0.isFinite && $0 > 0 }) else { return nil }
+        let returns = zip(values, values.dropFirst()).map { log($0.0) - log($0.1) }
+        let mean = returns.reduce(0, +) / Double(returns.count)
+        let variance = returns.reduce(0) { $0 + pow($1 - mean, 2) } / Double(returns.count - 1)
+        return variance.isFinite ? variance : nil
     }
 }
 
@@ -155,7 +197,7 @@ final class StockForecastStore: ObservableObject {
 
     private var accountSeq = 0
     private var holdingsAt: Date?
-    private var completedCloses: [String: [Decimal]] = [:]
+    private var completedCloses: [String: [StockForecastEvidence.Close]] = [:]
     private var historySession: [String: Date] = [:]
     private var historyAttempt: [String: Date] = [:]
 
@@ -288,25 +330,32 @@ final class StockForecastStore: ObservableObject {
                             .filter { calendar.startOfDay(for: $0.date) < today }
                             .sorted { $0.date > $1.date }
                             .prefix(61)
-                            .map(\.close)
+                            .map { StockForecastEvidence.Close(date: $0.date, price: $0.close) }
                     }
                     try Task.checkCancellation()
                     try await Task.sleep(for: .milliseconds(60)) // below the chart endpoint's 20/s limit
                 }
                 // Record when inputs actually finished loading, never the request's earlier start time.
                 let predictionTime = max(suppliedNow ?? Date(), quote.timestamp)
+                let evidence = StockForecastEvidence(closes: completedCloses[stock.id] ?? [])
                 if trading.contains(predictionTime), let forecast = StockForecast.estimate(price: quote.price,
-                                                           completedCloses: completedCloses[stock.id] ?? [],
+                                                           completedCloses: evidence.closes.map(\.price),
                                                            trading: trading, now: quote.timestamp),
-                   let previousClose = completedCloses[stock.id]?.first {
-                    next[holding.id] = forecast
-                    nextCandidates.append(StockForecastRecord(stockID: stock.id, name: holding.name,
+                   let previousClose = evidence.closes.first?.price {
+                    let record = StockForecastRecord(stockID: stock.id, name: holding.name,
                         currency: holding.currency, model: StockForecastRecord.modelVersion, capture: .manual,
                         createdAt: predictionTime, quoteAt: quote.timestamp, sessionStart: trading.startTime,
                         sessionEnd: trading.endTime, previousClose: previousClose, inputPrice: quote.price,
                         expectedClose: forecast.expectedClose, lowerClose: forecast.lowerClose,
                         upperClose: forecast.upperClose, riseProbability: forecast.riseProbability,
-                        observations: forecast.observations))
+                        observations: forecast.observations, evidence: evidence)
+                    guard evidence.isValid(for: record) else {
+                        nextReasons[holding.id] = L10n.t("Daily-candle evidence is inconsistent. Waiting for valid data.")
+                        completedCloses[stock.id] = nil
+                        continue
+                    }
+                    next[holding.id] = forecast
+                    nextCandidates.append(record)
                 } else {
                     nextReasons[holding.id] = L10n.t("At least 20 completed daily returns are required.")
                 }

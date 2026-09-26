@@ -32,6 +32,16 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.21",
+                headline: L10n.t("See prediction evidence and check model probabilities"),
+                changes: [
+                    ReleaseNote.Change(title: L10n.t("Keep the daily candles behind each prediction"),
+                                       detail: L10n.t("Review input prices, timestamps, daily volatility, and historical returns. Older records remain readable and CSV includes the saved evidence.")),
+                    ReleaseNote.Change(title: L10n.t("Compare matching inputs and observed rise rates"),
+                                       detail: L10n.t("Model comparison uses only shared, completed predictions. Probability checks show evaluated counts and uncertainty. This version records GBM; Laya and Jev are not connected."))
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.20",
                 headline: L10n.t("Record stock predictions and measure their results"),
                 changes: [

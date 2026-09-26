@@ -127,6 +127,11 @@ struct StockSettings: View {
                                         .font(.subheadline)
                                     Text("\(L10n.t("Model 80% range")): \(StockQuoteCodec.format(price: estimate.lowerClose, currency: holding.currency, locale: .current)) – \(StockQuoteCodec.format(price: estimate.upperClose, currency: holding.currency, locale: .current))")
                                         .font(.caption).foregroundStyle(.secondary)
+                                    if let record = portfolio.candidates.first(where: { $0.stockID == holding.stock?.id }) {
+                                        DisclosureGroup(L10n.t("Prediction evidence")) {
+                                            ForecastEvidenceView(record: record).padding(.vertical, 6)
+                                        }
+                                    }
                                 } else if let reason = portfolio.reasons[holding.id] {
                                     Text(reason).font(.caption).foregroundStyle(.secondary)
                                 }

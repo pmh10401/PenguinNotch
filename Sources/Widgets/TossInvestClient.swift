@@ -170,7 +170,9 @@ enum TossInvestAPI {
     }
 
     static func forecastCloses(token: String, stock: WatchedStock, session: URLSession = .shared) async throws -> [(date: Date, close: Decimal)] {
-        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 64, session: session)
+        // Pin the documented default so the archived evidence retains known price units.
+        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 64,
+                                        adjusted: true, session: session)
         return StockQuoteCodec.dailyCloses(from: data)
     }
 
