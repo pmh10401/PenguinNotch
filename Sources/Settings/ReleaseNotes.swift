@@ -32,7 +32,7 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
-                version: "1.18.21",
+                version: "1.18.22",
                 headline: L10n.t("See prediction evidence and check model probabilities"),
                 changes: [
                     ReleaseNote.Change(title: L10n.t("Keep the daily candles behind each prediction"),

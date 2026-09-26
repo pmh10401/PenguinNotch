@@ -302,16 +302,18 @@ final class StockForecastJournal: ObservableObject {
             let closes = r.evidence.map { evidence in
                 evidence.closes.map { "\(date.string(from: $0.date))=\(number($0.price))" }.joined(separator: ";")
             }
-            return [text(r.stockID), text(r.name), text(r.currency), text(r.model), text(r.capture.rawValue),
-             date.string(from: r.createdAt), date.string(from: r.quoteAt), date.string(from: r.sessionStart),
-             date.string(from: r.sessionEnd), number(r.previousClose), number(r.inputPrice), number(r.expectedClose),
-             number(r.lowerClose), number(r.upperClose), String(r.riseProbability), String(r.observations),
-             number(r.actualClose), r.evaluatedAt.map { date.string(from: $0) } ?? "",
-             r.directionHit.map { $0 ? "1" : "0" } ?? "",
-             r.absolutePercentageError.map { String($0) } ?? "", r.brierScore.map { String($0) } ?? "",
-             r.evidence == nil ? "" : text("Toss Securities"),
-             r.evidence?.dailyVolatility.map { String($0) } ?? "", closes.map(text) ?? "",
-             r.evidence.map { $0.adjusted ? "true" : "false" } ?? ""].joined(separator: ",")
+            var fields: [String] = [text(r.stockID), text(r.name), text(r.currency), text(r.model), text(r.capture.rawValue),
+                date.string(from: r.createdAt), date.string(from: r.quoteAt), date.string(from: r.sessionStart),
+                date.string(from: r.sessionEnd)]
+            fields += [number(r.previousClose), number(r.inputPrice), number(r.expectedClose),
+                       number(r.lowerClose), number(r.upperClose), String(r.riseProbability), String(r.observations)]
+            fields += [number(r.actualClose), r.evaluatedAt.map { date.string(from: $0) } ?? "",
+                       r.directionHit.map { $0 ? "1" : "0" } ?? "",
+                       r.absolutePercentageError.map { String($0) } ?? "", r.brierScore.map { String($0) } ?? ""]
+            fields += [r.evidence == nil ? "" : text("Toss Securities"),
+                       r.evidence?.dailyVolatility.map { String($0) } ?? "", closes.map(text) ?? "",
+                       r.evidence.map { $0.adjusted ? "true" : "false" } ?? ""]
+            return fields.joined(separator: ",")
         }
         return ([header] + rows).joined(separator: "\r\n") + "\r\n"
     }
