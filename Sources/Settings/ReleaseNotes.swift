@@ -32,6 +32,16 @@ enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
             ReleaseNote(
+                version: "1.18.20",
+                headline: L10n.t("Record stock predictions and measure their results"),
+                changes: [
+                    ReleaseNote.Change(title: L10n.t("Save immutable predictions and compare them with later daily closes"),
+                                       detail: L10n.t("Opt in to recording about one hour before the close, or save current predictions manually. Recording continues while the app runs, even with Settings closed.")),
+                    ReleaseNote.Change(title: L10n.t("Review direction accuracy, price error, probability error, and range coverage"),
+                                       detail: L10n.t("Filter by stock, model, period, and recording time. Export the selected records as CSV; account numbers and balances are never included."))
+                ]
+            ),
+            ReleaseNote(
                 version: "1.18.19",
                 headline: "Model estimates for Toss account holdings",
                 changes: [

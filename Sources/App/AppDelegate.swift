@@ -119,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.widgets = widgets
         let stocks = StockQuotesMonitor(preferences: preferences)
         self.stocks = stocks
+        StockForecastStore.shared.start(preferences: preferences)
         widgets.$snapshots.combineLatest(stocks.$snapshots, preferences.$systemUsageColors)
             .sink { [weak fleet] widgets, quotes, colors in
                 fleet?.setWidgetSnapshots(widgets + quotes, colors: colors)
@@ -1103,6 +1104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         systemUsage?.setEnabled(false)
         widgets?.stop()
+        if !isRunningTests { StockForecastStore.shared.stop() }
         ollamaRelay?.configure(enabled: false, endpoint: OllamaEndpoint.defaultAddress)
         lmstudioMetrics?.stop()
         tokenRefresher?.stop()

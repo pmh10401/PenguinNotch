@@ -344,6 +344,9 @@ final class Preferences: ObservableObject {
     @Published var portfolioForecastEnabled: Bool {
         didSet { defaults.set(portfolioForecastEnabled, forKey: "portfolioForecastEnabled") }
     }
+    @Published var recordsStockForecasts: Bool {
+        didSet { defaults.set(recordsStockForecasts, forKey: "recordsStockForecasts") }
+    }
     /// An opaque selector, never the account number or positions.
     @Published var tossAccountSeq: Int {
         didSet { defaults.set(tossAccountSeq, forKey: "tossAccountSeq") }
@@ -980,6 +983,7 @@ final class Preferences: ObservableObject {
         self.stockSymbols = defaults.stringArray(forKey: "stockSymbols") ?? []
         self.stockQuoteSource = StockQuoteSource(rawValue: defaults.string(forKey: "stockQuoteSource") ?? defaults.string(forKey: "usStockSource") ?? "") ?? .toss
         self.portfolioForecastEnabled = defaults.bool(forKey: "portfolioForecastEnabled")
+        self.recordsStockForecasts = defaults.bool(forKey: "recordsStockForecasts")
         self.tossAccountSeq = defaults.integer(forKey: "tossAccountSeq")
         self.stockChartCount = min(max(defaults.object(forKey: "stockChartCount") as? Int ?? 20, 1), 20)
         self.stockChartInterval = StockChartInterval(rawValue: defaults.string(forKey: "stockChartInterval") ?? "") ?? .tenMinutes

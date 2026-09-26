@@ -174,6 +174,15 @@ enum TossInvestAPI {
         return StockQuoteCodec.dailyCloses(from: data)
     }
 
+    /// Historical scoring must retain the price units observed on the prediction date.
+    /// Later splits/dividends must not retroactively adjust the recorded target price.
+    static func recordedClose(token: String, stock: WatchedStock, sessionEnd: Date,
+                              session: URLSession = .shared) async throws -> [(date: Date, close: Decimal)] {
+        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 2,
+                                        before: sessionEnd, adjusted: false, session: session)
+        return StockQuoteCodec.dailyCloses(from: data)
+    }
+
     static func names(token: String, symbols: [String], session: URLSession = .shared) async throws -> [String: String] {
         let data = try await authorized(path: "/api/v1/stocks", token: token, symbols: symbols, session: session)
         return StockQuoteCodec.names(from: data)
@@ -201,6 +210,7 @@ enum TossInvestAPI {
     }
 
     private static func candleData(token: String, symbol: String, interval: String, count: Int,
+                                   before: Date? = nil, adjusted: Bool? = nil,
                                    session: URLSession) async throws -> Data {
         guard var components = URLComponents(url: base.appending(path: "/api/v1/candles"), resolvingAgainstBaseURL: false) else {
             throw Failure.invalidResponse
@@ -210,6 +220,12 @@ enum TossInvestAPI {
             URLQueryItem(name: "interval", value: interval),
             URLQueryItem(name: "count", value: String(count))
         ]
+        if let before {
+            components.queryItems?.append(URLQueryItem(name: "before", value: ISO8601DateFormatter().string(from: before)))
+        }
+        if let adjusted {
+            components.queryItems?.append(URLQueryItem(name: "adjusted", value: adjusted ? "true" : "false"))
+        }
         guard let url = components.url else { throw Failure.invalidResponse }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

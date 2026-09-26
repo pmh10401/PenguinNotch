@@ -12,6 +12,11 @@ final class StockForecastTests: XCTestCase {
                                                          trading: trading, now: midpoint))
         XCTAssertEqual(flat.expectedClose, 100)
         XCTAssertEqual(flat.observations, 60)
+        XCTAssertLessThan(flat.lowerClose, flat.expectedClose)
+        XCTAssertGreaterThan(flat.upperClose, flat.expectedClose)
+        let nearClose = try XCTUnwrap(StockForecast.estimate(price: 100, completedCloses: closes,
+                                                            trading: trading, now: start.addingTimeInterval(3500)))
+        XCTAssertLessThan(nearClose.upperClose - nearClose.lowerClose, flat.upperClose - flat.lowerClose)
         XCTAssertTrue((0.45...0.55).contains(flat.riseProbability))
         let higher = try XCTUnwrap(StockForecast.estimate(price: 102, completedCloses: closes,
                                                            trading: trading, now: midpoint))
@@ -79,6 +84,37 @@ final class StockForecastTests: XCTestCase {
         XCTAssertNil(StockQuoteCodec.prices(from: body, requireTimestamp: true)["kr:005930"])
     }
 
+    @MainActor
+    func testScheduledAndManualSnapshotsAreSavedOnceAndKeepOriginalInputs() async throws {
+        let suite = "ForecastCapture.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = Preferences(defaults: defaults)
+        XCTAssertFalse(preferences.recordsStockForecasts)
+        preferences.portfolioForecastEnabled = true
+        preferences.recordsStockForecasts = true
+        let store = StockForecastStore()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ForecastEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        ForecastEndpoint.reset(priceTime: "2026-09-25T14:30:00+09:00")
+        let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-25T05:30:00Z"))
+        let credentials = (clientID: "capture-\(UUID().uuidString)", clientSecret: "fake-secret")
+        await store.refresh(preferences: preferences, session: session, now: now, credentials: credentials)
+        XCTAssertEqual(store.journal.records.count, 1)
+        XCTAssertEqual(store.journal.records.first?.capture, .scheduled)
+        XCTAssertEqual(store.saveCurrent(now: now), 1)
+        XCTAssertEqual(store.saveCurrent(now: now), 0)
+        await store.refresh(preferences: preferences, session: session, now: now.addingTimeInterval(60), credentials: credentials)
+        XCTAssertEqual(store.journal.records.count, 2)
+        XCTAssertTrue(store.journal.records.allSatisfy { $0.createdAt == now && $0.inputPrice == 100 })
+        XCTAssertEqual(store.saveCurrent(now: now.addingTimeInterval(240)), 0)
+        store.stop()
+        XCTAssertTrue(store.candidates.isEmpty)
+        XCTAssertEqual(store.journal.records.count, 2)
+    }
+
     func testUSRegularSessionContinuesPastKoreanMidnight() async throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [ForecastEndpoint.self]
@@ -100,8 +136,11 @@ final class StockForecastTests: XCTestCase {
 private final class ForecastEndpoint: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     private static var recorded: [URLRequest] = []
+    private static var priceTime = "2026-09-25T10:00:00+09:00"
     static var requests: [URLRequest] { lock.withLock { recorded } }
-    static func reset() { lock.withLock { recorded = [] } }
+    static func reset(priceTime: String = "2026-09-25T10:00:00+09:00") {
+        lock.withLock { recorded = []; Self.priceTime = priceTime }
+    }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
@@ -121,7 +160,8 @@ private final class ForecastEndpoint: URLProtocol, @unchecked Sendable {
         case "/api/v1/market-calendar/US":
             body = Data(#"{"result":{"today":{"regularMarket":null},"previousBusinessDay":{"regularMarket":{"startTime":"2026-09-25T22:30:00+09:00","endTime":"2026-09-26T05:00:00+09:00"}}}}"#.utf8)
         case "/api/v1/prices":
-            body = Data(#"{"result":[{"symbol":"005930","lastPrice":"100","currency":"KRW","timestamp":"2026-09-25T10:00:00+09:00"}]}"#.utf8)
+            let priceTime = Self.lock.withLock { Self.priceTime }
+            body = Data("{\"result\":[{\"symbol\":\"005930\",\"lastPrice\":\"100\",\"currency\":\"KRW\",\"timestamp\":\"\(priceTime)\"}]}".utf8)
         case "/api/v1/candles":
             let formatter = ISO8601DateFormatter()
             let base = formatter.date(from: "2026-09-24T00:00:00Z")!

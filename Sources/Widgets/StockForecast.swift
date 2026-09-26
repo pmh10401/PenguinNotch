@@ -54,6 +54,8 @@ struct StockForecast {
     let riseProbability: Double
     let expectedClose: Decimal
     let observations: Int
+    let lowerClose: Decimal
+    let upperClose: Decimal
 
     static func estimate(price: Decimal, completedCloses: [Decimal],
                          trading: TradingSession, now: Date) -> StockForecast? {
@@ -72,15 +74,23 @@ struct StockForecast {
         let z = (logMove - variance * remaining / 2) / sigma
         guard z.isFinite else { return nil }
         let probability = min(max(0.5 * (1 + erf(z / sqrt(2))), 0), 1)
+        let current = NSDecimalNumber(decimal: price).doubleValue
+        let medianLogMove = -variance * remaining / 2
+        let lower = current * exp(medianLogMove - 1.2815515655446004 * sigma)
+        let upper = current * exp(medianLogMove + 1.2815515655446004 * sigma)
+        guard lower.isFinite, upper.isFinite, lower > 0 else { return nil }
         return StockForecast(riseProbability: probability, expectedClose: price,
-                             observations: returns.count)
+                             observations: returns.count, lowerClose: Decimal(lower), upperClose: Decimal(upper))
     }
 }
 
 /// Account numbers and positions remain in memory. The selected account's
-/// opaque sequence is a preference; reads run only while this pane is visible.
+/// opaque sequence is a preference. The app owns one opt-in polling loop, so
+/// closing Settings does not miss the scheduled prediction or its later score.
 @MainActor
 final class StockForecastStore: ObservableObject {
+    static let shared = StockForecastStore(journal: StockForecastJournal(url: StockForecastJournal.fileURL))
+    let journal: StockForecastJournal
     private let privateSession = URLSession(configuration: .ephemeral)
     @Published private(set) var accounts: [TossAccount] = []
     @Published private(set) var holdings: [PortfolioHolding] = []
@@ -88,6 +98,60 @@ final class StockForecastStore: ObservableObject {
     @Published private(set) var reasons: [String: String] = [:]
     @Published private(set) var message: String?
     @Published private(set) var loading = false
+    @Published private(set) var candidates: [StockForecastRecord] = []
+
+    private var task: Task<Void, Never>?
+    private var subscription: AnyCancellable?
+    private var settingsRevision: Int?
+    private weak var preferences: Preferences?
+    private var settingsVisible = false
+
+    init(journal: StockForecastJournal? = nil) { self.journal = journal ?? StockForecastJournal() }
+
+    func start(preferences: Preferences) {
+        self.preferences = preferences
+        subscription = preferences.$portfolioForecastEnabled
+            .combineLatest(preferences.$tossAccountSeq, preferences.$stockSettingsRevision, preferences.$recordsStockForecasts)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.restart() }
+    }
+
+    func setSettingsVisible(_ visible: Bool) {
+        guard settingsVisible != visible else { return }
+        settingsVisible = visible
+        if preferences?.recordsStockForecasts != true { restart() }
+    }
+
+    private func restart() {
+        guard let preferences else { return }
+        task?.cancel()
+        if settingsRevision != preferences.stockSettingsRevision {
+            clear()
+            settingsRevision = preferences.stockSettingsRevision
+        }
+        guard preferences.portfolioForecastEnabled, preferences.stockQuoteSource == .toss,
+              settingsVisible || preferences.recordsStockForecasts else { clear(); return }
+        if accountSeq != preferences.tossAccountSeq { clearSelection() }
+        task = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refresh(preferences: preferences)
+                do { try await Task.sleep(for: .seconds(60)) }
+                catch { return }
+            }
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
+        subscription = nil
+        clear()
+    }
+
+    func saveCurrent(now: Date = Date()) -> Int {
+        journal.record(candidates.filter { now >= $0.createdAt && now < $0.sessionEnd
+            && now.timeIntervalSince($0.createdAt) <= 90 })
+    }
 
     private var accountSeq = 0
     private var holdingsAt: Date?
@@ -102,6 +166,7 @@ final class StockForecastStore: ObservableObject {
         reasons = [:]
         message = nil
         loading = false
+        candidates = []
         accountSeq = 0
         holdingsAt = nil
         completedCloses = [:]
@@ -114,12 +179,15 @@ final class StockForecastStore: ObservableObject {
         accountSeq = 0
     }
 
-    func refresh(preferences: Preferences, session suppliedSession: URLSession? = nil, now: Date = Date(),
+    func refresh(preferences: Preferences, session suppliedSession: URLSession? = nil, now suppliedNow: Date? = nil,
                  credentials supplied: (clientID: String, clientSecret: String)? = nil) async {
+        let now = suppliedNow ?? Date()
         guard preferences.portfolioForecastEnabled, preferences.stockQuoteSource == .toss else { clear(); return }
         let session = suppliedSession ?? privateSession
         let credentials = supplied ?? TossCredentials.load()
         guard !credentials.clientID.isEmpty, !credentials.clientSecret.isEmpty else {
+            forecasts = [:]
+            candidates = []
             message = L10n.t("Save Toss Securities API keys to view account holdings.")
             return
         }
@@ -129,6 +197,8 @@ final class StockForecastStore: ObservableObject {
             let token = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
                                                              clientSecret: credentials.clientSecret,
                                                              session: session)
+            await journal.reconcile(token: token.value, session: session, now: now)
+            try Task.checkCancellation()
             if accounts.isEmpty {
                 accounts = try await TossInvestAPI.accounts(token: token.value, session: session)
                     .filter { $0.accountType == "BROKERAGE" }
@@ -159,6 +229,7 @@ final class StockForecastStore: ObservableObject {
             }
             guard !holdings.isEmpty else {
                 forecasts = [:]
+                candidates = []
                 reasons = [:]
                 message = L10n.t("This account has no supported stock holdings.")
                 return
@@ -182,6 +253,7 @@ final class StockForecastStore: ObservableObject {
             }
             try Task.checkCancellation()
             var next: [String: StockForecast] = [:]
+            var nextCandidates: [StockForecastRecord] = []
             var nextReasons: [String: String] = [:]
             for holding in holdings {
                 guard let stock = holding.stock else {
@@ -221,22 +293,42 @@ final class StockForecastStore: ObservableObject {
                     try Task.checkCancellation()
                     try await Task.sleep(for: .milliseconds(60)) // below the chart endpoint's 20/s limit
                 }
-                if let forecast = StockForecast.estimate(price: quote.price,
+                // Record when inputs actually finished loading, never the request's earlier start time.
+                let predictionTime = max(suppliedNow ?? Date(), quote.timestamp)
+                if trading.contains(predictionTime), let forecast = StockForecast.estimate(price: quote.price,
                                                            completedCloses: completedCloses[stock.id] ?? [],
-                                                           trading: trading, now: now) {
+                                                           trading: trading, now: quote.timestamp),
+                   let previousClose = completedCloses[stock.id]?.first {
                     next[holding.id] = forecast
+                    nextCandidates.append(StockForecastRecord(stockID: stock.id, name: holding.name,
+                        currency: holding.currency, model: StockForecastRecord.modelVersion, capture: .manual,
+                        createdAt: predictionTime, quoteAt: quote.timestamp, sessionStart: trading.startTime,
+                        sessionEnd: trading.endTime, previousClose: previousClose, inputPrice: quote.price,
+                        expectedClose: forecast.expectedClose, lowerClose: forecast.lowerClose,
+                        upperClose: forecast.upperClose, riseProbability: forecast.riseProbability,
+                        observations: forecast.observations))
                 } else {
                     nextReasons[holding.id] = L10n.t("At least 20 completed daily returns are required.")
                 }
             }
             try Task.checkCancellation()
             forecasts = next
+            candidates = nextCandidates
+            if preferences.recordsStockForecasts {
+                let scheduled = nextCandidates.map { record in
+                    var record = record
+                    record.capture = .scheduled
+                    return record
+                }
+                journal.record(scheduled)
+            }
             reasons = nextReasons
             message = nil
         } catch is CancellationError {
             return
         } catch let error as TossInvestAPI.Failure {
             forecasts = [:]
+            candidates = []
             if case .http(429) = error {
                 message = L10n.t("Toss Securities rate limit reached. Retrying soon.")
             } else {
@@ -244,6 +336,7 @@ final class StockForecastStore: ObservableObject {
             }
         } catch {
             forecasts = [:]
+            candidates = []
             message = L10n.t("Could not load account holdings. Check API keys, account access, and allowed IP.")
         }
     }
@@ -251,6 +344,7 @@ final class StockForecastStore: ObservableObject {
     private func clearHoldings() {
         holdings = []
         forecasts = [:]
+        candidates = []
         reasons = [:]
         holdingsAt = nil
         completedCloses = [:]

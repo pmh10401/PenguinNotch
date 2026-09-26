@@ -2,7 +2,7 @@ import SwiftUI
 
 struct StockSettings: View {
     @ObservedObject var preferences: Preferences
-    @StateObject private var portfolio = StockForecastStore()
+    @ObservedObject private var portfolio = StockForecastStore.shared
     @State private var clientID = ""
     @State private var clientSecret = ""
     @State private var finnhubKey = ""
@@ -11,6 +11,8 @@ struct StockSettings: View {
     @State private var apiMessage: String?
     @State private var showsFinnhubKeys = false
     @State private var showsTossKeys = false
+    @State private var showsForecastHistory = false
+    @State private var forecastSaveMessage: String?
 
     var body: some View {
         Form {
@@ -90,7 +92,7 @@ struct StockSettings: View {
                     Toggle(L10n.t("Show estimates for my actual holdings"),
                            isOn: $preferences.portfolioForecastEnabled)
                     if preferences.portfolioForecastEnabled {
-                        Text(L10n.t("Read-only account access. Account numbers and holdings stay in memory; only the selected account identifier is saved."))
+                        Text(L10n.t("Read-only account access. Account numbers, quantities, and balances are not included in forecast history."))
                             .font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         if portfolio.accounts.count > 1 {
@@ -123,6 +125,8 @@ struct StockSettings: View {
                                     }
                                     Text("\(L10n.t("Estimated close")): \(StockQuoteCodec.format(price: estimate.expectedClose, currency: holding.currency, locale: .current))")
                                         .font(.subheadline)
+                                    Text("\(L10n.t("Model 80% range")): \(StockQuoteCodec.format(price: estimate.lowerClose, currency: holding.currency, locale: .current)) – \(StockQuoteCodec.format(price: estimate.upperClose, currency: holding.currency, locale: .current))")
+                                        .font(.caption).foregroundStyle(.secondary)
                                 } else if let reason = portfolio.reasons[holding.id] {
                                     Text(reason).font(.caption).foregroundStyle(.secondary)
                                 }
@@ -133,8 +137,28 @@ struct StockSettings: View {
                         Text(L10n.t("Experimental, uncalibrated model: 20–60 completed daily returns set volatility. Today's fresh price is the expected close; rise/fall odds assume zero drift until the regular close. Not an investment signal."))
                             .font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        Toggle(L10n.t("Automatically record and evaluate forecasts"), isOn: $preferences.recordsStockForecasts)
+                        Text(L10n.t("While this app is running, save one fresh prediction per stock 55–60 minutes before the regular close, even with Settings closed. Symbols, prices, dates, and model results are stored only on this Mac. Missed predictions are not backfilled."))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(L10n.t("Save current predictions")) {
+                            let saved = portfolio.saveCurrent()
+                            forecastSaveMessage = portfolio.journal.errorMessage ?? (saved > 0
+                                ? String(format: L10n.t("Saved %d predictions."), saved)
+                                : L10n.t("Already saved today, or waiting for a fresh quote. Existing predictions are never replaced."))
+                        }
+                        .disabled(portfolio.candidates.isEmpty)
+                        if let forecastSaveMessage {
+                            Text(forecastSaveMessage).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
+            }
+            Section(L10n.t("Forecast history")) {
+                Button(L10n.t("View forecast history and accuracy…")) { showsForecastHistory = true }
+                Text(L10n.t("Compare saved predictions with the matching Toss daily close after the next local calendar date. Automatic and manual records are scored separately."))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section(L10n.t("Watchlist")) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -236,21 +260,12 @@ struct StockSettings: View {
             }
         }
         .formStyle(.grouped)
-        .task(id: "\(preferences.portfolioForecastEnabled):\(preferences.stockQuoteSource.rawValue):\(preferences.tossAccountSeq):\(preferences.stockSettingsRevision)") {
-            guard preferences.portfolioForecastEnabled, preferences.stockQuoteSource == .toss else { return }
-            while !Task.isCancelled {
-                await portfolio.refresh(preferences: preferences)
-                do { try await Task.sleep(for: .seconds(60)) }
-                catch { break }
-            }
+        .sheet(isPresented: $showsForecastHistory) {
+            StockForecastHistoryView(journal: portfolio.journal)
         }
-        .onChange(of: preferences.portfolioForecastEnabled) { _, enabled in
-            if !enabled { portfolio.clear() }
-        }
-        .onChange(of: preferences.tossAccountSeq) { _, _ in portfolio.clearSelection() }
-        .onChange(of: preferences.stockSettingsRevision) { _, _ in portfolio.clear() }
+        .onAppear { portfolio.setSettingsVisible(true) }
+        .onDisappear { portfolio.setSettingsVisible(false) }
         .onChange(of: preferences.stockQuoteSource) { _, _ in
-            portfolio.clear()
             apiMessage = nil
             message = nil
             showsFinnhubKeys = false
