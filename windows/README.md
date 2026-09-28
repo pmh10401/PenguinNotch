@@ -9,9 +9,11 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-## What it shows
+**Latest stable release: [1.20.4](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.20.4).**
+Overflowing notch items now scroll with the mouse wheel or trackpad on every edge,
+in both Circles and Bars. See [Scrolling long lists](#scrolling-long-lists).
 
-When the list outgrows the display, use the mouse wheel or trackpad over the notch to scroll its items. All four edges and Circles/Bars are supported; a vertical wheel also scrolls horizontal notches. Hover-card scrolling stays separate.
+## What it shows
 
 | Cell | Source | How it reads it |
 |---|---|---|
@@ -235,6 +237,20 @@ changing its keep-open preference. **Meter style** switches accounts, system
 meters and stocks between circles and bars. **Size → Custom** supports **75–150%**;
 the custom value, Small/Medium/Large preset and hover text size are stored separately.
 Hiding and showing providers preserves their places in the saved cell order.
+
+### Scrolling long lists
+
+When the item list is longer than the display, the notch body and its handles
+stay on screen and the items become scrollable automatically. Reveal the notch
+with **Show notch now** if needed, place the pointer over its items, and use the
+**mouse wheel or trackpad**. Left/right notches scroll vertically; top/bottom
+notches scroll horizontally and also accept a vertical mouse wheel.
+
+This works with **Circles** and **Bars**. Hover, click and drag reordering follow
+the visible items; scrolling does not change the saved order. Move onto a hover
+card to scroll its contents separately. Lists that fit on screen do not scroll.
+**Appearance → Hover text size** adjusts cards from **80% to 150%** (default **100%**)
+independently of notch size.
 
 ### Where the notch sits
 

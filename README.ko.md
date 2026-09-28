@@ -6,10 +6,11 @@
 
 [![CI](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml/badge.svg)](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml)
 ![플랫폼](https://img.shields.io/badge/platform-macOS%2015%2B-black)
+![Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![Swift](https://img.shields.io/badge/swift-5-orange)
 ![라이선스](https://img.shields.io/badge/license-MIT-green)
 
-**PenguinNotch는 macOS 화면 가장자리에 작은 검은 노치를 띄워 코딩 도구별 사용 한도, 작업 진행 상태, 완료 및 사용자 입력 대기 상태를 보여주는 앱입니다.**
+**PenguinNotch**는 **macOS와 Windows**의 화면 가장자리에서 AI 구독 사용량, 시스템 상태, 주식 시세와 기술적 분석, 달력·날씨·할 일을 보여주는 노치 앱입니다.
 
 <a href="docs/design/penguinnotch-stocks.png"><img src="docs/design/penguinnotch-stocks.png" alt="AI 사용량, 시스템 상태, 토스증권 주식 차트를 보여주는 PenguinNotch 화면" width="480"></a>
 
@@ -17,13 +18,15 @@ PenguinNotch의 화면 예시입니다. 사용량과 시세는 촬영 시점의 
 
 </div>
 
-사용량 원에 포인터를 올리면 한도 기간과 재설정 시각이 나옵니다. Claude 원의 **현재 세션**은 Claude Code의 `/usage`가 맨 앞에 보여주는 기간과 같습니다.
+**최신 정식 릴리스: [1.20.4](../../releases/tag/v1.20.4).** 화면 밖으로 잘리던 항목을 마우스 휠이나 트랙패드로 볼 수 있습니다. macOS와 Windows 모두 네 방향과 원형·막대 표시를 지원합니다. [긴 목록 스크롤](#긴-목록-스크롤)에서 사용 방법을 확인하세요.
+
+항목에 포인터를 올리면 사용 한도와 작업 상태, 시스템 수치, 주식 차트, 생활 위젯의 상세 정보가 나옵니다. Claude 원의 **현재 세션**은 Claude Code의 `/usage`가 맨 앞에 보여주는 기간을 사용합니다.
 
 ## 다운로드
 
 [![macOS용 다운로드](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
-[최신 릴리스](../../releases/latest)의 `PenguinNotch.dmg`를 받습니다. 1.20.0은 임시 서명되며 **Apple 공증을 받지 않았습니다**. Sparkle 업데이트 서명은 파일의 출처를 검증하지만 Gatekeeper 경고를 없애지는 않습니다.
+[최신 릴리스](../../releases/latest)의 `PenguinNotch.dmg`를 받습니다. 1.20.4는 임시 서명되며 **Apple 공증을 받지 않았습니다**. Sparkle 업데이트 서명은 파일의 출처를 검증하지만 Gatekeeper 경고를 없애지는 않습니다.
 
 Xcode를 설치하지 않고 `main`의 개발 빌드를 시험하려면 커밋마다 다시 만들어지는 [preview 빌드](../../releases/tag/preview) 또는 [Package 작업](../../actions/workflows/package.yml)의 커밋별 DMG를 사용하세요. CI에는 Developer ID 인증서가 없어서 이 파일들은 임시 서명되며 Apple 공증을 받지 않습니다. 출처와 커밋을 확인한 뒤 앱을 `/Applications`로 옮겼다면 검역 속성을 한 번 제거할 수 있습니다.
 
@@ -39,7 +42,7 @@ xattr -dr com.apple.quarantine /Applications/PenguinNotch.app
 
 Rust/Tauri 2 기반 Windows판은 [`windows/`](windows/README.md)에 있습니다. [최신 릴리스](../../releases/latest)에서 `PenguinNotch-Setup.exe`를 받습니다. 현재 사용자 계정에 관리자 권한 없이 설치하며, WebView2가 없으면 가져옵니다.
 
-1.19.0에서는 토스/Finnhub 설정·시세·차트·기술적 분석·선택적 보유 종목 예측·영구 기록을 추가했습니다. 마운트된 볼륨별 디스크 용량, 논리 코어별 CPU 부하, 지원되는 GPU 엔진 사용률, Wi-Fi 신호 강도도 표시합니다.
+토스/Finnhub 설정·시세, 토스 차트·기술적 분석·관심 종목 예측, 영구 기록을 지원하며 보유 종목도 선택하여 예측에 추가할 수 있습니다. 마운트된 볼륨별 디스크 용량, 논리 코어별 CPU 부하, 지원되는 GPU 엔진 사용률, Wi-Fi 신호 강도도 표시합니다. **지금 노치 표시**, 원형·막대 전환, 사용자 지정 크기, 호버 글자 크기, 긴 목록 스크롤도 제공합니다.
 
 설치 파일에 코드 서명이 없어 처음 실행할 때 SmartScreen의 **Windows의 PC 보호** 경고가 나올 수 있습니다. 출처를 확인한 뒤 **추가 정보 → 실행**을 선택하세요. Windows 변경마다 [Windows Package 작업](../../actions/workflows/windows-package.yml)에 설치 프로그램이 남습니다.
 
@@ -124,17 +127,30 @@ PenguinNotch는 각 프로필의 `auth.json`을 읽습니다. 키체인 전용 �
 
 ## 목적별 설정
 
-항목이 많아 화면을 넘으면 노치 위에서 **마우스 휠이나 트랙패드**로 나머지 항목을 볼 수 있습니다. macOS와 Windows의 네 방향·원형·막대 표시에서 사용할 수 있으며, 위·아래 노치는 세로 휠로도 좌우로 스크롤됩니다. 호버 카드의 스크롤은 별도로 동작하고, 모든 항목이 들어가면 노치는 움직이지 않습니다.
-
-**설정 → 모양 → 호버 글자 크기**에서 호버 카드를 **80~150%**로 조절할 수 있습니다(기본 **100%**).
-macOS와 Windows 모두 글자와 버튼이 함께 커지며, 화면보다 긴 카드는 스크롤됩니다.
-이 설정은 노치 크기와 별도로 저장됩니다.
-
 macOS 사이드바를 **AI 구독**, **주식**, **컴퓨터 모니터링**, **생활 위젯**, **모양**으로 나눴습니다. 주식·컴퓨터 모니터링·생활 위젯의 표시 여부와 색상은 각 페이지에서 바꿉니다. 주식 페이지는 시세 제공처 하나를 먼저 고르며 API 키는 필요할 때 펼칩니다. AI 사용량 표시 형식과 한도 기준은 AI 계정과 함께 관리합니다. 앱 언어, 강조색, Dock·메뉴 막대 설정은 **일반**에 있습니다.
 
 **모양 → 노치 항목과 순서 → 표시 항목과 순서 편집**에서 카테고리로 목록을 좁히거나 **카테고리별로 모으기**를 눌러 관련 항목을 모을 수 있습니다. 필터링한 목록의 순서를 바꿔도 다른 카테고리의 위치는 유지하며, 기존 표시 여부·색상·순서도 보존합니다.
 
 ## 노치 위치와 모양
+
+### 긴 목록 스크롤
+
+**1.20.4부터** macOS와 Windows에서 목록이 화면보다 길어지면 자동으로 스크롤할 수 있습니다. 별도로 켤 설정은 없으며, 노치 본체와 손잡이는 화면 밖으로 늘어나지 않고 안쪽에 유지됩니다.
+
+노치를 펼친 뒤 항목 위에 포인터를 놓고 **마우스 휠이나 트랙패드**를 사용하세요.
+
+| 노치 위치 | 스크롤 동작 |
+| --- | --- |
+| 왼쪽·오른쪽 | 항목 목록을 위아래로 이동합니다. |
+| 위쪽·아래쪽 | 항목 목록을 좌우로 이동합니다. 세로 마우스 휠도 사용할 수 있습니다. |
+
+**원형·막대** 표시를 모두 지원합니다. 스크롤한 뒤에도 보이는 항목에 맞춰 호버·클릭·드래그 순서 변경이 동작하며, 스크롤 자체는 저장된 순서를 바꾸지 않습니다. 호버 카드 위로 포인터를 옮기면 카드 안의 내용만 별도로 스크롤됩니다. 모든 항목이 화면에 들어가면 노치 목록은 스크롤되지 않습니다.
+
+### 크기와 위치
+
+**설정 → 모양 → 호버 글자 크기**에서 호버 카드를 **80~150%**로 조절할 수 있습니다(기본 **100%**).
+macOS와 Windows 모두 글자와 버튼이 함께 커지며, 화면보다 긴 카드는 스크롤됩니다.
+이 설정은 노치 크기와 별도로 저장됩니다.
 
 노치는 화면 네 가장자리 어디에나 놓을 수 있습니다. 좌우에서는 세로 열, 상하에서는 가로 행으로 표시합니다. 화면의 물리적 가장자리에 고정되므로 Dock을 보이거나 숨겨도 움직이지 않습니다. **Option(⌥)을 누른 채 드래그**하면 같은 가장자리에서 위치를 옮길 수 있고, 위치는 가장자리별로 기억됩니다. 하드웨어 노치가 있는 Mac에서 화면 위쪽에 놓으면 그 형태에 맞춥니다. **Settings → Appearance → Recentre**는 현재 가장자리의 위치를 중앙으로 되돌립니다.
 
@@ -148,7 +164,7 @@ Windows에서는 **모양 → 지금 노치 표시** 또는 트레이 메뉴의 
 
 앱 아이콘은 Dock, 메뉴 막대, 둘 다 또는 둘 다 아닌 형태로 표시할 수 있습니다. **Settings → General → App → Show limit information in menu bar**를 켜면 선택한 제공자의 5시간 한도를 표식·사용률·재설정까지 남은 시간으로 표시합니다. 예: `72% · 2h 18m | 41% · 4h 05m`. 아무 제공자도 선택하지 않으면 아이콘만 남고, 메뉴에는 어느 경우든 전체 읽기 값이 나옵니다. 메뉴 표시 선택은 수집 대상에 영향을 주지 않습니다.
 
-## 시스템 사용량 (로컬 개발)
+## 시스템 사용량
 
 macOS와 Windows 노치는 **CPU, RAM, GPU, DISK, NET, BAT, PWR** 일곱 항목을 약 1초마다 갱신합니다. macOS에서는 **Settings → Computer monitoring**에서 전체 수집을 끌 수 있습니다. AI 계정을 연결하지 않아도 동작하며 한도 알림이나 사용량 기록 보관 대상이 아닙니다.
 
@@ -237,7 +253,9 @@ PenguinNotch는 [vinzdg의 Codenotch](https://github.com/vinzdg/codenotch)를 �
 
 ## 업데이트
 
-PenguinNotch는 [Sparkle](https://sparkle-project.org)로 [이 저장소의 릴리스](https://github.com/pmh10401/PenguinNotch/releases)를 확인합니다. 매일 업데이트를 검사하고 백그라운드에서 설치하며 설정에서 끌 수 있습니다. 업데이트마다 EdDSA 서명을 확인하므로 이 저장소 관리자가 빌드·서명하지 않은 파일은 설치하지 않습니다. 버전별 릴리스에는 DMG와 `appcast.xml`이 함께 게시되며, 개발용 preview에는 업데이트 피드가 없습니다. EdDSA 업데이트 서명은 Apple 코드 서명·공증과 별개입니다.
+macOS에서는 [Sparkle](https://sparkle-project.org)로 [이 저장소의 릴리스](https://github.com/pmh10401/PenguinNotch/releases)를 확인합니다. 매일 업데이트를 검사하고 백그라운드에서 설치하며 설정에서 끌 수 있습니다. 업데이트마다 EdDSA 서명을 확인하므로 이 저장소 관리자가 빌드·서명하지 않은 파일은 설치하지 않습니다. 버전별 릴리스에는 DMG와 `appcast.xml`이 함께 게시되며, 개발용 preview에는 업데이트 피드가 없습니다. EdDSA 업데이트 서명은 Apple 코드 서명·공증과 별개입니다.
+
+Windows에서는 **설정 → 일반 → 업데이트 확인**으로 최신 릴리스의 `latest.json`을 읽고, 실행 직후에도 자동으로 확인합니다. 업데이트 설치 전에 설치 파일의 서명을 검증합니다. 자세한 내용은 [Windows 업데이트 안내](windows/README.md#updates)를 참고하세요. 1.20.4 릴리스에는 두 운영체제의 설치 파일과 업데이트 피드, 파일 해시를 확인할 수 있는 [`SHA256SUMS.txt`](../../releases/latest/download/SHA256SUMS.txt)가 포함됩니다.
 
 ## 빌드
 

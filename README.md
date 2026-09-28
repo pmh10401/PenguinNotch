@@ -6,12 +6,13 @@
 
 [![CI](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml/badge.svg)](https://github.com/pmh10401/PenguinNotch/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-black)
+![Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![Swift](https://img.shields.io/badge/swift-5-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**PenguinNotch (Penguin Notch)** — A macOS app that pins a small black notch to a screen edge, showing how much
-of each coding assistant's usage limit you have burned — and whether it is
-still working, done, or waiting on you.**
+**PenguinNotch** brings AI subscription usage, system monitoring, stock quotes and
+technical analysis, calendar, weather and to-dos to a screen-edge notch on
+**macOS and Windows**.
 
 <a href="docs/design/penguinnotch-stocks.png"><img src="docs/design/penguinnotch-stocks.png" alt="PenguinNotch showing AI usage, system meters, and a Toss Securities stock chart" width="480"></a>
 
@@ -19,16 +20,21 @@ Screenshot from PenguinNotch. Usage and prices reflect the capture time; click f
 
 </div>
 
-Hover a ring for its limit windows and when they reset. Claude's ring shows the
-same **current session** window Claude Code's own `/usage` leads with, so the
-two never disagree.
+**Latest stable release: [1.20.4](../../releases/tag/v1.20.4).** Use the mouse wheel
+or trackpad to reach items that would otherwise extend beyond the screen.
+All four edges and both circles and bars are supported on macOS and Windows.
+See [Scrolling long lists](#scrolling-long-lists).
+
+Hover an item for details: quota windows and session activity, system readings,
+stock charts, or daily widgets. Claude's ring uses the **current session** window
+that Claude Code's own `/usage` leads with.
 
 ## Download
 
 [![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
 Download `PenguinNotch.dmg` from the [latest release](../../releases/latest).
-Version 1.20.0 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
+Version 1.20.4 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
 signature verifies the download's origin; it does not remove Gatekeeper warnings.
 
 To try unreleased `main` without an Xcode install, the [preview
@@ -52,10 +58,12 @@ instead, see [Building](#building).
 
 [![Download for Windows](docs/design/download-windows.svg)](../../releases/latest/download/PenguinNotch-Setup.exe)
 
-A Windows port — Rust/Tauri 2, same design and providers — lives in [`windows/`](windows/README.md).
-Version 1.19.0 adds Toss/Finnhub stock settings, quotes, charts/technical analysis,
-opt-in holdings forecasts and persistent history, plus mounted-volume disk
-monitoring, logical-core CPU load, supported GPU engine counters and Wi-Fi strength.
+A Windows version built with Rust/Tauri 2 lives in [`windows/`](windows/README.md).
+It includes Toss/Finnhub stock settings and quotes, Toss charts, technical analysis
+and watchlist forecasts with optional holdings, and persistent history. System meters
+include mounted-volume disk monitoring, logical-core CPU load, supported GPU engine
+counters and Wi-Fi strength. Notch controls include **Show notch now**, circles/bars,
+custom size, hover text size and overflow scrolling.
 Download `PenguinNotch-Setup.exe` from the [latest release](../../releases/latest).
 It installs for the current user without administrator rights,
 and fetches WebView2 if Windows does not already have it.
@@ -251,7 +259,26 @@ rows preserves other categories’ positions; existing visibility, colors and or
 
 ## Placement
 
-When many items fill the display, scroll over the notch with the **mouse wheel or trackpad** to reach the rest. This works on all four edges in macOS and Windows, with circles or bars. A vertical wheel also scrolls top/bottom notches horizontally. Hover cards scroll independently; lists that fit stay still.
+### Scrolling long lists
+
+Starting with **1.20.4**, long lists become scrollable on macOS and Windows;
+no extra setting is needed. The notch body and its handles stay within
+the display instead of growing beyond it.
+
+Open the notch, place the pointer over its items, and use the **mouse wheel or
+trackpad**:
+
+| Notch edge | Scroll behavior |
+| --- | --- |
+| Left or right | Scroll vertically through the items. |
+| Top or bottom | Scroll horizontally; a vertical mouse wheel works here too. |
+
+Both **Circles** and **Bars** are supported. Hover, click and drag reordering
+continue to use the visible items after scrolling. Scrolling does not change
+the saved item order. Move the pointer onto a hover card to scroll that card
+independently. Lists that already fit on screen do not scroll.
+
+### Size and position
 
 **Settings → Appearance → Hover text size** adjusts hover cards from **80% to 150%**
 (default **100%**) on macOS and Windows. Text and controls grow together; tall cards
@@ -310,7 +337,7 @@ and the time until it resets, like `72% · 2h 18m | 41% · 4h 05m`. Choosing
 what the bar shows never changes what PenguinNotch reads, and with nothing chosen
 the icon comes back. Its menu has the full readings either way.
 
-## System usage (local development)
+## System usage
 
 The macOS notch, and the Windows notch, also show **CPU, RAM, GPU, DISK, NET, BAT and PWR** as seven cells,
 refreshed about once a second. On macOS, **Settings → Computer monitoring** hides
@@ -627,7 +654,7 @@ The new icon and features were developed in this repository.
 
 ## Updates
 
-PenguinNotch uses [Sparkle](https://sparkle-project.org) to check
+On macOS, PenguinNotch uses [Sparkle](https://sparkle-project.org) to check
 [this repository's releases](https://github.com/pmh10401/PenguinNotch/releases) for updates.
 Sparkle checks daily
 and installs in the background without prompting; Settings says so and can
@@ -635,6 +662,12 @@ switch it off. Every update is EdDSA-signed, so nothing installs that wasn't
 built and signed by this fork's maintainer. Versioned releases publish `appcast.xml`
 beside the disk image; the rolling preview does not provide an update feed.
 EdDSA update signing is separate from Apple code signing and notarization.
+
+On Windows, **Settings → General → Check for updates** reads `latest.json` from
+the latest release; an automatic check also runs shortly after launch. The updater
+verifies the installer signature before running it. See [Windows updates](windows/README.md#updates).
+The 1.20.4 release includes both installers, both update feeds and
+[`SHA256SUMS.txt`](../../releases/latest/download/SHA256SUMS.txt) for checking file hashes.
 
 ## Building
 
