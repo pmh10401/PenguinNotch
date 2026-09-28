@@ -42,7 +42,7 @@
   /* The pill on the right edge */
   #pill{
     position:absolute;right:0;top:50%;transform:translateY(-50%);
-    width:70px;padding:18px 0;background:var(--pill);
+    width:70px;max-height:calc(100% - 134.4px);padding:12px 0;background:var(--pill);
     border-radius:20px 0 0 20px;
     /* Stays visible on dark wallpapers: a thin stroke plus a faint glow, the only outline when black sits on black */
     border:1px solid var(--edge);border-right:none;
@@ -67,7 +67,12 @@
     bottom:calc(-1 * var(--fillet));
     background:radial-gradient(circle at 0 100%, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px));
   }
-  .cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+  /* Scroll only the cells; the fillets and handles keep their 38.7 + 28.5 px at each end.
+     Six px of the original padding lives inside the viewport so outside rings stay intact. */
+  #cells{display:flex;flex-direction:column;align-items:center;gap:14px;padding:6px;
+    min-height:0;min-width:0;width:100%;overflow:auto;scrollbar-width:none;overscroll-behavior:contain;overflow-anchor:none}
+  #cells::-webkit-scrollbar{display:none}
+  .cell{display:flex;flex:none;flex-direction:column;align-items:center;gap:6px}
   /* The ring takes the Mac's own share of the body, NotchLayout.ringDiameter against sideBodyDepth: 44 in
      70. At 56 it left an outside weekly ring 2.8 px from the screen edge, where the Mac keeps it about 10
      clear ("far enough in that the bezel is never touched"). The arcs are drawn in a 56-unit viewBox and
@@ -167,8 +172,9 @@
      than a fixed 70 px column. The card is centred under (or over) the hovered ring by `placeCard`. */
   body[data-edge="top"] #pill,body[data-edge="bottom"] #pill{
     right:auto;left:50%;top:auto;transform:translateX(-50%);
-    flex-direction:row;width:auto;height:auto;padding:12px 18px;
+    flex-direction:row;width:max-content;height:auto;max-height:none;max-width:calc(100% - 134.4px);padding:6px 12px;
   }
+  body[data-edge="top"] #cells,body[data-edge="bottom"] #cells{flex-direction:row;width:auto}
   body[data-edge="top"] #pill::before,body[data-edge="top"] #pill::after,
   body[data-edge="bottom"] #pill::before,body[data-edge="bottom"] #pill::after{right:auto;top:auto;bottom:auto}
   body[data-edge="top"] #pill{top:0;border-radius:0 0 20px 20px;border-top:none}
@@ -267,7 +273,7 @@
     <div class="h-disc"></div>
     <svg class="h-glyph" viewBox="0 0 12 12" aria-hidden="true"><path fill-rule="evenodd" d="M5.1.6h1.8l.3 1.5 1.1.5 1.3-.8 1.3 1.3-.8 1.3.5 1.1 1.5.3v1.8l-1.5.3-.5 1.1.8 1.3-1.3 1.3-1.3-.8-1.1.5-.3 1.5H5.1l-.3-1.5-1.1-.5-1.3.8-1.3-1.3.8-1.3-.5-1.1L.6 6.9V5.1l1.5-.3.5-1.1-.8-1.3 1.3-1.3 1.3.8 1.1-.5zM6 4.1a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg>
   </div>
-  <div id="pill"></div><!-- one .cell per provider, stacked vertically (upstream: data-driven, the same layout for 1–5 cells) -->
+  <div id="pill"><div id="cells"></div></div>
   <div id="rest"></div><!-- after the pill, so its outline is drawn over the clipped pill -->
   <div id="notice"></div>
 </div>
@@ -1081,7 +1087,7 @@ function renderRing(){
   // Rebuild the DOM only when the structure changes (never swap the element under the cursor)
   const want=ps.map(p=>p.id+':'+(glyphs[p.base]?glyphs[p.base].kind:'-')).join(',');
   if(pill.dataset.cells!==want){
-    pill.innerHTML=ps.map((p,i)=>`<div class="cell" data-p="${p.id}" style="--i:${i}">
+    cells.innerHTML=ps.map((p,i)=>`<div class="cell" data-p="${p.id}" style="--i:${i}">
       <div class="ringwrap"><svg class="ring" viewBox="0 0 56 56"></svg><svg class="reading" viewBox="0 0 56 56"></svg><svg class="activity" viewBox="0 0 56 56"></svg><div class="glyph ${(!glyphs[p.base]&&p.glyph.length>1)?'small':''}">${glyphHtml(p)}</div></div>
       <div class="pct">—</div></div>`).join('');
     pill.dataset.cells=want;
@@ -1141,6 +1147,7 @@ function renderRing(){
     glyph.classList.toggle('dim', !!(h && h.used>=1));
     wrap.classList.toggle('stale', staleOf(p.snap));
   }
+  syncScrollHover();
   reportHot(); // a provider appearing or leaving resizes the pill
 }
 
@@ -1402,7 +1409,7 @@ function todoCardHtml(meter){
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 
 /* Hover: stays expanded while either the pill or the card is under the cursor; collapses after a 250 ms grace period (upstream motion rule) */
-const card=document.getElementById('card'), pill=document.getElementById('pill'), tail=document.getElementById('tail');
+const card=document.getElementById('card'), pill=document.getElementById('pill'), tail=document.getElementById('tail'), cells=document.getElementById('cells');
 let hideTimer=null;
 function showCard(){clearTimeout(hideTimer);card.classList.add('show');renderCard();armWatchdog();refreshClock();} // show first so placeCard can measure it
 // Nothing is broadcast when the Windows clock format changes, so ask again each time the card opens
@@ -1448,21 +1455,17 @@ function armWatchdog(){
 }
 // Expanded stock details and changing system rows can resize a card without a hover event.
 const cardResizeObserver=new ResizeObserver(()=>{
+  syncScrollHover();
   if(card.classList.contains('show')) placeCard(); else reportHot();
 });
 cardResizeObserver.observe(card);
 cardResizeObserver.observe(pill);
-// Viewport fit (pure front-end fallback, independent of Rust): Rust sizes and zooms the window so this
-// page is as wide as the design, so if the CSS viewport is not that wide the WebView's DPR disagrees
-// with the monitor; CSS zoom pulls the layout back to the design size.
-// The design width is the window's, and the window is not the same shape on every edge — see
-// `notch_window_size` in main.rs: NOTCH_W upright, NOTCH_LONG lying flat. Dividing by 360 on a
-// flat edge read the wider window as a DPR error and zoomed the whole notch by 520/360. Either number
-// left behind when the window changes width does the same thing, so a test in main.rs pins both.
-const DESIGN_W_UPRIGHT=480, DESIGN_W_FLAT=650;
-function designWidth(){ return edgeIsVertical()?DESIGN_W_UPRIGHT:DESIGN_W_FLAT; }
+cardResizeObserver.observe(cells);
+// Rust reports the intended DPR (monitor scale × notch size). A narrower capped window is
+// less room for cells, not a DPI disagreement: deriving zoom from its width shrank the notch.
+let nativeDpr=0;
 function fitZoom(){
-  const z=innerWidth/designWidth();
+  const z=nativeDpr>0?nativeDpr/(window.devicePixelRatio||1):1;
   document.documentElement.style.zoom=(Math.abs(z-1)>0.02)?String(z):'';
   return z;
 }
@@ -1471,11 +1474,15 @@ function reportDpr(settled){
   const z=fitZoom();
   if(card.classList.contains('show')) placeCard();
   jslog(`dpr=${window.devicePixelRatio} inner=${innerWidth}x${innerHeight} cssZoom=${z.toFixed(3)}`);
-  callq('report_dpr',{dpr:window.devicePixelRatio||1,w:innerWidth,h:innerHeight,settled:settled===true}).catch(()=>{});
+  callq('report_dpr',{dpr:window.devicePixelRatio||1,w:innerWidth,h:innerHeight,settled:settled===true}).then(dpr=>{
+    if(!Number.isFinite(dpr)||dpr<=0) return;
+    nativeDpr=dpr;
+    fitZoom();
+    syncScrollHover();
+    if(card.classList.contains('show')) placeCard(); else reportHot();
+  }).catch(()=>{});
 }
-// Not measured yet: the width to measure against depends on the edge, and only Rust knows it. The
-// ask is at the bottom of this file and answers in a round trip; measuring first would zoom a flat
-// window by 520/360 for that moment.
+// Recheck the native target after a resize or a move between monitors.
 window.addEventListener('resize',()=>{clearTimeout(window._dprT);window._dprT=setTimeout(()=>{reportDpr(true);reportHot();},120);});
 matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change',()=>reportDpr());
 // A landing on a screen at another scale: empty the page, which leaves the transparent window
@@ -1491,9 +1498,15 @@ listen('notch_reveal',()=>{ document.documentElement.style.visibility=''; }).cat
    pure geometry: is the cursor (clientX/Y) inside pill rect ∪ card rect ∪ their bounding box?
    Leaving the window: document mouseout (relatedTarget=null) plus the Rust watchdog (system cursor) as a second line. */
 function inRect(x,y,r,pad){return x>=r.left-pad&&y>=r.top-pad&&x<r.right+pad&&y<r.bottom+pad;}
+function visibleCell(el){
+  const r=el.getBoundingClientRect(), v=cells.getBoundingClientRect();
+  return r.right>v.left&&r.left<v.right&&r.bottom>v.top&&r.top<v.bottom;
+}
 function cellAt(x,y){
-  for(const el of pill.querySelectorAll('.cell')){ if(inRect(x,y,el.getBoundingClientRect(),6)) return el.dataset.p; }
-  return null;
+  if(folded||!inRect(x,y,pill.getBoundingClientRect(),0)||!inRect(x,y,cells.getBoundingClientRect(),0)) return null;
+  // Use the same clipped DOM target as stock reordering, including overflowing SVG ring strokes.
+  const el=document.elementFromPoint(x,y)?.closest('.cell');
+  return el&&cells.contains(el)?el.dataset.p:null;
 }
 function pointerInHot(x,y){
   const p=pill.getBoundingClientRect();
@@ -1504,27 +1517,55 @@ function pointerInHot(x,y){
   const u={left:Math.min(p.left,c.left),top:Math.min(p.top,c.top),right:Math.max(p.right,c.right),bottom:Math.max(p.bottom,c.bottom)};
   return inRect(x,y,u,0);
 }
-let hideLogged=0;
-document.addEventListener('mousemove',e=>{
-  // Folded, the page is sent events only over the pill, so any movement at all is the pointer reaching it
-  if(folded){ pointerIn=true; unfold(); }
-  if(dragging||stockDragging)return; // no card while dragging or reordering
-  if(carrying) return; // the notch is in hand; the card would only be in the way
-  setHovered(onHandle(e.clientX,e.clientY));
+let hideLogged=0, lastPointer=null;
+function updateHover(x,y){
+  if(folded||dragging||stockDragging||carrying) return;
+  setHovered(onHandle(x,y));
   if(hovered){ if(card.classList.contains('show')){ clearTimeout(hideTimer); hideCard(); } return; }
-  const hot=pointerInHot(e.clientX,e.clientY);
-  if(hot){
+  const id=cellAt(x,y);
+  if(id){
     clearTimeout(hideTimer);
-    const id=cellAt(e.clientX,e.clientY);
-    if(id&&id!==hoverId){ hoverId=id; if(card.classList.contains('show')){ renderCard(); armWatchdog(); } }
+    if(id!==hoverId){ hoverId=id; if(card.classList.contains('show')){ renderCard(); armWatchdog(); } }
     if(!card.classList.contains('show')) showCard();
   }
-  else if(card.classList.contains('show')){ if(hideLogged++<5) jslog(`mousemove left the hot area -> collapse at ${e.clientX},${e.clientY}`); scheduleHide(); }
+  else if(inRect(x,y,pill.getBoundingClientRect(),0)){ if(card.classList.contains('show')) scheduleHide(); }
+  else if(pointerInHot(x,y)){ clearTimeout(hideTimer); }
+  else if(card.classList.contains('show')){ if(hideLogged++<5) jslog(`mousemove left the hot area -> collapse at ${x},${y}`); scheduleHide(); }
+}
+function syncScrollHover(){
+  const anchor=cells.querySelector(`.cell[data-p="${hoverId}"]`);
+  if(card.classList.contains('show')&&(!anchor||!visibleCell(anchor))) hideCard();
+  if(lastPointer) updateHover(...lastPointer);
+  if(card.classList.contains('show')) placeCard();
+}
+cells.addEventListener('scroll',syncScrollHover);
+pill.addEventListener('wheel',e=>{
+  if(e.ctrlKey) return; // Leave trackpad pinch gestures to the WebView.
+  const vertical=edgeIsVertical(), span=vertical?cells.clientHeight:cells.clientWidth;
+  const max=(vertical?cells.scrollHeight:cells.scrollWidth)-span;
+  if(max<=0) return;
+  e.preventDefault(); // Also consume outward wheel motion at either boundary.
+  if(folded||dragging||stockDragging||carrying) return;
+  const delta=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY;
+  if(!Number.isFinite(delta)) return;
+  const unit=e.deltaMode===1?16:e.deltaMode===2?span:1/(parseFloat(document.documentElement.style.zoom)||1);
+  const axis=vertical?'scrollTop':'scrollLeft', before=cells[axis];
+  cells[axis]=Math.max(0,Math.min(max,before+delta*unit));
+  if(cells[axis]!==before) press=null;
+  lastPointer=[e.clientX,e.clientY];
+  syncScrollHover(); // A stationary pointer must follow the cell now underneath it.
+},{passive:false});
+document.addEventListener('mousemove',e=>{
+  lastPointer=[e.clientX,e.clientY];
+  // Folded, the page is sent events only over the pill, so any movement at all is the pointer reaching it
+  if(folded){ pointerIn=true; unfold(); }
+  updateHover(...lastPointer);
 });
 document.addEventListener('mouseout',e=>{ // relatedTarget null = the cursor left the page
+  if(!e.relatedTarget) lastPointer=null;
   if(!e.relatedTarget && card.classList.contains('show')){ if(hideLogged++<5) jslog('mouseout left the page -> collapse'); scheduleHide(); }
 });
-listen('pointer_left',()=>{clearTimeout(hideTimer);hideCard();}).catch(()=>{});
+listen('pointer_left',()=>{lastPointer=null;clearTimeout(hideTimer);hideCard();}).catch(()=>{});
 // Card content changes change its height -> report the hot rectangles again
 listen('usage',()=>{if(card.classList.contains('show'))armWatchdog();}).catch(()=>{});
 listen('state',()=>{if(card.classList.contains('show'))armWatchdog();}).catch(()=>{});
@@ -1564,7 +1605,7 @@ function settle(id){
   renderRing();
 }
 // Alt+drag moves the notch. Plain stock drags reorder after 5 px; a shorter press refreshes.
-pill.addEventListener('mousedown',e=>{ if(e.button!==0||folded)return; press={x:e.clientX,y:e.clientY,id:cellAt(e.clientX,e.clientY)||hoverId,alt:e.altKey}; });
+pill.addEventListener('mousedown',e=>{ if(e.button!==0||folded)return; press={x:e.clientX,y:e.clientY,id:cellAt(e.clientX,e.clientY),alt:e.altKey}; });
 document.addEventListener('mousemove',e=>{
   if(!press||dragging||!press.alt)return;
   if(Math.abs(e.clientY-press.y)>4||Math.abs(e.clientX-press.x)>4){
@@ -1742,8 +1783,7 @@ invoke('get_glyphs').then(g=>{glyphs=g||glyphs;renderRing();}).catch(()=>{});
 // The edge: pushed on every placement (a drag that snapped elsewhere, or Settings), and asked for once
 // at startup in case the placement happened before this page was listening.
 listen('notch_edge',e=>applyEdge(e.payload)).catch(()=>{});
-// applyEdge measures for the edge it is given; on the right-hand one it returns early, so the first
-// measurement is made here either way — and still made if the ask fails, from the default edge.
+// applyEdge returns early on the default edge, so ask for its initial DPR here either way.
 invoke('get_notch_edge').then(e=>{applyEdge(e);reportDpr();}).catch(()=>reportDpr());
 invoke('get_codex').then(u=>{codexSnap=u||codexSnap;renderRing();}).catch(()=>{});
 invoke('get_usage').then(u=>{usage=u||usage;renderRing();}).catch(e=>notice('get_usage failed: '+e));

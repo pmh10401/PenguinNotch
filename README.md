@@ -251,6 +251,8 @@ rows preserves other categories’ positions; existing visibility, colors and or
 
 ## Placement
 
+When many items fill the display, scroll over the notch with the **mouse wheel or trackpad** to reach the rest. This works on all four edges in macOS and Windows, with circles or bars. A vertical wheel also scrolls top/bottom notches horizontally. Hover cards scroll independently; lists that fit stay still.
+
 **Settings → Appearance → Hover text size** adjusts hover cards from **80% to 150%**
 (default **100%**) on macOS and Windows. Text and controls grow together; tall cards
 scroll within the screen. This setting is saved separately from the notch size.

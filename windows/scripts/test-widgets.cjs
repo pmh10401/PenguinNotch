@@ -175,7 +175,6 @@ for (const edge of ['left', 'right', 'top', 'bottom']) for (const zoom of [0.75,
 }
 const native = fs.readFileSync(path.join(__dirname, '../penguinnotch/src/main.rs'), 'utf8');
 const nativeWidth = Number(native.match(/pub const NOTCH_W: f64 = ([\d.]+)/)[1]);
-assert.equal(nativeWidth, Number(notch.match(/const DESIGN_W_UPRIGHT=([\d.]+)/)[1]), 'fallback zoom must match the native window');
 assert.ok(nativeWidth >= 70+30+246*1.5+10, 'space for 150% cards without changing notch zoom');
 console.log('PASS: hover scale validation, all eight sizes, four edges, viewport bounds, CSS zoom and measured hot rectangles');
 
@@ -202,3 +201,39 @@ console.log('PASS: hover scale validation, all eight sizes, four edges, viewport
   assert.ok(reports>10,'visibility transitions remeasure native hot regions');
 }
 console.log('PASS: reveal duration/renewal, Keep open, hover and drag/menu folding guards');
+
+// Exercise the page's real wheel listener without a browser dependency. Rendered clipping and
+// elementFromPoint/reorder parity are covered by test-notch-scroll-browser.cjs.
+{
+  const wheelSource=notch.slice(notch.indexOf("pill.addEventListener('wheel'"),notch.indexOf("document.addEventListener('mousemove'",notch.indexOf("pill.addEventListener('wheel'")));
+  const zoomSource=notch.slice(notch.indexOf('function fitZoom(){'),notch.indexOf('// `settled` only'));
+  for(const vertical of [false,true]) for(const zoom of [.75,1,1.137,1.5]){
+    let wheel,synced=0;
+    const cells={clientHeight:200,clientWidth:200,scrollHeight:900,scrollWidth:900,scrollTop:0,scrollLeft:0};
+    const context=vm.createContext({cells,folded:false,dragging:false,stockDragging:false,carrying:false,press:{id:'old'},lastPointer:null,
+      nativeDpr:1.5*zoom,window:{devicePixelRatio:1.5},innerWidth:123,
+      document:{documentElement:{style:{zoom:String(zoom)}}},edgeIsVertical:()=>vertical,syncScrollHover(){synced++;},
+      pill:{addEventListener(name,fn,opts){assert.equal(name,'wheel');assert.equal(opts.passive,false);wheel=fn;}}});
+    vm.runInContext(zoomSource+wheelSource,context);
+    assert.equal(context.fitZoom(),zoom,'capping viewport width must not change scale');
+    const axis=vertical?'scrollTop':'scrollLeft',cross=vertical?'scrollLeft':'scrollTop';
+    const event=(patch={})=>{const e={deltaX:0,deltaY:0,deltaMode:0,clientX:5,clientY:8,preventDefault(){this.prevented=true;},...patch};wheel(e);return e;};
+    event({deltaY:40*zoom});assert.equal(cells[axis],40);assert.equal(cells[cross],0);
+    assert.equal(context.press,null,'scroll cannot refresh the cell pressed before it moved');
+    assert.deepEqual(Array.from(context.lastPointer),[5,8]);assert.ok(synced>0,'wheel immediately rechecks stationary hover');
+    event({deltaX:30*zoom,deltaY:10*zoom});assert.equal(cells[axis],70,'trackpad dominant axis only, never summed');
+    event({deltaY:2,deltaMode:1});assert.equal(cells[axis],102,'line units');
+    event({deltaY:1,deltaMode:2});assert.equal(cells[axis],302,'page units');
+    event({deltaY:1e6});assert.equal(cells[axis],700);
+    assert.equal(event({deltaY:20}).prevented,true);assert.equal(cells[axis],700,'end clamp');
+    event({deltaY:-1e6});assert.equal(cells[axis],0);
+    assert.equal(event({deltaY:-20}).prevented,true);assert.equal(cells[axis],0,'start clamp');
+    for(const guard of ['folded','dragging','stockDragging','carrying']){
+      context[guard]=true;event({deltaY:80});assert.equal(cells[axis],0,guard);context[guard]=false;
+    }
+    event({deltaY:80,ctrlKey:true});event({deltaY:NaN});assert.equal(cells[axis],0);
+    cells.scrollHeight=cells.scrollWidth=200;
+    assert.equal(event({deltaY:100}).prevented,undefined,'non-overflow wheel is untouched');assert.equal(cells[axis],0);
+  }
+}
+console.log('PASS: capped viewport DPI, wheel units/axes/boundaries, stationary hover, drag/fold guards and no-overflow stability');

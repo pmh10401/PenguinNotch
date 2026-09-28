@@ -16,6 +16,8 @@ final class NotchPanel: NSPanel {
     var onReorderHover: ((CGPoint, CGPoint) -> Void)?
     var onReorderDrop: ((CGPoint, CGPoint) -> Void)?
     var onReorderEnd: (() -> Void)?
+    /// Consume wheel input only over an overflowing list. Cards keep native scrolling.
+    var onScroll: ((NSEvent) -> Bool)?
     /// ⌥-drag on the chrome, reported as the raw pointer delta since the last
     /// event — not a cumulative offset, so the caller decides what "along the
     /// edge" means for the current one. Chosen over a plain click-and-hold
@@ -26,6 +28,7 @@ final class NotchPanel: NSPanel {
     var onDragEnd: (() -> Void)?
 
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .scrollWheel, onScroll?(event) == true { return }
         guard event.type == .rightMouseDown,
               let menu = contextMenuProvider?(),
               let view = contentView,

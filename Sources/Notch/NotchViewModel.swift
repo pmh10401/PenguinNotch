@@ -35,6 +35,7 @@ final class NotchViewModel: ObservableObject {
         let nextHoveredIndex = hoveredID.flatMap { id in next.firstIndex { $0.id == id } }
         if hoveredIndex != nextHoveredIndex { hoveredIndex = nextHoveredIndex }
         snapshots = next
+        scroll(by: 0)
     }
 
     func updatePerformances(_ measurements: [String: LocalModelPerformance],
@@ -227,6 +228,21 @@ final class NotchViewModel: ObservableObject {
     /// Visible slice of the panel along its edge, in local stack coordinates.
     @Published var visibleAlongRange: ClosedRange<CGFloat>?
 
+    @Published private var storedScrollOffset: CGFloat = 0
+    /// Scroll in design points; rendering, hover and clicks share this offset.
+    var scrollOffset: CGFloat { min(storedScrollOffset, maxScrollOffset) }
+    var maxScrollOffset: CGFloat { max(0, contentLength(cellCount: snapshots.count) - shapeLength) }
+
+    @discardableResult
+    func scroll(by delta: CGFloat) -> Bool {
+        guard delta.isFinite else { return false }
+        let next = min(max(0, scrollOffset + delta), maxScrollOffset)
+        guard next != storedScrollOffset else { return false }
+        storedScrollOffset = next
+        hoveredIndex = nil
+        return true
+    }
+
     func tooltipAlong(index: Int, length: CGFloat) -> CGFloat {
         let centre = slack + ringCenter(index: index) * sizeScale
         guard let range = visibleAlongRange else { return centre }
@@ -352,7 +368,9 @@ final class NotchViewModel: ObservableObject {
     /// Reserve the full hit area even while only the resting arc is visible,
     /// so revealing the settings button cannot put it beyond the screen.
     var trailingExtent: CGFloat {
-        (max(0, orbAlong - shapeLength + NotchLayout.orbHotZone / 2) * sizeScale).rounded(.up)
+        let extensionLength = orbHugsCorner
+            ? -flare - drawnCornerRadius + NotchLayout.orbCornerOffset(corner: drawnCornerRadius) : 0
+        return (max(0, extensionLength + NotchLayout.orbHotZone / 2) * sizeScale).rounded(.up)
     }
 
     /// Where the move handle sits: the settings orb's position mirrored to the
@@ -373,7 +391,7 @@ final class NotchViewModel: ObservableObject {
     /// meant to reach.
     var leadingExtent: CGFloat {
         guard showsMoveHandle else { return 0 }
-        return (max(0, -moveAlong + NotchLayout.orbHotZone / 2) * sizeScale).rounded(.up)
+        return trailingExtent
     }
 
     /// Where the bar's far corner actually turns, along the stack.
@@ -514,17 +532,22 @@ final class NotchViewModel: ObservableObject {
 
     /// The straight part of the shape, flares excluded.
     var bodyLength: CGFloat {
-        NotchLayout.bodyLength(
-            cellCount: snapshots.count, edge: edge, spacing: cellSpacing,
-            meterStyle: notchMeterStyle
-        ) + 2 * endSpread
+        shapeLength - 2 * flare
     }
 
     /// Distance along the stack to cell `index`'s ring centre, widening
     /// included so the readings stay in the middle of the bar.
     func ringCenter(index: Int) -> CGFloat {
         NotchLayout.ringCenter(index: index, edge: edge, flare: flare,
-                              spacing: cellSpacing, meterStyle: notchMeterStyle) + endSpread
+                              spacing: cellSpacing, meterStyle: notchMeterStyle) + endSpread - scrollOffset
+    }
+
+    func isCellVisible(index: Int) -> Bool {
+        let half = (notchMeterStyle == .bar && edge.isVertical
+            ? NotchLayout.barCellExtent : NotchLayout.ringDiameter) / 2
+        let start = ringCenter(index: index) - half
+        return start < shapeLength - flare
+            && start + NotchLayout.cellAlong(for: edge, meterStyle: notchMeterStyle) > flare
     }
 
     var cellSpacing: CGFloat { cellSpacing(cellCount: snapshots.count) }
@@ -737,6 +760,14 @@ final class NotchViewModel: ObservableObject {
     /// model back. Taking the count as an argument is the only way to be sure
     /// the panel is sized for the list that caused the change.
     func shapeLength(cellCount: Int) -> CGFloat {
+        let content = contentLength(cellCount: cellCount)
+        let available = edge.isVertical ? screenSize.height : screenSize.width
+        guard available > 0 else { return content }
+        // Keep both handles on screen too, with room for AppKit's frame rounding.
+        return min(content, max(1, (available - leadingExtent - trailingExtent - 2) / sizeScale))
+    }
+
+    private func contentLength(cellCount: Int) -> CGFloat {
         NotchLayout.shapeLength(cellCount: cellCount,
                                 edge: edge, flare: flare,
                                 spacing: cellSpacing(cellCount: cellCount),

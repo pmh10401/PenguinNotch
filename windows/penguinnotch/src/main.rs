@@ -36,10 +36,10 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Logical window width: the 70 px pill, a 246 px card at up to 150%, its tail and margin. Reserve it at
-/// 100% so changing hover text size never resizes or zooms the notch. `fitZoom` uses the same width.
+/// 100% so changing hover text size never resizes or zooms the notch.
 pub const NOTCH_W: f64 = 480.0;
 /// Hand-bumped build tag, written to run.log at startup so a log can always be matched to the exe that wrote it.
-pub const BUILD: &str = "r46";
+pub const BUILD: &str = "r47";
 /// The upright notch also holds system meters, calendar, weather and to-do cells.
 pub const NOTCH_UPRIGHT_H: f64 = 980.0;
 /// The flat notch needs this much width for its rings and height for its card.
@@ -267,7 +267,7 @@ fn along_at(pos: i32, len: i32, start: i32, span: i32) -> f64 {
 /// out of the taskbar, so what is left here is the window's other three sides — an upright notch is
 /// taller than the work area is on a short screen — and the hover card is what the page moves.
 fn work_insets(s: &Screen, x: i32, y: i32, ww: i32, wh: i32) -> [i32; 4] {
-    let (wx, wy, waw, wah) = s.work;
+    let (wx, wy, waw, wah) = s.area();
     [
         (wy - y).clamp(0, wh),
         ((x + ww) - (wx + waw)).clamp(0, ww),
@@ -296,6 +296,16 @@ pub fn notch_window_size(edge: &str) -> (f64, f64) {
     }
 }
 
+/// Cap physical bounds before positioning; keep the configured size and per-edge offsets intact.
+fn notch_physical_size(s: &Screen, edge: &str, size: f64) -> (u32, u32) {
+    let (width, height) = notch_window_size(edge);
+    let (_, _, aw, ah) = s.area();
+    (
+        ((width * s.scale * size).round() as u32).clamp(1, aw.max(1) as u32),
+        ((height * s.scale * size).round() as u32).clamp(1, ah.max(1) as u32),
+    )
+}
+
 pub fn place_notch(app: &AppHandle) {
     let Some(w) = app.get_webview_window("notch") else {
         return;
@@ -315,12 +325,8 @@ pub fn place_notch(app: &AppHandle) {
             let c = st.cfg.lock().unwrap();
             config::edge_or_right(&c.notch_edge)
         };
-        let (width, height) = notch_window_size(&edge);
-        // Never taller or wider than the screen: Large on a small, highly scaled display can ask for more
-        let target = tauri::PhysicalSize::new(
-            ((width * ms * size).round() as u32).min(mon.w.max(1) as u32),
-            ((height * ms * size).round() as u32).min(mon.h.max(1) as u32),
-        );
+        let (width, height) = notch_physical_size(&mon, &edge, size);
+        let target = tauri::PhysicalSize::new(width, height);
         let _ = w.set_size(target);
         zoom_notch(&w, ms, size);
         // Position from the window's measured physical size — deriving it from the scale factor
@@ -337,7 +343,7 @@ pub fn place_notch(app: &AppHandle) {
         let (x, y) = edge_origin(&mon, &edge, ww, wh, ratio);
         let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
         let mut placed = (x, y, ww, wh);
-        if w.outer_size().map(|s| s.width != target.width).unwrap_or(false) {
+        if w.outer_size().map(|s| s != target).unwrap_or(false) {
             let _ = w.set_size(target);
             let (x, y) = edge_origin(&mon, &edge, target.width as i32, target.height as i32, ratio);
             let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
@@ -863,8 +869,8 @@ pub fn applog(line: &str) {
 /// `settled` is true when the report comes at the end of a burst of resizes rather than partway
 /// through one, which is what a landing on another screen waits for before it shows the notch.
 #[tauri::command]
-fn report_dpr(app: AppHandle, dpr: f64, w: f64, h: f64, settled: Option<bool>) {
-    let Some(win) = app.get_webview_window("notch") else { return };
+fn report_dpr(app: AppHandle, dpr: f64, w: f64, h: f64, settled: Option<bool>) -> Option<f64> {
+    let Some(win) = app.get_webview_window("notch") else { return None };
     let want = target_screen(&app)
         .map(|s| s.scale)
         .unwrap_or_else(|| win.scale_factor().unwrap_or(1.0))
@@ -899,6 +905,7 @@ fn report_dpr(app: AppHandle, dpr: f64, w: f64, h: f64, settled: Option<bool>) {
     if settled == Some(true) && !corrected && LANDING.swap(0, std::sync::atomic::Ordering::SeqCst) != 0 {
         let _ = app.emit_to("notch", "notch_reveal", ());
     }
+    Some(want)
 }
 
 /// Slack around every hot rectangle: this is sampled on a timer, so a cursor arriving at the pill
@@ -2120,29 +2127,28 @@ mod tests {
         }
     }
 
-    /// `fitZoom` treats a window wider than the page's design width as a DPI disagreement and zooms
-    /// the layout to close the gap, so a design width left behind when the window is widened zooms
-    /// the whole notch instead — and `placeCard`, which writes unzoomed styles from zoomed rects,
-    /// then puts the card at the wrong place entirely.
     #[test]
-    fn the_pages_design_widths_are_the_window_widths() {
-        let page = include_str!("../ui/notch.html");
-        let line = page
-            .lines()
-            .find(|l| l.trim_start().starts_with("const DESIGN_W_UPRIGHT"))
-            .expect("notch.html declares its design widths on one line");
-        let width_of = |key: &str| -> f64 {
-            let after = line.split(key).nth(1).unwrap_or_else(|| panic!("{key} missing"));
-            after
-                .trim_start_matches('=')
-                .chars()
-                .take_while(|c| c.is_ascii_digit() || *c == '.')
-                .collect::<String>()
-                .parse()
-                .unwrap_or_else(|_| panic!("{key} is not a number"))
-        };
-        assert_eq!(width_of("DESIGN_W_UPRIGHT"), notch_window_size("right").0);
-        assert_eq!(width_of("DESIGN_W_FLAT"), notch_window_size("top").0);
+    fn notch_bounds_fit_the_work_area_without_changing_saved_offsets() {
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let s = Screen { name: None, x: -900, y: 100, w: 900, h: 700, scale, work: (-860, 120, 860, 640) };
+            for step in 15..=30 {
+                for edge in ["left", "right", "top", "bottom"] {
+                    let (w, h) = super::notch_physical_size(&s, edge, step as f64 / 20.0);
+                    assert!(w > 0 && w <= 860 && h > 0 && h <= 640);
+                    for ratio in [0.0, 0.2, 0.5, 0.73, 1.0] {
+                        let (x, y) = super::edge_origin(&s, edge, w as i32, h as i32, ratio);
+                        assert!(x >= -860 && x + w as i32 <= 0 && y >= 120 && y + h as i32 <= 760);
+                        assert_eq!(work_insets(&s, x, y, w as i32, h as i32), [0; 4]);
+                    }
+                }
+            }
+        }
+        let s = Screen { name: None, x: 0, y: 0, w: 3200, h: 2000, scale: 1.0, work: (0, 0, 0, 0) };
+        for edge in ["left", "right", "top", "bottom"] {
+            let (w, h) = super::notch_physical_size(&s, edge, 1.0);
+            assert_eq!((w as f64, h as f64), notch_window_size(edge), "uncapped size is unchanged");
+            assert_eq!(work_insets(&s, 0, 0, w as i32, h as i32), [0; 4]);
+        }
     }
 
     /// A name declared in one palette and not the other keeps its dark value under a light page —

@@ -296,6 +296,7 @@ final class NotchWindowController {
     func relocate(cellCount: Int? = nil) {
         guard let screen = currentScreen() else { return }
         model.adopt(screen: screen)
+        model.scroll(by: 0)
         let size = model.panelSize(cellCount: cellCount ?? model.snapshots.count)
         let frame = NotchGeometry.panelFrame(
             for: screen, panelSize: size, edge: model.edge,
@@ -314,6 +315,10 @@ final class NotchWindowController {
             let hosting = NotchHostingView(rootView: NotchRootView(model: model))
             panel.contextMenuProvider = { [weak self] in self?.contextMenu() }
             panel.onClick = { [weak self] point in self?.handleClick(at: point) }
+            panel.onScroll = { [weak self] event in
+                self?.scroll(at: event.locationInWindow, deltaX: event.scrollingDeltaX,
+                             deltaY: event.scrollingDeltaY, precise: event.hasPreciseScrollingDeltas) ?? false
+            }
             panel.canReorder = { [weak self] point in self?.cellIndex(at: point) != nil }
             panel.onReorderHover = { [weak self] start, point in
                 guard let self else { return }
@@ -849,7 +854,7 @@ final class NotchWindowController {
     func apply(showsMoveHandle: Bool) {
         guard model.showsMoveHandle != showsMoveHandle else { return }
         model.showsMoveHandle = showsMoveHandle
-        updateInteractiveRects()
+        relocate()
     }
 
     func apply(notchMeterStyle: NotchMeterStyle) {
@@ -1205,12 +1210,36 @@ final class NotchWindowController {
     }
 
     func cellIndex(along: CGFloat) -> Int? {
+        let position = (along - model.slack) / model.sizeScale
+        guard position >= model.flare, position < model.shapeLength - model.flare else { return nil }
         let pitch = model.cellPitch * model.sizeScale
         for index in model.snapshots.indices {
+            guard model.isCellVisible(index: index) else { continue }
             let centre = model.slack + model.ringCenter(index: index) * model.sizeScale
             if abs(along - centre) <= pitch / 2 { return index }
         }
         return nil
+    }
+
+    @discardableResult
+    func scroll(at locationInWindow: CGPoint, deltaX: CGFloat, deltaY: CGFloat, precise: Bool) -> Bool {
+        guard let panel, model.isExpanded, model.maxScrollOffset > 0,
+              !isOptionDragging, !isReordering, !model.isMoving else { return false }
+        let local = CGPoint(x: locationInWindow.x, y: panel.frame.height - locationInWindow.y)
+        guard notchRect.contains(local), !isOverHandle(local), !isOverMoveHandle(local) else { return false }
+        // A plain wheel also moves a horizontal notch; trackpads use their dominant axis.
+        let delta = model.edge.isVertical || abs(deltaY) >= abs(deltaX) ? deltaY : deltaX
+        guard delta.isFinite else { return false }
+        let points = -delta * (precise ? 1 : 20) / model.sizeScale
+        if model.scroll(by: points) {
+            clearHoverWork?.cancel()
+            clearHoverWork = nil
+            foldWork?.cancel()
+            foldWork = nil
+            model.hoveredIndex = cellIndex(along: placement.along(of: local))
+            updateInteractiveRects()
+        }
+        return true
     }
 
     private func cellIndex(at locationInWindow: CGPoint) -> Int? {

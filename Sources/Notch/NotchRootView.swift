@@ -259,7 +259,17 @@ struct NotchRootView: View {
             // a shape that had been made deeper is what put the top of every
             // ring inside the hole in the display.
             .overlay(alignment: contentAlignment) {
-                cells.padding(bezelSide, model.contentInset)
+                cells
+                    .fixedSize()
+                    .offset(x: -model.edge.alongDirection.x * (model.scrollOffset + model.flare),
+                            y: -model.edge.alongDirection.y * (model.scrollOffset + model.flare))
+                    .animation(nil, value: model.scrollOffset)
+                    .frame(width: model.edge.isVertical ? NotchLayout.bodyDepth(for: model.edge) : max(0, model.bodyLength),
+                           height: model.edge.isVertical ? max(0, model.bodyLength) : NotchLayout.bodyDepth(for: model.edge),
+                           alignment: contentAlignment)
+                    .clipped()
+                    .padding(model.edge.isVertical ? .top : .leading, model.flare)
+                    .padding(bezelSide, model.contentInset)
             }
             // Masked by the notch itself, not by its bounding box. Without this
             // the cells simply sit on top of a shrinking shape and appear to
@@ -347,6 +357,7 @@ struct NotchRootView: View {
                 .frame(width: model.edge.isVertical ? nil
                     : NotchLayout.cellAlong(for: model.edge, meterStyle: model.notchMeterStyle))
                 .opacity(model.isExpanded ? 1 : 0)
+                .accessibilityHidden(!model.isExpanded || !model.isCellVisible(index: index))
                 // A short slide toward the edge, no scaling: the clip is
                 // already doing the concealing, and scaling on top of it
                 // reads as two effects fighting.

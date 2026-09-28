@@ -1,6 +1,9 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Scroll through every notch item": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "스크롤로 모든 노치 항목 보기"}}}},
+    "Use the wheel when the notch fills the screen": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "항목이 화면을 넘으면 휠로 스크롤"}}}},
+    "Scroll overflowing items with the mouse wheel or trackpad on all four edges. The notch stays within the display, and hover cards keep their own scrolling.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "네 방향 모두에서 마우스 휠이나 트랙패드로 넘치는 항목을 스크롤할 수 있습니다. 노치는 화면 안에 유지되고, 호버 카드는 별도로 스크롤됩니다."}}}},
     "Adjust hover text size": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "호버 화면의 글자 크기 조절"}}}},
     "Claude and Antigravity background reads no longer launch a separate security process after access is refused. Use Allow access in Settings when permission is needed.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "Claude·Antigravity의 백그라운드 접근이 거절되면 별도 security 프로세스로 재시도하지 않습니다. 인증이 필요하면 설정에서 접근 허용을 선택하세요."}}}},
     "Clockwise gains, counterclockwise losses": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "상승은 시계 방향, 하락은 반시계 방향"}}}},

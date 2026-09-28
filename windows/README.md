@@ -11,6 +11,8 @@ formats, using native Windows storage and system APIs.
 
 ## What it shows
 
+When the list outgrows the display, use the mouse wheel or trackpad over the notch to scroll its items. All four edges and Circles/Bars are supported; a vertical wheel also scrolls horizontal notches. Hover-card scrolling stays separate.
+
 | Cell | Source | How it reads it |
 |---|---|---|
 | **Claude** | `GET https://api.anthropic.com/api/oauth/usage` with the token Claude Code keeps in `~/.claude/.credentials.json` | Session / weekly windows, 429 back-off with a persisted deadline, stale readings dimmed with their age. Renews that token by running the standalone `claude -p` shortly before it expires (Claude Code inside the desktop app never writes this file), and never sends an expired one. A thin arc spins inside the ring while a Claude session is working, and pulses amber when one is waiting on you (Claude Code hooks + transcript watcher, desktop app included). |
