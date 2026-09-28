@@ -286,6 +286,24 @@ enum StockQuoteCodec {
         return candles
     }
 
+    static let movingAveragePeriods = [5, 20, 60, 120]
+
+    /// One trailing average per input bar. Warm-up entries stay nil; future bars never enter a window.
+    static func movingAverages(for candles: [StockCandle], period: Int) -> [Double?] {
+        var values = [Double?](repeating: nil, count: candles.count)
+        let closes = candles.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+        guard period > 0, closes.allSatisfy({ $0.isFinite && $0 > 0 }),
+              candles.allSatisfy({ $0.end.timeIntervalSince1970.isFinite }),
+              zip(candles, candles.dropFirst()).allSatisfy({ $0.end < $1.end }) else { return values }
+        var sum = 0.0
+        for index in closes.indices {
+            sum += closes[index]
+            if index >= period { sum -= closes[index - period] }
+            if index >= period - 1, sum.isFinite { values[index] = sum / Double(period) }
+        }
+        return values
+    }
+
     /// The API's minute timestamp marks the *end* of [minute - 1, minute).
     /// Subtract a second so 09:10 joins 09:01–09:09, not 09:11–09:20.
     static func tenMinuteCandles(from minutes: [StockCandle]) -> [StockCandle] {
@@ -304,6 +322,37 @@ enum StockQuoteCodec {
             }
         }
         return result
+    }
+
+    /// Forecasts intentionally use only the current regular session.
+    static func completedRegularBars(_ minutes: [StockCandle], trading: TradingSession,
+                                     through: Date, interval: StockChartInterval) -> [StockCandle] {
+        let regular = minutes.filter {
+            $0.end > trading.startTime && $0.end <= trading.endTime
+                && $0.end.addingTimeInterval(-60) >= trading.startTime
+        }
+        return completedIntradayBars(regular, through: through, interval: interval)
+    }
+
+    /// Historical analysis also uses earlier trading days and extended-hours bars.
+    static func completedIntradayBars(_ minutes: [StockCandle], through: Date,
+                                      interval: StockChartInterval) -> [StockCandle] {
+        let completed = minutes.filter {
+            $0.end <= through && $0.open > 0 && $0.close > 0
+                && NSDecimalNumber(decimal: $0.close).doubleValue.isFinite
+        }.sorted { $0.end < $1.end }
+        guard Set(completed.map(\.end)).count == completed.count else { return [] }
+        var bars = completed
+        if interval == .tenMinutes {
+            // The chart may draw partial buckets. Analysis requires all ten one-minute bars.
+            bars = StockQuoteCodec.tenMinuteCandles(from: completed).filter { bar in
+                let group = completed.filter { $0.end > bar.end.addingTimeInterval(-600) && $0.end <= bar.end }
+                return group.count == 10 && group.enumerated().allSatisfy { index, minute in
+                    abs(minute.end.timeIntervalSince(bar.end) + Double(9 - index) * 60) < 0.01
+                }
+            }
+        }
+        return bars
     }
 
     private static func rows(in data: Data) -> [[String: Any]]? {

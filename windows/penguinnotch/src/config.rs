@@ -126,6 +126,8 @@ pub struct Config {
     pub todos: Vec<crate::widgets::TodoItem>,
     #[serde(default)]
     pub weather_location: Option<crate::widgets::WeatherLocation>,
+    #[serde(default, rename = "stockSettings")]
+    pub stock_settings: crate::stocks::StockSettings,
 }
 
 fn default_notch_y() -> f64 {
@@ -264,6 +266,7 @@ impl Default for Config {
             notch_colors: BTreeMap::new(),
             todos: Vec::new(),
             weather_location: None,
+            stock_settings: crate::stocks::StockSettings::default(),
         }
     }
 }

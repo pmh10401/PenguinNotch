@@ -344,6 +344,9 @@ final class Preferences: ObservableObject {
     @Published var portfolioForecastEnabled: Bool {
         didSet { defaults.set(portfolioForecastEnabled, forKey: "portfolioForecastEnabled") }
     }
+    @Published var showsStockTimingSignals: Bool {
+        didSet { defaults.set(showsStockTimingSignals, forKey: "showsStockTimingSignals") }
+    }
     @Published var recordsStockForecasts: Bool {
         didSet { defaults.set(recordsStockForecasts, forKey: "recordsStockForecasts") }
     }
@@ -361,6 +364,13 @@ final class Preferences: ObservableObject {
     }
     @Published var stockChartInterval: StockChartInterval {
         didSet { defaults.set(stockChartInterval.rawValue, forKey: "stockChartInterval") }
+    }
+    @Published var stockMovingAveragePeriods: [Int] {
+        didSet {
+            let valid = StockQuoteCodec.movingAveragePeriods.filter { stockMovingAveragePeriods.contains($0) }
+            if valid != stockMovingAveragePeriods { stockMovingAveragePeriods = valid }
+            defaults.set(valid, forKey: "stockMovingAveragePeriods")
+        }
     }
     @Published var stockDisplayInterval: Int {
         didSet {
@@ -983,10 +993,13 @@ final class Preferences: ObservableObject {
         self.stockSymbols = defaults.stringArray(forKey: "stockSymbols") ?? []
         self.stockQuoteSource = StockQuoteSource(rawValue: defaults.string(forKey: "stockQuoteSource") ?? defaults.string(forKey: "usStockSource") ?? "") ?? .toss
         self.portfolioForecastEnabled = defaults.bool(forKey: "portfolioForecastEnabled")
+        self.showsStockTimingSignals = defaults.object(forKey: "showsStockTimingSignals") as? Bool ?? true
         self.recordsStockForecasts = defaults.bool(forKey: "recordsStockForecasts")
         self.tossAccountSeq = defaults.integer(forKey: "tossAccountSeq")
         self.stockChartCount = min(max(defaults.object(forKey: "stockChartCount") as? Int ?? 20, 1), 20)
         self.stockChartInterval = StockChartInterval(rawValue: defaults.string(forKey: "stockChartInterval") ?? "") ?? .tenMinutes
+        let savedAverages = defaults.array(forKey: "stockMovingAveragePeriods") as? [Int] ?? [5, 20]
+        self.stockMovingAveragePeriods = StockQuoteCodec.movingAveragePeriods.filter { savedAverages.contains($0) }
         self.stockDisplayInterval = min(max(defaults.object(forKey: "stockDisplayInterval") as? Int ?? 3, 1), 10)
         self.weatherLocation = defaults.data(forKey: "weatherLocation")
             .flatMap { try? JSONDecoder().decode(WeatherLocation.self, from: $0) }

@@ -181,7 +181,7 @@ enum TossInvestAPI {
     static func recordedClose(token: String, stock: WatchedStock, sessionEnd: Date,
                               session: URLSession = .shared) async throws -> [(date: Date, close: Decimal)] {
         let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 2,
-                                        before: sessionEnd, adjusted: false, session: session)
+                                        before: ISO8601DateFormatter().string(from: sessionEnd), adjusted: false, session: session)
         return StockQuoteCodec.dailyCloses(from: data)
     }
 
@@ -203,16 +203,33 @@ enum TossInvestAPI {
 
     static func chartCandles(token: String, stock: WatchedStock, interval: StockChartInterval,
                              session: URLSession = .shared) async throws -> [StockCandle] {
-        let daily = interval == .day
-        let data = try await candleData(token: token, symbol: stock.symbol,
-                                        interval: daily ? "1d" : "1m", count: daily ? 20 : 200,
-                                        session: session)
-        guard let candles = StockQuoteCodec.candles(from: data) else { throw Failure.invalidResponse }
-        return candles.sorted { $0.end < $1.end }
+        // 120-bar SMA needs history before the 20 visible bars. Ten-minute bars use raw minutes.
+        // ponytail: bounded backfill per refresh; add incremental history only if this becomes costly.
+        var candles: [Date: StockCandle] = [:]
+        var before: String?
+        for page in 0..<(interval == .tenMinutes ? 8 : 1) {
+            try Task.checkCancellation()
+            if page > 0 { try await Task.sleep(for: .milliseconds(250)) }
+            let data = try await candleData(token: token, symbol: stock.symbol,
+                interval: interval == .day ? "1d" : "1m", count: 200, before: before,
+                adjusted: true, session: session)
+            guard let rows = StockQuoteCodec.candles(from: data) else { throw Failure.invalidResponse }
+            let oldCount = candles.count
+            // `before` is inclusive. Keep the first observation when page boundaries overlap.
+            for candle in rows where candles[candle.end] == nil { candles[candle.end] = candle }
+            if interval != .tenMinutes || candles.count >= 1_400 || rows.isEmpty { break }
+            guard candles.count > oldCount,
+                  let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let result = object["result"] as? [String: Any] else { throw Failure.invalidResponse }
+            guard let cursor = result["nextBefore"], !(cursor is NSNull) else { break }
+            guard let next = cursor as? String, !next.isEmpty, next != before else { throw Failure.invalidResponse }
+            before = next
+        }
+        return candles.values.sorted { $0.end < $1.end }
     }
 
     private static func candleData(token: String, symbol: String, interval: String, count: Int,
-                                   before: Date? = nil, adjusted: Bool? = nil,
+                                   before: String? = nil, adjusted: Bool? = nil,
                                    session: URLSession) async throws -> Data {
         guard var components = URLComponents(url: base.appending(path: "/api/v1/candles"), resolvingAgainstBaseURL: false) else {
             throw Failure.invalidResponse
@@ -223,11 +240,12 @@ enum TossInvestAPI {
             URLQueryItem(name: "count", value: String(count))
         ]
         if let before {
-            components.queryItems?.append(URLQueryItem(name: "before", value: ISO8601DateFormatter().string(from: before)))
+            components.queryItems?.append(URLQueryItem(name: "before", value: before))
         }
         if let adjusted {
             components.queryItems?.append(URLQueryItem(name: "adjusted", value: adjusted ? "true" : "false"))
         }
+        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         guard let url = components.url else { throw Failure.invalidResponse }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

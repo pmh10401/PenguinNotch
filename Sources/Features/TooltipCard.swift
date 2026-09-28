@@ -1170,7 +1170,8 @@ struct TooltipCard: View {
             hasNetworkSettings: snapshot.id == "system-network",
             cpuCoreCount: snapshot.cpuCores.count
         )
-        return height + (chartStock == nil ? 0 : NotchLayout.stockChartSectionHeight)
+        return height + (chartStock == nil ? 0 : NotchLayout.stockDetailsHeight(forecasts: stockPreferences?.portfolioForecastEnabled == true,
+                                                 timing: stockPreferences?.showsStockTimingSignals == true))
     }
 
     var body: some View {

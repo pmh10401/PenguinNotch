@@ -623,7 +623,8 @@ final class NotchViewModel: ObservableObject {
             cpuCoreCount: snapshot.cpuCores.count)
         let showsStockChart = snapshot.id.hasPrefix("widget-stock:")
             && stockCharts != nil && todoPreferences?.stockQuoteSource == .toss
-        return height + (showsStockChart ? NotchLayout.stockChartSectionHeight : 0)
+        return height + (showsStockChart ? NotchLayout.stockDetailsHeight(forecasts: todoPreferences?.portfolioForecastEnabled == true,
+                                                timing: todoPreferences?.showsStockTimingSignals == true) : 0)
     }
 
     private func contentCardHeight(sessionCap: Int) -> CGFloat {

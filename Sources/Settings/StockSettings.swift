@@ -88,34 +88,49 @@ struct StockSettings: View {
                 if let apiMessage { Text(apiMessage).font(.caption).foregroundStyle(.secondary) }
             }
             if preferences.stockQuoteSource == .toss {
-                Section(L10n.t("My Toss holdings · model estimates")) {
-                    Toggle(L10n.t("Show estimates for my actual holdings"),
+                Section(L10n.t("Stock close estimates")) {
+                    Toggle(L10n.t("Show estimates for watchlist stocks"),
                            isOn: $preferences.portfolioForecastEnabled)
                     if preferences.portfolioForecastEnabled {
-                        Text(L10n.t("Read-only account access. Account numbers, quantities, and balances are not included in forecast history."))
+                        Text(L10n.t("Hover a stock in the notch. The selected 1m, 10m or 1d bars set volatility for today's regular close. Daily forecast history remains separate."))
                             .font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        if portfolio.accounts.count > 1 {
-                            Picker(L10n.t("Toss Securities account"), selection: $preferences.tossAccountSeq) {
-                                Text(L10n.t("Select an account")).tag(0)
-                                ForEach(portfolio.accounts) { account in
-                                    Text(account.maskedNumber).tag(account.accountSeq)
-                                }
-                            }
-                        } else if let account = portfolio.accounts.first {
-                            LabeledContent(L10n.t("Toss Securities account"), value: account.maskedNumber)
+                        Text(L10n.t("Watchlist estimates use public market data. Loading accounts is optional; selecting one also includes its holdings."))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(L10n.t("Load accounts")) {
+                            Task { await portfolio.loadAccounts(preferences: preferences) }
                         }
-                        if portfolio.loading { ProgressView(L10n.t("Loading holdings…")) }
+                        .disabled(portfolio.loadingAccounts)
+                        Picker(L10n.t("Toss Securities account"), selection: $preferences.tossAccountSeq) {
+                            Text(L10n.t("Watchlist only (no account access)")).tag(0)
+                            if preferences.tossAccountSeq > 0,
+                               !portfolio.accounts.contains(where: { $0.accountSeq == preferences.tossAccountSeq }) {
+                                Text(L10n.t("Selected account")).tag(preferences.tossAccountSeq)
+                            }
+                            ForEach(portfolio.accounts) { account in
+                                Text(account.maskedNumber).tag(account.accountSeq)
+                            }
+                        }
+                        if preferences.tossAccountSeq > 0 {
+                            Text(L10n.t("Read-only account access. Account numbers, quantities, and balances are not included in forecast history."))
+                                .font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let message = portfolio.accountMessage {
+                            Text(message).font(.caption).foregroundStyle(.secondary)
+                        }
+                        if portfolio.loading { ProgressView(L10n.t("Loading estimates…")) }
                         if let message = portfolio.message {
                             Text(message).font(.caption).foregroundStyle(.secondary)
                         }
-                        ForEach(portfolio.holdings) { holding in
+                        ForEach(portfolio.targets(for: preferences)) { target in
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(holding.name.isEmpty ? holding.symbol : holding.name)
+                                Text(target.name)
                                     .font(.headline)
-                                Text("\(holding.marketCountry) · \(holding.symbol)")
+                                Text("\(target.stock.market.rawValue.uppercased()) · \(target.stock.symbol)")
                                     .font(.caption).foregroundStyle(.secondary)
-                                if let estimate = portfolio.forecasts[holding.id] {
+                                if let estimate = portfolio.forecasts[target.id] {
                                     let up = Int((estimate.riseProbability * 100).rounded())
                                     HStack(spacing: 16) {
                                         Text("\(L10n.t("Rise")) ≈\(up)%")
@@ -123,16 +138,16 @@ struct StockSettings: View {
                                         Text("\(L10n.t("Fall")) ≈\(100 - up)%")
                                             .foregroundStyle(.red)
                                     }
-                                    Text("\(L10n.t("Estimated close")): \(StockQuoteCodec.format(price: estimate.expectedClose, currency: holding.currency, locale: .current))")
+                                    Text("\(L10n.t("Estimated close")): \(StockQuoteCodec.format(price: estimate.expectedClose, currency: target.currency, locale: .current))")
                                         .font(.subheadline)
-                                    Text("\(L10n.t("Model 80% range")): \(StockQuoteCodec.format(price: estimate.lowerClose, currency: holding.currency, locale: .current)) – \(StockQuoteCodec.format(price: estimate.upperClose, currency: holding.currency, locale: .current))")
+                                    Text("\(L10n.t("Model 80% range")): \(StockQuoteCodec.format(price: estimate.lowerClose, currency: target.currency, locale: .current)) – \(StockQuoteCodec.format(price: estimate.upperClose, currency: target.currency, locale: .current))")
                                         .font(.caption).foregroundStyle(.secondary)
-                                    if let record = portfolio.candidates.first(where: { $0.stockID == holding.stock?.id }) {
+                                    if let record = portfolio.candidates.first(where: { $0.stockID == target.id }) {
                                         DisclosureGroup(L10n.t("Prediction evidence")) {
                                             ForecastEvidenceView(record: record).padding(.vertical, 6)
                                         }
                                     }
-                                } else if let reason = portfolio.reasons[holding.id] {
+                                } else if let reason = portfolio.reasons[target.id] {
                                     Text(reason).font(.caption).foregroundStyle(.secondary)
                                 }
                             }
@@ -242,6 +257,13 @@ struct StockSettings: View {
                 }
             }
             if preferences.stockQuoteSource == .toss {
+                Section(L10n.t("Technical analysis")) {
+                    Toggle(L10n.t("Show buy/sell review signals"), isOn: $preferences.showsStockTimingSignals)
+                    Text(L10n.t("Analyze the latest 20 completed bars, including earlier trading days, for every watchlist stock. Minute charts also include extended-hours bars; daily analysis excludes today's bar. No account access is needed."))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.t("Volume ≥1.5× the previous 10 bars, SMA 5/20 trend, and a 10-bar breakout must agree. Experimental rules; no orders are placed."))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
                 Section(L10n.t("Hover chart")) {
                     HStack {
                         Text(L10n.t("Stock candles to show"))
@@ -260,7 +282,18 @@ struct StockSettings: View {
                     .pickerStyle(.segmented)
                     Text(L10n.t("1–20 candles · 1m every minute, 10m every 10 minutes, 1d daily"))
                         .font(.caption).foregroundStyle(.secondary)
-
+                    Text(L10n.t("Moving averages")).font(.headline)
+                    ForEach(StockQuoteCodec.movingAveragePeriods, id: \.self) { period in
+                        Toggle("SMA \(period)", isOn: Binding(
+                            get: { preferences.stockMovingAveragePeriods.contains(period) },
+                            set: { enabled in
+                                preferences.stockMovingAveragePeriods = enabled
+                                    ? preferences.stockMovingAveragePeriods + [period]
+                                    : preferences.stockMovingAveragePeriods.filter { $0 != period }
+                            }))
+                    }
+                    Text(L10n.t("Daily charts use trading days; minute charts use bars. Averages include history before the 20 visible candles. The newest chart bar may still change. Line visibility does not change the SMA 5/20 signal rule."))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

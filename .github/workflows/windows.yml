@@ -37,6 +37,12 @@ jobs:
       - name: Test Korean card localization
         run: node --test scripts/test-ko-i18n.cjs
 
+      - name: Test stock analysis and history
+        run: node --test scripts/test-stocks.cjs
+
+      - name: Test system widgets and disk volumes
+        run: node scripts/test-widgets.cjs
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy

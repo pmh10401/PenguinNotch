@@ -1,6 +1,6 @@
 [package]
 name = "penguinnotch"
-version = "1.18.10"
+version = "1.19.1"
 edition = "2021"
 description = "PenguinNotch for Windows — usage notch for Claude, Codex, Cursor and Antigravity"
 license = "MIT"
@@ -33,6 +33,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Shell",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_Security_Credentials",
   "Win32_Graphics_Gdi",
@@ -48,4 +49,6 @@ windows = { version = "0.58", features = [
   "Win32_NetworkManagement_IpHelper",
   "Win32_NetworkManagement_Ndis",
   "Win32_System_Power",
+  "Win32_System_Performance",
+  "Win32_NetworkManagement_WiFi",
 ] }

@@ -1,13 +1,13 @@
 # PenguinNotch for Windows
 
 A Windows port based on [vinzdg's Codenotch](https://github.com/vinzdg/codenotch) — the usage notch that
-sits on the edge of your screen and answers two questions at a glance:
-**how much of my AI allowance is left**, and **is Claude still working**.
+sits on the edge of your screen with **AI usage, system monitoring, stock quotes,
+charts and local forecast history**.
 
 Same design language as the macOS original (inverse-rounded pill, colour-graded rings,
 hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebView2.
-No code is copied from the Swift app; the providers are reimplemented from their
-documented behaviour and the wire formats.
+The providers and stock calculations follow the macOS app's behaviour and wire
+formats, using native Windows storage and system APIs.
 
 ## What it shows
 
@@ -23,8 +23,19 @@ Providers that are not installed simply do not get a cell.
 
 The same notch also shows **CPU, RAM, GPU, DISK, NET, BAT and PWR**, plus a calendar,
 weather and a to-do list. CPU, memory, disk, network and battery use documented
-Win32 calls. GPU utilization has no public per-process-free reading here, so that
-cell stays `—` rather than a fabricated zero. Power is the battery discharge
+Win32 calls. CPU hover cards include logical-core load from PDH counters. GPU
+cards show available driver/PDH engine counters; processes sharing an engine
+are combined, and the headline is the busiest engine, not the sum of all GPUs.
+Unsupported or failed readings stay `—` rather than a fabricated zero.
+DISK covers mounted local fixed/removable volumes, including separate partitions
+and folder mount points. Each volume is counted once even if it has several
+paths. Its hover card shows each volume's used, total and available space;
+unmounted recovery volumes and network drives are excluded. Capacity refreshes
+every 30 seconds on a separate worker so a slow disk does not stall the meters.
+NET fills its ring for a wired connection, uses Windows WLAN signal quality for
+Wi-Fi, and offers **Wi-Fi settings…** to open Windows network settings. Unknown
+signal remains unmeasured; a filled ring does not guarantee Internet access.
+Power is the battery discharge
 reported by `CallNtPowerInformation` / `SystemBatteryState` while unplugged and
 discharging. The rate is a signed value (negative means discharging); it is
 labelled as an estimate and is not added to the watt-hour total. On AC, or when
@@ -34,6 +45,54 @@ is Celsius from Open-Meteo and is fetched off the sampling thread. Refresh asks
 again for the saved city and does not clear it. Order, hide and per-cell color
 are in Settings → System. Hiding one meter does not stop the others; turning off
 system monitoring does.
+
+### Stocks and local history
+
+Open **Settings → Stocks**, choose one provider, and save its credentials.
+**Toss Securities** supports Korean/US quotes, 1-minute/10-minute/daily charts,
+SMA 5/20/60/120 and completed-bar volume/breakout analysis. Register this PC's
+public IP in Toss WTS → Settings → Open API → Allowed IPs. **Finnhub** supports
+US quotes only; its mode does not show an empty chart or call Toss. Credentials
+stay in Windows Credential Manager and are never returned to the web UI.
+
+Add up to 30 Korean codes/company names or US tickers. Set visibility and colors,
+and drag visible stocks in either the list or notch to reorder them; hidden
+stocks keep their positions. Arrow buttons remain available. Alt-drag still
+moves the notch. Prices and percentage changes alternate every three seconds
+by default. Windows quotes poll once a minute; chart requests are cached per
+symbol for 1 minute, 10 minutes or 1 day, with daily cache rollover on the market's
+local date. Charts display at most 20 candles and use earlier bars for analysis.
+
+Enable **Stock forecasts** to estimate watchlist stocks without account access
+or owning them (1.19.1). **Watchlist only** keeps account requests off. To include
+actual holdings too, explicitly load accounts and select one; failed account reads
+do not stop watchlist estimates. The selected chart interval controls the volatility
+estimate for today's regular close. Daily forecast snapshots, observed minute traces, manual/automatic capture,
+next-day scoring and filtered CSV export follow the macOS rules documented in the
+[main README](../README.md). Automatic recording needs the app running; missed
+predictions are not reconstructed. These are technical/model estimates, with no
+automatic orders or validated trading-return claim.
+
+Windows stores public forecast inputs and results in
+`%APPDATA%\penguinnotch\stock-history.sqlite3`. Account numbers, quantities,
+balances and API secrets are excluded. Traces and snapshots survive restarts,
+provider/key changes and disabling the feature. The notch alone writes atomic
+deltas; settings loads the archive for filtering/export. No age-based pruning or
+omission-based deletion occurs, and unreadable/unknown archives are preserved
+with an error. macOS uses its own files; history is not synchronized between PCs.
+
+Focused checks from `windows/`:
+
+```powershell
+node --test scripts/test-stocks.cjs
+node scripts/test-widgets.cjs
+node scripts/check-ui-scripts.mjs
+cargo test --locked
+```
+
+Tests use synthetic market data and a local HTTP server. Cross-compilation and
+browser mocks do not verify live Windows Credential Manager, hardware counters,
+WebView2 or brokerage access; those need a native Windows run.
 
 ### Codex quota recovery
 

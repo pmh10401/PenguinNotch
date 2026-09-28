@@ -4,7 +4,9 @@
     en: {
       'Sampling…':'Sampling…', 'All cores':'All cores', 'Physical memory':'Physical memory',
       'Busiest GPU':'Busiest GPU', 'GPU utilization is unavailable on this computer.':'GPU utilization is unavailable on this computer.',
-      'Home volume':'Home volume', 'No reading':'No reading', 'Last 60s avg / peak':'Last 60s avg / peak',
+      'Busiest GPU engine':'Busiest GPU engine', 'GPU engine':'GPU engine', 'Wi-Fi signal':'Wi-Fi signal',
+      'Home volume':'Home volume', 'Mounted volumes':'Mounted volumes', 'Volume':'Volume', 'Used':'Used',
+      'No reading':'No reading', 'Last 60s avg / peak':'Last 60s avg / peak',
       'User / System':'User / System', 'Per-core load':'Per-core load', 'Unavailable':'Unavailable',
       'Free space':'Free space', 'Available for files':'Available for files', 'Primary connection':'Primary connection',
       'Download':'Download', 'Upload':'Upload', 'Received while monitoring':'Received while monitoring',
@@ -31,7 +33,9 @@
     ko: {
       'Sampling…':'측정 중…', 'All cores':'모든 코어', 'Physical memory':'실제 메모리',
       'Busiest GPU':'가장 바쁜 GPU', 'GPU utilization is unavailable on this computer.':'이 컴퓨터에서는 GPU 사용률을 알 수 없습니다.',
-      'Home volume':'홈 볼륨', 'No reading':'측정값 없음', 'Last 60s avg / peak':'최근 60초 평균 / 최고',
+      'Busiest GPU engine':'가장 바쁜 GPU 엔진', 'GPU engine':'GPU 엔진', 'Wi-Fi signal':'Wi-Fi 신호',
+      'Home volume':'홈 볼륨', 'Mounted volumes':'마운트된 볼륨', 'Volume':'볼륨', 'Used':'사용 중',
+      'No reading':'측정값 없음', 'Last 60s avg / peak':'최근 60초 평균 / 최고',
       'User / System':'사용자 / 시스템', 'Per-core load':'코어별 사용률', 'Unavailable':'사용할 수 없음',
       'Free space':'남은 공간', 'Available for files':'파일에 쓸 수 있는 공간', 'Primary connection':'기본 연결',
       'Download':'다운로드', 'Upload':'업로드', 'Received while monitoring':'측정 중 받은 양',
@@ -110,6 +114,9 @@
     if (!Number.isFinite(fraction)) return '—';
     return Math.round(Math.min(1, Math.max(0, fraction)) * 100) + '%';
   }
+  function readingFraction(value) {
+    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+  }
   function colorOf(payload, id) {
     const raw = payload.colors && payload.colors[id];
     return raw ? '#' + String(raw).replace('#', '') : null;
@@ -143,7 +150,12 @@
         const rows = [row(t(lang, 'All cores'), cpu == null ? t(lang, 'Sampling CPU…') : percent(cpu) + ' active', cpu)];
         if (payload.cpuUser != null && payload.cpuSystem != null) rows.push(row(t(lang, 'User / System'), percent(payload.cpuUser) + ' / ' + percent(payload.cpuSystem)));
         if (payload.recentCpu) rows.push(row(t(lang, 'Last 60s avg / peak'), percent(payload.recentCpu.average) + ' / ' + percent(payload.recentCpu.peak)));
-        rows.push(row(t(lang, 'Per-core load'), t(lang, 'Unavailable')));
+        const cores = Array.isArray(payload.cpuCores) ? payload.cpuCores.filter(core => core && typeof core.id === 'string') : [];
+        if (!cores.length) rows.push(row(t(lang, 'Per-core load'), t(lang, 'Unavailable')));
+        cores.forEach(core => {
+          const usage = readingFraction(core.usage);
+          rows.push(row('CPU ' + core.id.replace(',', ':'), percent(usage), usage));
+        });
         cells.push(meter(payload, 'system-cpu', 'CPU', 'CPU', cpu, cpu == null ? '—' : percent(cpu), false, false, rows));
       }
       if (!hidden(payload, 'system-memory') && payload.memoryTotal) {
@@ -155,25 +167,46 @@
         cells.push(meter(payload, 'system-memory', 'RAM', 'RAM', null, '—', false, false, [row(t(lang, 'Physical memory'), t(lang, 'No reading'))]));
       }
       if (!hidden(payload, 'system-gpu')) {
-        cells.push(meter(payload, 'system-gpu', 'GPU', 'GPU', null, '—', false, false, [
-          row(t(lang, 'Busiest GPU'), t(lang, 'GPU utilization is unavailable on this computer.'))
-        ]));
+        const gpu = readingFraction(payload.gpu);
+        const rows = [row(t(lang, 'Busiest GPU engine'), gpu == null ? t(lang, 'GPU utilization is unavailable on this computer.') : percent(gpu), gpu)];
+        if (gpu != null && payload.recentGpu) rows.push(row(t(lang, 'Last 60s avg / peak'), percent(payload.recentGpu.average) + ' / ' + percent(payload.recentGpu.peak)));
+        const engines = Array.isArray(payload.gpuEngines) ? payload.gpuEngines.filter(engine => engine && typeof engine.id === 'string') : [];
+        engines.forEach((engine, index) => {
+          const usage = readingFraction(engine.usage);
+          rows.push(row(t(lang, 'GPU engine') + ' ' + (index + 1), (engine.name || '') + ' · ' + percent(usage), usage));
+        });
+        cells.push(meter(payload, 'system-gpu', 'GPU', 'GPU', gpu, percent(gpu), false, false, rows));
       }
-      if (!hidden(payload, 'system-disk') && payload.diskTotal) {
+      const volumes = Array.isArray(payload.volumes) ? payload.volumes : null;
+      const diskLabel = t(lang, volumes ? 'Mounted volumes' : 'Home volume');
+      if (!hidden(payload, 'system-disk') && Number.isFinite(payload.diskTotal) && payload.diskTotal > 0 && Number.isFinite(payload.diskUsed)) {
         const fraction = payload.diskUsed / payload.diskTotal;
-        const rows = [row(t(lang, 'Home volume'), formatBytes(payload.diskUsed) + ' / ' + formatBytes(payload.diskTotal), fraction)];
+        const rows = [row(diskLabel, formatBytes(payload.diskUsed) + ' / ' + formatBytes(payload.diskTotal), fraction)];
+        if (volumes) rows.push(row(t(lang, 'Free space'), formatBytes(payload.diskTotal - payload.diskUsed)));
         if (payload.diskAvailable != null) rows.push(row(t(lang, 'Available for files'), formatBytes(payload.diskAvailable)));
+        for (const volume of volumes || []) {
+          if (!volume || !Number.isFinite(volume.total) || volume.total <= 0 || !Number.isFinite(volume.used) || volume.used < 0 || volume.used > volume.total) continue;
+          const paths = Array.isArray(volume.mountPoints) ? volume.mountPoints.filter(path => typeof path === 'string' && path) : [];
+          const mounts = paths.join(', ');
+          const name = volume.name || mounts || volume.id || t(lang, 'Volume');
+          const identity = mounts && mounts !== name ? name + ' · ' + mounts : name;
+          // The card's headings do not wrap; keep full names/paths in its wrapping detail.
+          const label = paths.find(path => /^[a-z]:\\$/i.test(path)) || t(lang, 'Volume');
+          const free = volume.total - volume.used;
+          let detail = identity + ' · ' + t(lang, 'Used') + ': ' + formatBytes(volume.used) + ' / ' + formatBytes(volume.total) + ' · ' + t(lang, 'Free space') + ': ' + formatBytes(free);
+          if (Number.isFinite(volume.available) && volume.available !== free) detail += ' · ' + t(lang, 'Available for files') + ': ' + formatBytes(volume.available);
+          rows.push(row(label, detail, volume.used / volume.total));
+        }
         cells.push(meter(payload, 'system-disk', 'DISK', 'DISK', fraction, percent(fraction), false, false, rows));
       } else if (!hidden(payload, 'system-disk')) {
-        cells.push(meter(payload, 'system-disk', 'DISK', 'DISK', null, '—', false, false, [row(t(lang, 'Home volume'), t(lang, 'No reading'))]));
+        cells.push(meter(payload, 'system-disk', 'DISK', 'DISK', null, '—', false, false, [row(diskLabel, t(lang, 'No reading'))]));
       }
       if (!hidden(payload, 'system-network')) {
-        const hasNet = payload.netDown != null && payload.netUp != null;
+        const hasNet = Number.isFinite(payload.netDown) && payload.netDown >= 0 && Number.isFinite(payload.netUp) && payload.netUp >= 0;
         const total = hasNet ? payload.netDown + payload.netUp : null;
-        let fraction = null, invert = false;
-        if (payload.link === 'wired') { fraction = 1; invert = true; }
-        else if (payload.link === 'disconnected') { fraction = 0; invert = true; }
+        const fraction = payload.link === 'wired' ? 1 : payload.link === 'disconnected' ? 0 : payload.link === 'wifi' ? readingFraction(payload.linkStrength) : null;
         const rows = [row(t(lang, 'Primary connection'), linkTitle(payload, lang))];
+        if (payload.link === 'wifi') rows.push(row(t(lang, 'Wi-Fi signal'), percent(fraction), fraction));
         if (hasNet) {
           rows.push(row(t(lang, 'Download'), formatRate(payload.netDown, false)));
           rows.push(row(t(lang, 'Upload'), formatRate(payload.netUp, false)));
@@ -183,7 +216,7 @@
           rows.push(row(t(lang, 'Sent while monitoring'), formatBytes(payload.sentTotal)));
           rows.push(row(t(lang, 'Measured for'), duration(payload.networkSeconds)));
         }
-        cells.push(meter(payload, 'system-network', 'NET', 'NET', fraction, hasNet ? formatRate(total, true) : '—', invert, false, rows));
+        cells.push(meter(payload, 'system-network', 'NET', 'NET', fraction, hasNet ? formatRate(total, true) : '—', true, false, rows));
       }
       if (!hidden(payload, 'system-battery')) {
         if (payload.battery == null) {

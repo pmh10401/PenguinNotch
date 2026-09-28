@@ -1,4 +1,5 @@
 #![cfg_attr(all(not(debug_assertions), windows), windows_subsystem = "windows")]
+#![recursion_limit = "256"]
 
 mod autostart;
 mod config;
@@ -29,6 +30,7 @@ mod settings_window;
 mod updater;
 mod widgets;
 mod system_usage;
+mod stocks;
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -37,7 +39,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// and its tail on the left. `fitZoom` in ui/notch.html divides by the same width.
 pub const NOTCH_W: f64 = 360.0;
 /// Hand-bumped build tag, written to run.log at startup so a log can always be matched to the exe that wrote it.
-pub const BUILD: &str = "r42";
+pub const BUILD: &str = "r44";
 /// The upright notch also holds system meters, calendar, weather and to-do cells.
 pub const NOTCH_UPRIGHT_H: f64 = 980.0;
 /// The flat notch needs this much width for its rings and height for its card.
@@ -1620,6 +1622,21 @@ fn open_settings(app: AppHandle) {
     settings_window::open(&app);
 }
 
+#[tauri::command]
+fn open_network_settings() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::{core::w, Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL}};
+        // The destination is fixed; the webview cannot launch arbitrary URLs or commands.
+        let result = unsafe {
+            ShellExecuteW(None, w!("open"), w!("ms-settings:network-wifi"), None, None, SW_SHOWNORMAL)
+        };
+        if result.0 as isize > 32 { Ok(()) } else { Err("Could not open Windows Wi-Fi settings".into()) }
+    }
+    #[cfg(not(windows))]
+    Err("Wi-Fi settings are only available on Windows".into())
+}
+
 /// Epoch milliseconds. Every polling module keeps its own copy of this; the tray menu's wording
 /// needs one that is not private to a poller.
 pub fn now_ms() -> u64 {
@@ -1843,6 +1860,7 @@ fn main() {
             get_monitors,
             set_notch_monitor,
             open_settings,
+            open_network_settings,
             begin_move,
             get_move_handle,
             set_move_handle,
@@ -1856,7 +1874,15 @@ fn main() {
             system_usage::set_weather_city,
             system_usage::add_todo,
             system_usage::toggle_todo,
-            system_usage::remove_todo
+            system_usage::remove_todo,
+            stocks::get_stock_settings,
+            stocks::set_stock_settings,
+            stocks::get_stock_credential_status,
+            stocks::save_stock_credentials,
+            stocks::delete_stock_credentials,
+            stocks::stock_request,
+            stocks::load_stock_history,
+            stocks::save_stock_history
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

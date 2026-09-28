@@ -149,8 +149,14 @@ enum NotchLayout {
     static let cardWidth     = Design.px(600)
     static let calendarCardHeight: CGFloat = 320
     static let todoCardHeight: CGFloat = 320
-    static let stockChartPlotHeight: CGFloat = 100
-    static let stockChartSectionHeight: CGFloat = 180
+    static let stockChartPlotHeight: CGFloat = 180
+    static let stockChartSectionHeight: CGFloat = stockChartPlotHeight + 100
+    static let stockForecastSectionHeight: CGFloat = 260
+    static let stockTimingSectionHeight: CGFloat = 180
+
+    static func stockDetailsHeight(forecasts: Bool, timing: Bool) -> CGFloat {
+        stockChartSectionHeight + (forecasts ? stockForecastSectionHeight : 0) + (timing ? stockTimingSectionHeight : 0)
+    }
     static let cardCorner    = Design.px(49.5)
     static let cardPadding   = Design.px(32)
     static let tailLength    = Design.px(75)

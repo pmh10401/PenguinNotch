@@ -9,3 +9,4 @@ xcuserdata/
 .swiftpm/
 .agents/
 .forgeguard/
+Scripts/__pycache__/
