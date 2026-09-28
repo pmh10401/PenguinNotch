@@ -9,6 +9,55 @@ import SwiftUI
 /// `TOOLTIP_RENDER_PATH` and the frame is written there.
 @MainActor
 final class TooltipRenderTests: XCTestCase {
+    func testHoverTextActuallyGrowsAndTallShellUsesItsViewport() throws {
+        let snapshot = ProviderSnapshot(id: "claude", displayName: "Claude", glyph: .claude,
+            fidelity: .official, status: .ok,
+            windows: [LimitWindow(id: "session", label: "Session", usedFraction: 0.47)])
+        var inkCounts: [Int] = []
+        for scale: CGFloat in [0.8, 1.5] {
+            let model = NotchViewModel()
+            model.hoverTextScale = scale
+            model.snapshots = [snapshot]
+            model.isExpanded = true
+            model.hoveredIndex = 0
+            model.surfaceStyle = .solid
+            let renderer = ImageRenderer(content: NotchRootView(model: model)
+                .frame(width: model.panelSize.width, height: model.panelSize.height)
+                .environment(\.colorScheme, .dark))
+            renderer.scale = 2
+            let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+            let size = model.tooltipCardSize(for: snapshot)
+            let centre = model.placement.point(along: model.tooltipAlong(index: 0, length: size.height),
+                across: model.tooltipInset + NotchLayout.tailLength * scale + size.width / 2)
+            let card = CGRect(x: centre.x - size.width / 2, y: centre.y - size.height / 2,
+                              width: size.width, height: size.height)
+            var ink = 0
+            for x in Int(card.minX * 2)..<Int(card.maxX * 2) {
+                for y in Int(card.minY * 2)..<Int(card.maxY * 2) {
+                    if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                       color.alphaComponent > 0.5, min(color.redComponent, color.greenComponent, color.blueComponent) > 0.7 {
+                        ink += 1
+                    }
+                }
+            }
+            inkCounts.append(ink)
+            let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+            attachment.name = "hover-text-\(Int(scale * 100))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        XCTAssertGreaterThan(inkCounts[0], 100)
+        XCTAssertGreaterThan(inkCounts[1], inkCounts[0] * 2, "Card text did not scale with its hit region")
+        let shell = TooltipShell(height: 800, direction: .leading) {
+            Text("First row\nLast row").font(.body)
+        }
+        .environment(\.tooltipHeightLimit, 220)
+        .environment(\.notchSurfaceStyle, .solid)
+        let image = try XCTUnwrap(ImageRenderer(content: shell).nsImage)
+        XCTAssertEqual(image.size.height, 220, accuracy: 1)
+    }
+
     func testAmpDetailsRenderBesideTheHoveredRing() throws {
         let reading = try AmpUsage.parse(AmpFixture.tier)
         let model = NotchViewModel()

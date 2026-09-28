@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 /// The ring around a provider glyph: a grey track with a coloured arc that
-/// starts at 12 o'clock and sweeps clockwise by the fraction used.
+/// starts at 12 o'clock. Usage and stock gains sweep clockwise; stock losses
+/// sweep counterclockwise.
 ///
 /// When that provider is doing something right now, a second, much thinner arc
 /// appears *inside* the ring, in the gap between the glyph and the track. It is
@@ -33,6 +34,7 @@ struct ProviderRing: View {
     var weeklyRing: WeeklyRing = .off
     var bandOverride: UsageBand? = nil
     var colorOverride: Color? = nil
+    var counterclockwise = false
     /// Replaces the glyph when a cell has to name itself inside the circle.
     var centerText: String? = nil
 
@@ -44,8 +46,6 @@ struct ProviderRing: View {
     @Environment(\.weeklyRingDashed) private var weeklyRingDashed
     @State private var spin: Double = 0
 
-    /// A stock circle is green or red in itself. The gray track stays only for
-    /// the part of the ring the move has not reached.
     private var trackColor: Color { Palette.ringTrack }
 
     private var band: UsageBand {
@@ -84,13 +84,6 @@ struct ProviderRing: View {
                 Circle()
                     .strokeBorder(trackColor, lineWidth: NotchLayout.trackStroke)
 
-                if centerText != nil, let colorOverride, (usedFraction ?? 0) > 0 {
-                    StockChangePie(fraction: sweep)
-                        .fill(colorOverride)
-                        .padding(NotchLayout.trackStroke * 0.35)
-                        .animation(NotchMotion.reading, value: sweep)
-                }
-
                 if localPerformance != nil || localContextFraction != nil {
                     // Two facts on one ring: the arc is the context filling up,
                     // the colour is the last response's speed. Inset by half the
@@ -115,14 +108,14 @@ struct ProviderRing: View {
                         .trim(from: 0, to: sweep)
                         .stroke(
                             colorOverride ?? band.color(accent: accentColor),
-                            style: StrokeStyle(lineWidth: centerText == nil ? NotchLayout.progressStroke : NotchLayout.trackStroke,
-                                               lineCap: .round)
+                            style: StrokeStyle(lineWidth: NotchLayout.progressStroke, lineCap: .round)
                         )
                         // Refreshing spins the reading itself rather than
                         // overlaying a separate spinner: the thing being
                         // refetched is the thing that should move, and a second
                         // arc on the same track only competes with it.
                         .rotationEffect(.degrees(-90 + spin))
+                        .scaleEffect(x: counterclockwise ? -1 : 1, y: 1)
                         // A ring that snaps to a new value reads as a glitch; one
                         // that sweeps reads as a measurement being taken.
                         .animation(NotchMotion.reading, value: sweep)
@@ -216,31 +209,6 @@ struct ProviderRing: View {
                 spin += 360
             }
         }
-    }
-}
-
-/// A wedge that starts at 12 o'clock and grows clockwise. A fraction of 1 is
-/// a full disk, which a stock uses for a 30 percent move.
-private struct StockChangePie: Shape {
-    var fraction: CGFloat
-    var animatableData: CGFloat {
-        get { fraction }
-        set { fraction = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let amount = min(max(fraction, 0), 1)
-        guard amount > 0 else { return path }
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        path.move(to: center)
-        path.addArc(center: center, radius: radius,
-                    startAngle: .degrees(-90),
-                    endAngle: .degrees(-90 + 360 * amount),
-                    clockwise: false)
-        path.closeSubpath()
-        return path
     }
 }
 
@@ -409,6 +377,7 @@ struct ProviderCell: View {
                 weeklyRing: weeklyRing,
                 bandOverride: snapshot.bandOverride,
                 colorOverride: ringColor,
+                counterclockwise: snapshot.kind == .stocks && snapshot.bandOverride == .critical,
                 centerText: snapshot.ringLabel
             )
             }

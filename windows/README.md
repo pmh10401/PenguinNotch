@@ -58,7 +58,10 @@ stay in Windows Credential Manager and are never returned to the web UI.
 Add up to 30 Korean codes/company names or US tickers. Set visibility and colors,
 and drag visible stocks in either the list or notch to reorder them; hidden
 stocks keep their positions. Arrow buttons remain available. Alt-drag still
-moves the notch. Prices and percentage changes alternate every three seconds
+moves the notch. Stocks use the same hollow ring and stroke thickness as other
+cells. Their arcs start at twelve o'clock: gains fill clockwise in
+green and losses fill counterclockwise in red, matching macOS. An unchanged price
+draws no colored sweep. Prices and percentage changes alternate every three seconds
 by default. Windows quotes poll once a minute; chart requests are cached per
 symbol for 1 minute, 10 minutes or 1 day, with daily cache rollover on the market's
 local date. Charts display at most 20 candles and use earlier bars for analysis.
@@ -214,15 +217,22 @@ npx @tauri-apps/cli@2 build --config tauri.bundle.conf.json
 ```
 
 Tray menu: the readings themselves — a line per provider with its headline figure, and under it
-one line per limit window — then **Refresh all**, **Settings…** and **Quit PenguinNotch**. Clicking a
+one line per limit window — then **Show notch now**, **Refresh all**, **Settings…** and **Quit PenguinNotch**. Clicking a
 provider's line re-reads that provider. Everything else is in the settings window: which rings the
 notch shows, its size, the weekly ring, which screen edge it sits on and which screen,
 start with Windows, the language, Claude Code hooks, reset
 position, and the data folder (`%APPDATA%\penguinnotch` — logs, persisted readings, icon overrides).
 
 Notch: clicking a ring re-reads that provider, as on the Mac. Right-clicking the notch or its card
-offers **Refresh now**, the provider's usage page (**Open claude.ai**, **Open chatgpt.com**, …) and
+offers **Refresh now**, the provider's usage page (**Open claude.ai**, **Open chatgpt.com**, …), **Keep open**, **Settings…** and
 **Quit PenguinNotch**. Neither click, nor the tray, asks Claude again while its rate-limit wait runs.
+
+**Appearance → Show notch now** (also in the tray menu) reveals the saved notch
+position, including when hidden. Hover mode stays open for five seconds without
+changing its keep-open preference. **Meter style** switches accounts, system
+meters and stocks between circles and bars. **Size → Custom** supports **75–150%**;
+the custom value, Small/Medium/Large preset and hover text size are stored separately.
+Hiding and showing providers preserves their places in the saved cell order.
 
 ### Where the notch sits
 
@@ -230,15 +240,16 @@ The notch pins to one edge of one screen. The arc above the pill carries it: hol
 places it can go are outlined on the screen; release on one and the notch lands there, centred.
 **Appearance → Show move handle** hides that arc. **Appearance → Edge** picks left, right, top or bottom:
 it stands upright on the left and right edges with the hover card opening sideways, and lies flat
-on the top and bottom ones with the card opening below or above. **Appearance → Screen** appears
-once more than one monitor is attached.
+on the top and bottom ones with the card opening below or above. **Appearance → Screen**
+can follow the main display or remember a particular monitor.
 
 Dragging does both at once: pick the pill up, drop it anywhere, and it snaps to the nearest edge
 of the screen it was dropped on — across monitors, and across a change of DPI between them. The
 choice is stored as `notch_edge`, `notch_monitor` (the device name, e.g. `\\.\DISPLAY2`) and
 `notch_y` (the position along the edge, 0–1) in `config.json`. A monitor that is no longer
 attached falls back to the primary one, so unplugging a screen cannot strand the notch off-screen;
-**Recentre** centres it on the edge it is on, or on the primary screen's right-hand edge when the screen it was on is gone.
+**Recentre** centres only the current edge, keeping other edges' positions and the
+saved monitor. When an unavailable monitor reconnects, the notch returns to it.
 
 ### Icons
 

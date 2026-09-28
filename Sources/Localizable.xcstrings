@@ -1,6 +1,18 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Adjust hover text size": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "호버 화면의 글자 크기 조절"}}}},
+    "Claude and Antigravity background reads no longer launch a separate security process after access is refused. Use Allow access in Settings when permission is needed.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "Claude·Antigravity의 백그라운드 접근이 거절되면 별도 security 프로세스로 재시도하지 않습니다. 인증이 필요하면 설정에서 접근 허용을 선택하세요."}}}},
+    "Clockwise gains, counterclockwise losses": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "상승은 시계 방향, 하락은 반시계 방향"}}}},
+    "Hover text size": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "호버 글자 크기"}}}},
+    "Open the notch directly from Settings or the tray, including when it was hidden.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "설정이나 트레이에서 노치를 바로 표시합니다. 숨김 상태에서도 다시 열 수 있습니다."}}}},
+    "Read stock direction at a glance": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "주식 등락 방향을 한눈에 확인"}}}},
+    "Reset hover text size": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "호버 글자 크기 초기화"}}}},
+    "Resizes text and controls in hover cards. Tall cards scroll to keep all content accessible.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "호버 카드의 글자와 버튼 크기를 조절합니다. 화면보다 긴 카드는 스크롤해서 끝까지 볼 수 있습니다."}}}},
+    "Scales the notch rings and labels. Hover text size is adjusted separately. 100% is the original size.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "노치의 링과 글자 크기를 조절합니다. 호버 글자 크기는 별도로 설정하며, 100%는 원래 크기입니다."}}}},
+    "Show the Windows notch immediately": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "Windows 노치 바로 표시"}}}},
+    "Stock circles start at twelve o'clock: green gains fill clockwise and red losses fill counterclockwise on macOS and Windows.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "macOS와 Windows의 주식 원형은 12시 방향에서 시작합니다. 상승은 초록색으로 시계 방향, 하락은 빨간색으로 반시계 방향으로 채워집니다."}}}},
+    "Stop automatic Keychain retries through security": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "security를 통한 키체인 자동 재시도 중단"}}}},
     "US quote sessions and manual Codex analysis": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "미국 시세 거래 시간대와 Codex 수동 분석"}}}},
     "Use the correct regular close for each US trading session": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "미국 거래 시간대별 기준 종가 수정"}}}},
     "Day, pre-market, regular and after-hours changes use their dated reference closes. Missing timestamps no longer produce guessed percentages.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "데이마켓·프리마켓·정규장·애프터마켓별 기준 종가와 날짜를 사용합니다. 체결 시각이 없으면 등락률을 추측하지 않습니다."}}}},

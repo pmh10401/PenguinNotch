@@ -81,6 +81,9 @@
     font-size:calc(20px * var(--k));font-weight:700;color:var(--ink-2);letter-spacing:-.5px;
   }
   .glyph.small{font-size:calc(15px * var(--k))}
+  .cell.meter-bar .glyph{inset:0 0 10px;align-items:flex-end;color:var(--ink);letter-spacing:0}
+  .bar-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+    max-height:28px;width:100%;font-size:11px;line-height:14px;text-align:center;overflow-wrap:anywhere}
   /* Glyphs: mark = the provider's own brand mark (monochrome, shown white); appicon = the installed app's icon (colour, rounded and shrunk) */
   .glyph img,.glyph svg{display:block;pointer-events:none;user-select:none}
   .glyph .mark{display:block;width:calc(26px * var(--k));height:calc(26px * var(--k));color:var(--ink-2)}
@@ -108,11 +111,9 @@
 
   /* Hover card, shown to the left of the pill */
   #card{
-    position:absolute;left:10px;right:100px;top:50%;transform:translateY(-50%);
-    /* Anchored on both sides = fluid width: whatever the WebView's real logical width, the card cannot
-       extend past the window's left edge (a fixed max-width got clipped when the DPI disagreed).
-       The 246 cap matches the upstream spec. */
-    max-width:246px;margin-left:auto;background:var(--card);border-radius:16px;padding:16px;
+    position:absolute;left:0;top:0;width:246px;
+    /* placeCard caps the zoomed card to the work area and measures its rendered bounds. */
+    background:var(--card);border-radius:16px;padding:16px;
     overflow-wrap:anywhere;min-width:0;
     max-height:calc(100% - 16px);overflow-x:hidden;overflow-y:auto;scrollbar-width:thin; /* actions stay reachable in a tall card */
     display:none;
@@ -132,8 +133,8 @@
   .c-sub{font-size:11px;color:var(--ink-dim);margin-bottom:10px}
   .win{margin-top:10px}
   .w-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;flex-wrap:wrap;column-gap:8px}
-  .w-label{color:var(--ink-2);font-weight:600;white-space:nowrap}
-  .w-reset{color:var(--ink-dim);font-size:11px;white-space:nowrap;margin-left:auto} /* wrap as a whole when it does not fit; never break inside a word */
+  .w-label{color:var(--ink-2);font-weight:600;max-width:100%}
+  .w-reset{color:var(--ink-dim);font-size:11px;max-width:100%;margin-left:auto}
   .w-track{height:4px;border-radius:2px;background:var(--bar);margin:6px 0 4px;overflow:hidden}
   .w-fill{height:100%;border-radius:2px}
   .w-used{font-size:11px;color:var(--ink-dim)}
@@ -160,7 +161,6 @@
   body[data-edge="left"] #pill::before,body[data-edge="left"] #pill::after{right:auto;left:0}
   body[data-edge="left"] #pill::before{background:radial-gradient(circle at 100% 0, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
   body[data-edge="left"] #pill::after{background:radial-gradient(circle at 100% 100%, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
-  body[data-edge="left"] #card{left:100px;right:10px;margin-left:0;margin-right:auto}
   body[data-edge="left"] #tail{right:auto;left:69px;clip-path:path('M32 0C32 9 13.44 13.68 0 18C13.44 22.32 32 27 32 36Z')}
 
   /* Top and bottom: the pill lies flat, so it is a row and its thickness comes from the cells rather
@@ -177,12 +177,6 @@
   body[data-edge="bottom"] #pill{bottom:0;border-radius:20px 20px 0 0;border-bottom:none}
   body[data-edge="bottom"] #pill::before{bottom:0;left:calc(-1 * var(--fillet));background:radial-gradient(circle at 0 0, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
   body[data-edge="bottom"] #pill::after{bottom:0;right:calc(-1 * var(--fillet));background:radial-gradient(circle at 100% 0, transparent calc(var(--fillet) - 1.5px), var(--edge) calc(var(--fillet) - 0.5px), var(--pill) calc(var(--fillet) + 0.5px))}
-  /* A fixed width here, not the fluid one the upright edges use: `placeCard` measures the card to
-     centre it, and a shrink-to-fit width would change as it moves. 246 is the upstream cap either way. */
-  body[data-edge="top"] #card,body[data-edge="bottom"] #card{
-    left:8px;right:auto;top:0;transform:none;margin-left:0;
-    width:246px;max-height:calc(100% - 150px);
-  }
   body[data-edge="top"] #tail,body[data-edge="bottom"] #tail{right:auto;width:36px;height:32px}
   body[data-edge="top"] #tail{clip-path:path('M0 32C9 32 13.68 13.44 18 0C22.32 13.44 27 32 36 32Z')}
   body[data-edge="bottom"] #tail{clip-path:path('M0 0C9 0 13.68 18.56 18 32C22.32 18.56 27 0 36 0Z')}
@@ -341,8 +335,16 @@ let activity=[]; // working state of the non-Claude providers: {provider,state:'
 /* Which screen edge the notch is pinned to. Rust owns it (it is what placed the window); the page is
    told so it can mirror or rotate itself to match. 'right' is the default and the pre-edge layout. */
 let notchEdge='right';
+let hoverTextScale=1;
+function normalizeHoverTextScale(value){ return Number.isFinite(value)?Math.round(Math.min(1.5,Math.max(0.8,value))*10)/10:1; }
+function applyHoverTextScale(value){
+  hoverTextScale=normalizeHoverTextScale(value);
+  card.style.zoom=String(hoverTextScale);
+  if(card.classList.contains('show')) placeCard();
+}
 // Show on hover — the logic is beside the move handle below; declared here, since reportHot reads `folded` from the first frame
-let onHover=false, folded=false, pointerIn=false, menuOpen=false, foldTimer=null;
+let onHover=false, folded=false, pointerIn=false, menuOpen=false, foldTimer=null, previewTimer=null;
+let meterStyle='ring';
 /* How much of the window the taskbar covers, in CSS px, from Rust: top, right, bottom, left. The pill
    stays against the screen edge; the card is kept out of these. */
 let insets=[0,0,0,0];
@@ -988,7 +990,7 @@ function providers(){
   if(cursorSnap.status!=='absent') list.push({id:'cursor',base:'cursor',name:'Cursor',glyph:'Cu',snap:cursorSnap});
   if(grokSnap.status!=='absent') list.push({id:'grok',base:'grok',name:'Grok',glyph:'Gk',snap:grokSnap});
   if(agSnap.status!=='absent') list.push({id:'gemini',base:'gemini',name:'Antigravity',glyph:'Ag',snap:agSnap});
-  if(Array.isArray(notchSlots)) list=list.filter(p=>!!slotFor(p.base));
+  if(Array.isArray(notchSlots)) list=list.filter(p=>!!slotFor(p.base)).sort((a,b)=>notchSlots.indexOf(slotFor(a.base))-notchSlots.indexOf(slotFor(b.base)));
   if(window.PenguinNotchStocks&&typeof stockStore!=='undefined'&&stockStore) list=list.concat(PenguinNotchStocks.cells(stockStore,uiLang));
   // Meters and widgets are not account slots. They join after the filter, then the saved order mixes them.
   if(window.PenguinNotchWidgets&&systemPayload){
@@ -1058,6 +1060,22 @@ function svgArc(r,frac,color,width,extra=''){
     transform="rotate(-90 28 28)" ${extra}/>`;
 }
 
+function stockSweep(frac,color,counterclockwise){
+  if(!(frac>0)) return '';
+  // Mirror only the signed reading; the track, stock name and value stay upright.
+  return `<g${counterclockwise?' transform="translate(56 0) scale(-1 1)"':''}>${svgArc(25,Math.min(frac,1),color,5)}</g>`;
+}
+
+function svgBar(frac,color,y=47,height=7){
+  return frac>0?`<rect x="3" y="${y}" width="${50*Math.min(frac,1)}" height="${height}" rx="${Math.min(height/2,25*frac)}" fill="${color}"/>`:'';
+}
+
+function applyMeterStyle(value){
+  meterStyle=value==='bar'?'bar':'ring';
+  renderRing();
+  if(card.classList.contains('show')) placeCard();
+}
+
 function renderRing(){
   const ps=providers();
   // Rebuild the DOM only when the structure changes (never swap the element under the cursor)
@@ -1071,14 +1089,20 @@ function renderRing(){
   for(const p of ps){
     const cell=pill.querySelector(`.cell[data-p="${p.id}"]`); if(!cell) continue;
     const svg=cell.querySelector('svg.ring'), reading=cell.querySelector('svg.reading'), activity=cell.querySelector('svg.activity'), pct=cell.querySelector('.pct'), glyph=cell.querySelector('.glyph'), wrap=cell.querySelector('.ringwrap');
+    const bar=meterStyle==='bar';
+    const track=bar?svgBar(1,TRACK):`<circle cx="28" cy="28" r="22" fill="${HOLE}"/><circle cx="28" cy="28" r="25" fill="none" stroke="${TRACK}" stroke-width="5"/>`;
+    cell.classList.toggle('meter-bar',bar);
+    const label=p.stock?p.glyph:p.base==='gemini'?'AGY':p.name;
+    glyph.innerHTML=bar?`<span class="bar-name">${esc(label)}</span>`:glyphHtml(p);
     cell.classList.toggle('stock-cell',!!p.stock);
-    if(p.stock){glyph.innerHTML=glyphHtml(p);cell.dataset.stockDrag=PenguinNotchStocks.stockID(p.stock);cell.title=PenguinNotchStocks.t(uiLang,'Drag to reorder');}
+    if(p.stock){cell.dataset.stockDrag=PenguinNotchStocks.stockID(p.stock);cell.title=PenguinNotchStocks.t(uiLang,'Drag to reorder');}
     else delete cell.dataset.stockDrag;
     if(p.meter){
       const used=p.meter.fraction==null?null:(p.meter.invert?1-p.meter.fraction:p.meter.fraction);
       const col=p.meter.color||(p.meter.steady?AMPLE:(used==null?'#8e8e93':tone(used)));
-      svg.innerHTML=`<circle cx="28" cy="28" r="22" fill="${HOLE}"/><circle cx="28" cy="28" r="25" fill="none" stroke="${TRACK}" stroke-width="5"/>`;
-      reading.innerHTML=p.meter.fraction==null?'':svgArc(25,Math.min(Math.max(p.meter.fraction,0),1),col,5);
+      const fraction=p.meter.fraction==null?0:Math.min(Math.max(p.meter.fraction,0),1);
+      svg.innerHTML=track;
+      reading.innerHTML=bar?svgBar(fraction,col):p.stock?stockSweep(fraction,col,p.meter.counterclockwise):svgArc(25,fraction,col,5);
       activity.innerHTML='';
       pct.textContent=p.meter.text;
       pct.style.color=p.meter.color||'';
@@ -1088,17 +1112,18 @@ function renderRing(){
     }
     pct.style.color='';
     const h=headlineOf(p.snap,p.base);
-    let inner=`<circle cx="28" cy="28" r="22" fill="${HOLE}"/><circle cx="28" cy="28" r="25" fill="none" stroke="${TRACK}" stroke-width="5"/>`;
+    let inner=track;
     wrap.classList.toggle('pressed',!!refreshing[p.id]);
-    reading.innerHTML=h && h.count==null?svgArc(25,Math.min(h.used,1),tone(h.used),5):'';
+    reading.innerHTML=h && h.count==null?(bar?svgBar(h.used,tone(h.used)):svgArc(25,Math.min(h.used,1),tone(h.used),5)):'';
     if(weeklyRing!=='off'){ // the week, thinner and at its own radius, in its own colour: a session at 12% beside a week at 91% is the case this exists for
       const wk=weeklyOf(p.snap,p.base);
       // Inside, it shares the gap with the working indicator, so it stands down while that is showing
       const taken=weeklyRing==='inside'&&workState(p.base)!=='idle';
       if(wk&&(!h||wk.id!==h.id)&&!taken){
         const r=weeklyRing==='inside'?16:31;
-        inner+=`<circle cx="28" cy="28" r="${r}" fill="none" stroke="${TRACK}" stroke-width="2.4" opacity="0.7"/>`
-          +svgArc(r,Math.min(wk.used,1),tone(wk.used),2.4,'opacity="0.85"');
+        inner+=bar?svgBar(1,TRACK,weeklyRing==='inside'?42:57,2.4)+svgBar(wk.used,tone(wk.used),weeklyRing==='inside'?42:57,2.4)
+          :`<circle cx="28" cy="28" r="${r}" fill="none" stroke="${TRACK}" stroke-width="2.4" opacity="0.7"/>`
+            +svgArc(r,Math.min(wk.used,1),tone(wk.used),2.4,'opacity="0.85"');
       }
     }
     svg.innerHTML=inner;
@@ -1144,7 +1169,7 @@ function ago(ms){
 }
 
 const STATE_DOT={running:INK,attention:WATCH,done:AMPLE,idle:TRACK};
-// The card is clipped, not scrolled, so rows past this would push its title off the top; the rest are counted, as on the Mac
+// Keep the session list short; the rest are counted, as on the Mac.
 const SESSION_ROWS=5;
 function moreRow(n){ return n>0?`<div class="s-more">${ui().andMore(n)}</div>`:''; }
 
@@ -1252,32 +1277,43 @@ function renderCard(){
 // On the upright edges that means matching its vertical centre; on the flat ones, its horizontal centre,
 // and the card is pushed clear of a pill whose thickness follows the cells it holds.
 function placeCard(){
+  if(!card.classList.contains('show')) return;
   const cell=pill.querySelector(`.cell[data-p="${hoverId}"]`)||pill;
   const cr=cell.getBoundingClientRect();
   // The point sits on the ring, not the cell, which includes the label below it
   const rr=(cell.querySelector('.ringwrap')||cell).getBoundingClientRect();
-  card.style.transform='none';
+  const pr=pill.getBoundingClientRect();
+  // DOM bounds include both CSS zooms; styles use the element's own unzoomed coordinates.
+  const z=parseFloat(document.documentElement.style.zoom)||1, k=z*hoverTextScale;
+  let left=(8+insets[3])*z, right=innerWidth-(8+insets[1])*z;
+  let top=(8+insets[0])*z, bottom=innerHeight-(8+insets[2])*z;
+  if(notchEdge==='left') left=Math.max(left,pr.right+30*z);
+  else if(notchEdge==='right') right=Math.min(right,pr.left-30*z);
+  else if(notchEdge==='top') top=Math.max(top,pr.bottom+30*z);
+  else bottom=Math.min(bottom,pr.top-30*z);
+  card.style.maxWidth=Math.max(0,(right-left)/k)+'px';
+  card.style.maxHeight=Math.max(0,(bottom-top)/k)+'px';
+  const bounds=card.getBoundingClientRect(), cw=bounds.width, ch=bounds.height;
   if(edgeIsVertical()){
-    const cy=cr.top+cr.height/2;
-    const H=innerHeight, ch=card.offsetHeight||0;
-    let top=Math.round(cy-ch/2); top=Math.max(8+insets[0],Math.min(top,H-insets[2]-ch-8));
-    card.style.top=top+'px'; card.style.left='';
+    top=Math.max(top,Math.min(cr.top+cr.height/2-ch/2,bottom-ch));
+    if(notchEdge==='right') left=right-cw;
     const ry=rr.top+rr.height/2;
-    const th=tail.offsetHeight||36, ty=Math.max(top+16+th/2,Math.min(top+ch-16-th/2,ry));
-    tail.style.top=Math.round(ty-th/2)+'px'; tail.style.left='';
+    const th=36*z, corner=Math.min(16*k+th/2,ch/2);
+    const ty=Math.max(top+corner,Math.min(top+ch-corner,ry));
+    tail.style.top=(ty-th/2)/z+'px';
+    tail.style.left=(notchEdge==='left'?pr.right-z:pr.left-31*z)/z+'px';
   }else{
-    const pr=pill.getBoundingClientRect();
-    const cx=cr.left+cr.width/2;
-    const W=innerWidth, cw=card.offsetWidth||0, ch=card.offsetHeight||0;
-    let left=Math.round(cx-cw/2); left=Math.max(8+insets[3],Math.min(left,W-insets[1]-cw-8));
-    card.style.left=left+'px';
+    left=Math.max(left,Math.min(cr.left+cr.width/2-cw/2,right-cw));
+    if(notchEdge==='bottom') top=bottom-ch;
     const rx=rr.left+rr.width/2;
-    const tw=tail.offsetWidth||36, tx=Math.max(left+16+tw/2,Math.min(left+cw-16-tw/2,rx));
-    tail.style.left=Math.round(tx-tw/2)+'px';
-    // 30 px of clear gap, the same the upright edges leave, with the tail spanning it 1 px under the pill
-    if(notchEdge==='top'){ card.style.top=Math.round(pr.bottom+30)+'px'; tail.style.top=Math.round(pr.bottom-1)+'px'; }
-    else{ card.style.top=Math.round(pr.top-30-ch)+'px'; tail.style.top=Math.round(pr.top-31)+'px'; }
+    const tw=36*z, corner=Math.min(16*k+tw/2,cw/2);
+    const tx=Math.max(left+corner,Math.min(left+cw-corner,rx));
+    tail.style.left=(tx-tw/2)/z+'px';
+    tail.style.top=(notchEdge==='top'?pr.bottom-z:pr.top-31*z)/z+'px';
   }
+  card.style.left=left/k+'px';
+  card.style.top=top/k+'px';
+  reportHot();
 }
 
 function renderMeterCard(c,p){
@@ -1368,7 +1404,7 @@ function esc(s){const d=document.createElement('div');d.textContent=s||'';return
 /* Hover: stays expanded while either the pill or the card is under the cursor; collapses after a 250 ms grace period (upstream motion rule) */
 const card=document.getElementById('card'), pill=document.getElementById('pill'), tail=document.getElementById('tail');
 let hideTimer=null;
-function showCard(){clearTimeout(hideTimer);card.classList.add('show');renderCard();armWatchdog();refreshClock();} // show first, then render: placeCard needs offsetHeight
+function showCard(){clearTimeout(hideTimer);card.classList.add('show');renderCard();armWatchdog();refreshClock();} // show first so placeCard can measure it
 // Nothing is broadcast when the Windows clock format changes, so ask again each time the card opens
 function refreshClock(){
   invoke('get_state').then(s=>{
@@ -1410,6 +1446,12 @@ function wakeRect(){
 function armWatchdog(){
   requestAnimationFrame(reportHot); // wait one frame so renderCard's new content is laid out before measuring
 }
+// Expanded stock details and changing system rows can resize a card without a hover event.
+const cardResizeObserver=new ResizeObserver(()=>{
+  if(card.classList.contains('show')) placeCard(); else reportHot();
+});
+cardResizeObserver.observe(card);
+cardResizeObserver.observe(pill);
 // Viewport fit (pure front-end fallback, independent of Rust): Rust sizes and zooms the window so this
 // page is as wide as the design, so if the CSS viewport is not that wide the WebView's DPR disagrees
 // with the monitor; CSS zoom pulls the layout back to the design size.
@@ -1417,7 +1459,7 @@ function armWatchdog(){
 // `notch_window_size` in main.rs: NOTCH_W upright, NOTCH_LONG lying flat. Dividing by 360 on a
 // flat edge read the wider window as a DPR error and zoomed the whole notch by 520/360. Either number
 // left behind when the window changes width does the same thing, so a test in main.rs pins both.
-const DESIGN_W_UPRIGHT=360, DESIGN_W_FLAT=650;
+const DESIGN_W_UPRIGHT=480, DESIGN_W_FLAT=650;
 function designWidth(){ return edgeIsVertical()?DESIGN_W_UPRIGHT:DESIGN_W_FLAT; }
 function fitZoom(){
   const z=innerWidth/designWidth();
@@ -1427,6 +1469,7 @@ function fitZoom(){
 // `settled` only from the end of a burst of resizes, which is what a landing waits for (land_on_another_screen)
 function reportDpr(settled){
   const z=fitZoom();
+  if(card.classList.contains('show')) placeCard();
   jslog(`dpr=${window.devicePixelRatio} inner=${innerWidth}x${innerHeight} cssZoom=${z.toFixed(3)}`);
   callq('report_dpr',{dpr:window.devicePixelRatio||1,w:innerWidth,h:innerHeight,settled:settled===true}).catch(()=>{});
 }
@@ -1632,7 +1675,7 @@ listen('move_end',()=>{ carrying=false; moveHandle.classList.remove('armed'); se
    never folds mid-carry, mid-drag or under the right-click menu, all of which take the pointer off the
    notch on purpose — folding under them is what #239's reviewers caught, so it is ruled out here. */
 const FOLD_GRACE=450; // NotchWindowController.foldGrace
-function foldAllowed(){ return onHover&&!pointerIn&&!carrying&&!dragging&&!stockDragging&&!menuOpen; }
+function foldAllowed(){ return onHover&&!previewTimer&&!pointerIn&&!carrying&&!dragging&&!stockDragging&&!menuOpen; }
 function setFolded(f){
   if(f===folded) return;
   folded=f;
@@ -1646,10 +1689,20 @@ function scheduleFold(){
   if(!onHover){ setFolded(false); return; }
   if(foldAllowed()) foldTimer=setTimeout(()=>{ if(foldAllowed()) setFolded(true); },FOLD_GRACE);
 }
-function applyUiFlags(f){ onHover=!!(f&&f.notch_on_hover); scheduleFold(); }
+function applyUiFlags(f){ clearTimeout(previewTimer); previewTimer=null; onHover=!!(f&&f.notch_on_hover); scheduleFold(); }
+function showNotchNow(){
+  clearTimeout(previewTimer);
+  unfold();
+  previewTimer=setTimeout(()=>{previewTimer=null;scheduleFold();},5000);
+  reportHot();
+}
+listen('notch_show_now',showNotchNow).catch(()=>{});
 listen('notch_pointer',e=>{ pointerIn=e.payload===true; if(pointerIn) unfold(); else scheduleFold(); }).catch(()=>{});
 listen('ui_flags',e=>applyUiFlags(e.payload)).catch(()=>{});
 invoke('get_ui_flags').then(applyUiFlags).catch(()=>{});
+listen('notch_meter_style',e=>applyMeterStyle(e.payload)).catch(()=>{});
+invoke('get_notch_meter_style').then(applyMeterStyle).catch(()=>{});
+listen('notch_order',e=>{if(systemPayload&&Array.isArray(e.payload)){systemPayload.order=e.payload;renderRing();}}).catch(()=>{});
 listen('move_handle',e=>{ showMove=e.payload!==false; reportHot(); }).catch(()=>{});
 invoke('get_move_handle').then(v=>{ showMove=v!==false; reportHot(); }).catch(()=>{});
 
@@ -1676,6 +1729,8 @@ listen('notch_slots',e=>{
 }).catch(()=>{});
 invoke('get_antigravity_prefs').then(p=>{if(p){agPrefs=p;renderRing();}}).catch(()=>{});
 invoke('get_weekly_ring').then(v=>{if(typeof v==='string'){weeklyRing=v;renderRing();}}).catch(()=>{});
+listen('hover_text_scale',e=>applyHoverTextScale(e.payload)).catch(()=>{});
+invoke('get_hover_text_scale').then(applyHoverTextScale).catch(()=>{});
 listen('weekly_ring',e=>{if(typeof e.payload==='string'){weeklyRing=e.payload;renderRing();}}).catch(()=>{});
 listen('antigravity_prefs',e=>{if(e.payload){agPrefs=e.payload;renderRing();}}).catch(()=>{});
 listen('glyphs',e=>{glyphs=e.payload||glyphs;renderRing();if(card.classList.contains('show'))renderCard();}).catch(()=>{});

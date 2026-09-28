@@ -31,6 +31,16 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.20.2", headline: L10n.t("Read stock direction at a glance"),
+                        changes: [.init(title: L10n.t("Clockwise gains, counterclockwise losses"),
+                                        detail: L10n.t("Stock circles start at twelve o'clock: green gains fill clockwise and red losses fill counterclockwise on macOS and Windows.")),
+                                  .init(title: L10n.t("Show the Windows notch immediately"),
+                                        detail: L10n.t("Open the notch directly from Settings or the tray, including when it was hidden."))]),
+            ReleaseNote(version: "1.20.1", headline: L10n.t("Adjust hover text size"),
+                        changes: [.init(title: L10n.t("Hover text size"),
+                                        detail: L10n.t("Resizes text and controls in hover cards. Tall cards scroll to keep all content accessible.")),
+                                  .init(title: L10n.t("Stop automatic Keychain retries through security"),
+                                        detail: L10n.t("Claude and Antigravity background reads no longer launch a separate security process after access is refused. Use Allow access in Settings when permission is needed."))]),
             ReleaseNote(version: "1.20.0", headline: L10n.t("US quote sessions and manual Codex analysis"),
                         changes: [.init(title: L10n.t("Use the correct regular close for each US trading session"),
                                         detail: L10n.t("Day, pre-market, regular and after-hours changes use their dated reference closes. Missing timestamps no longer produce guessed percentages.")),

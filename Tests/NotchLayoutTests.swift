@@ -1469,4 +1469,50 @@ final class NotchSizeTests: XCTestCase {
         XCTAssertEqual(large.panelSize(cellCount: 3).width - medium.panelSize(cellCount: 3).width,
                        notchShare * 0.25, accuracy: 0.001)
     }
+
+    func testHoverTextScaleReservesItsOwnSpaceOnEveryEdge() {
+        for edge in NotchEdge.allCases {
+            let model = model(scale: 0.8, edge: edge)
+            model.snapshots = Array(Fixtures.snapshots().prefix(3))
+            let snapshot = model.snapshots[0]
+            let oldSize = model.tooltipCardSize(for: snapshot)
+            let oldNotch = model.notchDrawnDepth
+            let oldLength = model.shapeLength
+            model.hoverTextScale = 1.5
+            let size = model.tooltipCardSize(for: snapshot)
+            XCTAssertEqual(size.width, oldSize.width * 1.5, accuracy: 0.001)
+            XCTAssertEqual(model.notchDrawnDepth, oldNotch)
+            XCTAssertEqual(model.shapeLength, oldLength)
+            let along = edge.isVertical ? size.height : size.width
+            let across = edge.isVertical ? size.width : size.height
+            let rect = model.placement.rect(along: model.tooltipAlong(index: 0, length: along) - along / 2,
+                across: model.tooltipInset, length: along,
+                depth: NotchLayout.tailLength * 1.5 + across)
+            XCTAssertTrue(CGRect(origin: .zero, size: model.panelSize).insetBy(dx: -0.01, dy: -0.01).contains(rect),
+                          "\(edge): enlarged card escapes its panel")
+        }
+    }
+
+    func testEnlargedStockCardFitsShortScreensWithAllSectionsEnabled() {
+        let name = "HoverTextScaleTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.portfolioForecastEnabled = true
+        preferences.showsStockTimingSignals = true
+        for edge in NotchEdge.allCases {
+            let model = model(scale: 1.25, edge: edge, height: 600)
+            model.hoverTextScale = 1.5
+            model.todoPreferences = preferences
+            model.stockCharts = StockChartStore()
+            let snapshot = ProviderSnapshot(id: "widget-stock:SOXL", displayName: "SOXL", glyph: .claude,
+                fidelity: .official, status: .ok,
+                windows: [LimitWindow(id: "quote", label: "Change", usedFraction: 0.05)])
+            model.snapshots = [snapshot]
+            XCTAssertGreaterThan(model.cardHeight(for: snapshot), model.tooltipHeightLimit)
+            let height = model.tooltipCardSize(for: snapshot).height
+            let reserved = edge.isVertical ? 0 : model.tooltipInset + NotchLayout.tailLength * 1.5
+            XCTAssertLessThanOrEqual(height + reserved, 600)
+        }
+    }
 }

@@ -948,7 +948,7 @@ struct SettingsView: View {
                             .frame(width: 46, alignment: .trailing)
                     }
 
-                    Text(L10n.t("Scales the whole surface — rings, text and tooltip together — so the proportions stay as drawn. 100% is the size the notch was designed at."))
+                    Text(L10n.t("Scales the notch rings and labels. Hover text size is adjusted separately. 100% is the original size."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -964,6 +964,25 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                HStack(spacing: 10) {
+                    Slider(value: $preferences.hoverTextScale,
+                           in: Preferences.hoverTextScaleRange, step: 0.1) {
+                        Text(L10n.t("Hover text size"))
+                    }
+                        .accessibilityValue(Self.scalePercent(preferences.hoverTextScale))
+                    Text(Self.scalePercent(preferences.hoverTextScale))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 46, alignment: .trailing)
+                    Button("100%") { preferences.hoverTextScale = 1 }
+                        .accessibilityLabel(L10n.t("Reset hover text size"))
+                        .disabled(abs(preferences.hoverTextScale - 1) < 0.001)
+                }
+                Text(L10n.t("Resizes text and controls in hover cards. Tall cards scroll to keep all content accessible."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 // The nudge has been draggable since the edge picker existed,
                 // and nothing on screen has ever said so — the only way to

@@ -71,6 +71,7 @@ fn build_menu_from(app: &AppHandle, lang: &str, lines: &[(String, String, bool)]
         );
     }
     let refresh = MenuItemBuilder::with_id("refresh", tr(&lang, "refresh_all")).build(app)?;
+    let show = MenuItemBuilder::with_id("show_notch", if lang == "ko" { "지금 노치 표시" } else { "Show notch now" }).build(app)?;
     let settings = MenuItemBuilder::with_id("settings", tr(&lang, "settings")).build(app)?;
     let quit = MenuItemBuilder::with_id("quit", tr(&lang, "quit_app")).build(app)?;
     let mut menu = MenuBuilder::new(app);
@@ -78,6 +79,7 @@ fn build_menu_from(app: &AppHandle, lang: &str, lines: &[(String, String, bool)]
         menu = menu.item(item);
     }
     menu.separator()
+        .item(&show)
         .item(&refresh)
         .item(&settings)
         .separator()
@@ -154,7 +156,7 @@ pub fn refresh_menu(app: &AppHandle) {
     });
 }
 
-/// Provider rows carry `refresh:<id>`; everything else the menu offers is one of the four fixed
+/// Provider rows carry `refresh:<id>`; everything else the menu offers is one of the fixed
 /// items. Settings, language, hooks and the rest arrive as commands from the settings window.
 fn handle(app: &AppHandle, id: &str) {
     if let Some(provider) = id.strip_prefix("refresh:") {
@@ -162,6 +164,7 @@ fn handle(app: &AppHandle, id: &str) {
         return;
     }
     match id {
+        "show_notch" => { if let Err(e) = crate::show_notch_now(app.clone()) { crate::applog(&format!("show notch: {e}")); } }
         "refresh" => crate::refresh_all(app),
         "settings" => crate::settings_window::open(app),
         "quit" => app.exit(0),

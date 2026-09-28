@@ -20,6 +20,34 @@ const clone=value=>structuredClone(value);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
 async function main(){
+  const meterStock={symbol:'AAPL',market:'us',visible:true,color:'b026ff'};
+  const meterStore={settings:S.normalizeSettings({enabled:true,symbols:[meterStock]}),quotes:new Map(),names:new Map(),now:()=>12000};
+  for(const [price,close,fraction,color,reverse] of [[107.5,100,.25,'var(--ample)',false],[92.5,100,.25,'#FF453A',true],[115,100,.5,'var(--ample)',false],[85,100,.5,'#FF453A',true],[150,100,1,'var(--ample)',false],[50,100,1,'#FF453A',true],[100,100,0,'var(--ink-dim)',false],[100,null,null,'var(--ink-dim)',false],[Infinity,100,null,'var(--ink-dim)',false],[1e308,1e-308,null,'var(--ink-dim)',false]]){
+    meterStore.quotes.set('us:AAPL',{price,previousClose:close,currency:'USD',quoteAt:12000});
+    const meter=S.cells(meterStore,'en')[0].meter;
+    assert.equal(meter.fraction,fraction);assert.equal(meter.color,color,'stock direction overrides custom accent');assert.equal(meter.counterclockwise,reverse);
+  }
+  const ringSource=fs.readFileSync(path.join(__dirname,'../penguinnotch/ui/notch.html'),'utf8');
+  const svg=vm.runInNewContext(ringSource.slice(ringSource.indexOf('function svgArc('),ringSource.indexOf('function applyMeterStyle('))+';({stockSweep,svgArc,svgBar})');
+  for(const fraction of [.001,.25,.5,.75,1]){
+    const forward=svg.stockSweep(fraction,'#00FF88',false),reverse=svg.stockSweep(fraction,'#FF453A',true);
+    for(const [markup,direction] of [[forward,1],[reverse,-1]]){
+      assert.equal((markup.match(/<circle /g)||[]).length,1,'one hollow arc, no pie');
+      assert.ok(!markup.includes('<path'));assert.match(markup,/fill="none"/);
+      const radius=Number(markup.match(/ r="([^"]+)"/)[1]),dash=Number(markup.match(/stroke-dasharray="([^ ]+)/)[1]);
+      near(dash,2*Math.PI*radius*fraction,.006);
+      assert.match(markup,/transform="rotate\(-90 28 28\)"/,'12 oclock origin');
+      const mirrored=markup.includes('transform="translate(56 0) scale(-1 1)"');
+      // Sample the actual SVG dash halfway through its first quadrant, then apply its group transform.
+      const angle=Math.min(dash/(2*radius),Math.PI/4),x=28+radius*Math.sin(angle),screenX=mirrored?56-x:x;
+      assert.ok(direction*(screenX-28)>0,'gain sweeps right, loss sweeps left from twelve');
+    }
+    assert.equal(forward.replace('#00FF88','#FF453A').replace('<g>','<g transform="translate(56 0) scale(-1 1)">'),reverse,'only signed reading is mirrored');
+    near(Number(svg.svgBar(fraction,'green').match(/width="([^"]+)/)[1]),50*fraction);
+  }
+  for(const empty of [0,null,NaN]) assert.equal(svg.stockSweep(empty,'red',true),'');
+  assert.equal(svg.svgBar(0,'red'),'');
+  console.log('PASS stock signed colors, neutral/missing quotes, hollow SVG sweep geometry and equal bar magnitude');
   assert.deepEqual(S.parseStock(' 삼성전자 '),null);
   assert.deepEqual(S.parseStock('kr:005930'),{symbol:'005930',market:'kr'});
   assert.deepEqual(S.parseStock('BRK.B'),{symbol:'BRK.B',market:'us'});

@@ -187,6 +187,7 @@ final class NotchViewModel: ObservableObject {
     /// The multiplication happens once, at the two places that touch the
     /// screen: the panel's frame and the drawn content.
     @Published var sizeScale: CGFloat = 1
+    @Published var hoverTextScale: CGFloat = 1
     /// Mirrors the persisted Appearance choice so the separate notch window
     /// redraws immediately when Settings changes it.
     @Published var accentColor: AccentColorChoice = .system
@@ -487,6 +488,20 @@ final class NotchViewModel: ObservableObject {
         notchDrawnDepth + NotchLayout.tailGap
     }
 
+    /// A card uses its own scale. Overflow scrolls inside its shell, so the
+    /// title and the last control remain reachable even on a small display.
+    var tooltipHeightLimit: CGFloat {
+        guard screenSize.height > 0 else { return .infinity }
+        let reserved = edge.isVertical ? 16 : notchDrawnDepth + NotchLayout.tailGap
+            + NotchLayout.tailLength * hoverTextScale + 16
+        return max(64, (screenSize.height - reserved) / hoverTextScale)
+    }
+
+    func tooltipCardSize(for snapshot: ProviderSnapshot) -> CGSize {
+        CGSize(width: NotchLayout.cardWidth * hoverTextScale,
+               height: min(cardHeight(for: snapshot), tooltipHeightLimit) * hoverTextScale)
+    }
+
     /// How deep the notch body reaches on screen — the design-frame depth at
     /// the size it is actually drawn.
     ///
@@ -569,7 +584,7 @@ final class NotchViewModel: ObservableObject {
     func slack(cellCount: Int) -> CGFloat {
         NotchLayout.slack(for: edge,
                           maxCardHeight: maxCardHeight(cellCount: cellCount),
-                          notchScale: sizeScale)
+                          notchScale: sizeScale, tooltipScale: hoverTextScale)
     }
 
     /// How many sessions a tooltip may list here before it has to summarise
@@ -590,7 +605,7 @@ final class NotchViewModel: ObservableObject {
 
     func sessionCap(cellCount: Int) -> Int {
         guard screenSize != .zero else { return NotchLayout.defaultSessionCap }
-        return NotchLayout.sessionsFitting(cardBudget: cardBudget(cellCount: cellCount),
+        return NotchLayout.sessionsFitting(cardBudget: min(tooltipHeightLimit, cardBudget(cellCount: cellCount) / hoverTextScale),
                                            windowCount: NotchLayout.maxWindowCount,
                                            hasTokenUsage: hasTokenUsage,
                                            hasPlan: hasPlan,
@@ -633,10 +648,11 @@ final class NotchViewModel: ObservableObject {
 
     func maxCardHeight(cellCount: Int) -> CGFloat {
         let cap = sessionCap(cellCount: cellCount)
-        return snapshots.isEmpty
+        let height = snapshots.isEmpty
             ? NotchLayout.maxCardHeight(sessionCap: cap, hasTokenUsage: hasTokenUsage, hasPlan: hasPlan,
                                         hasResetCredits: hasResetCredits)
             : contentCardHeight(sessionCap: cap)
+        return min(height, tooltipHeightLimit)
     }
 
     /// How tall the tallest card may be before the panel runs off the screen.
@@ -730,22 +746,16 @@ final class NotchViewModel: ObservableObject {
 
     /// The panel as it lands on screen, size choice included.
     ///
-    /// Two spaces, added rather than multiplied together: the notch is drawn at
-    /// `sizeScale`, and the tooltip is drawn at one size whatever the notch is
-    /// set to — its text has a legible size of its own, and shrinking the
-    /// reading you opened the notch to read is the opposite of the point.
-    ///
-    /// So the notch's share scales and the card's share does not. Scaling the
-    /// whole panel instead left the card cropped at the small end, where the
-    /// panel had shrunk around a card that had not.
+    /// The notch and hover card use independent scales. Add their drawn
+    /// extents so neither is cropped when the other size changes.
     func panelSize(cellCount: Int) -> CGSize {
         let card = maxCardHeight(cellCount: cellCount)
         return NotchPlacement.panelSize(
             edge: edge,
             length: shapeLength(cellCount: cellCount) * sizeScale
-                + 2 * NotchLayout.slack(for: edge, maxCardHeight: card, notchScale: sizeScale),
+                + 2 * NotchLayout.slack(for: edge, maxCardHeight: card, notchScale: sizeScale, tooltipScale: hoverTextScale),
             depth: (contentInset + NotchLayout.bodyDepth(for: edge)) * sizeScale
-                + NotchLayout.tooltipDepth(for: edge, maxCardHeight: card)
+                + NotchLayout.tooltipDepth(for: edge, maxCardHeight: card, tooltipScale: hoverTextScale)
         )
     }
 }

@@ -99,6 +99,7 @@ final class NotchFleet {
     /// One size for the whole fleet, for the same reason the edge is: a notch
     /// that were larger on one display than another would read as a bug.
     private var scale: CGFloat = 1
+    private var hoverTextScale: CGFloat = 1
 
     /// Hooked up by the app delegate; driven by the notch's own chrome.
     var onRefresh: (() -> Void)?
@@ -290,6 +291,13 @@ final class NotchFleet {
         }
     }
 
+    func apply(hoverTextScale: CGFloat) {
+        self.hoverTextScale = hoverTextScale
+        for controller in controllers.values {
+            controller.apply(hoverTextScale: hoverTextScale)
+        }
+    }
+
     // MARK: - Readings
 
     func setSnapshots(_ snapshots: [ProviderSnapshot]) {
@@ -473,6 +481,7 @@ final class NotchFleet {
         // Set before `show()`, so a display plugged in later builds its panel
         // at the current size rather than at medium and resizing a beat later.
         controller.model.sizeScale = scale
+        controller.model.hoverTextScale = hoverTextScale
         controller.model.resetTimeFormat = resetTimeFormat
         controller.model.accentColor = accentColor
         controller.model.watchLimit = watchLimit

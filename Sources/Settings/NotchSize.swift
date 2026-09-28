@@ -9,9 +9,8 @@ import Foundation
 /// providers is competing with the windows it sits beside rather than reporting
 /// on them.
 ///
-/// The scale multiplies the whole surface — rings, text, tooltip and all — so
-/// the proportions stay exactly as they were drawn. `NotchLayout` keeps every
-/// constant it quotes from the design frame, and `medium` is that frame at 1:1.
+/// Scales the notch's rings and labels. Hover cards have an independent scale.
+/// `medium` is the design frame at 1:1.
 enum NotchSize: String, CaseIterable, Identifiable {
     case small
     case medium

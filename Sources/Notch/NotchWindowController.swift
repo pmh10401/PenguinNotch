@@ -505,32 +505,32 @@ final class NotchWindowController {
     private func tooltipRect(index: Int) -> CGRect? {
         guard model.snapshots.indices.contains(index) else { return nil }
         let snapshot = model.snapshots[index]
-        let cardHeight = model.cardHeight(for: snapshot)
+        let size = model.tooltipCardSize(for: snapshot)
         // Across the stack the region is the card, its tail, and the gap the
         // pointer has to cross. Along it, the card's own extent.
-        let cardAcross = model.edge.isVertical ? NotchLayout.cardWidth : cardHeight
-        let cardAlong = model.edge.isVertical ? cardHeight : NotchLayout.cardWidth
+        let cardAcross = model.edge.isVertical ? size.width : size.height
+        let cardAlong = model.edge.isVertical ? size.height : size.width
         let centre = model.tooltipAlong(index: index, length: cardAlong)
         return placement.rect(
             along: centre - cardAlong / 2,
-            // The card's own extent does not scale, and it begins where the
-            // drawn notch ends.
+            // Include the gap from the drawn notch to the scaled card.
             across: model.notchDrawnDepth,
             length: cardAlong,
-            depth: NotchLayout.tailGap + NotchLayout.tailLength + cardAcross
+            depth: NotchLayout.tailGap + NotchLayout.tailLength * model.hoverTextScale + cardAcross
         )
     }
 
     private func resetCardRect(event: UsageResetEvent) -> CGRect? {
         let index = model.resetAlertIndex(for: event) ?? 0
-        let cardAcross = model.edge.isVertical ? NotchLayout.cardWidth : UsageResetCard.cardHeight
-        let cardAlong = model.edge.isVertical ? UsageResetCard.cardHeight : NotchLayout.cardWidth
+        let height = min(UsageResetCard.cardHeight, model.tooltipHeightLimit)
+        let cardAcross = (model.edge.isVertical ? NotchLayout.cardWidth : height) * model.hoverTextScale
+        let cardAlong = (model.edge.isVertical ? height : NotchLayout.cardWidth) * model.hoverTextScale
         let centre = model.tooltipAlong(index: index, length: cardAlong)
         return placement.rect(
             along: centre - cardAlong / 2,
             across: model.notchDrawnDepth,
             length: cardAlong,
-            depth: NotchLayout.tailGap + NotchLayout.tailLength + cardAcross
+            depth: NotchLayout.tailGap + NotchLayout.tailLength * model.hoverTextScale + cardAcross
         )
     }
 
@@ -861,6 +861,13 @@ final class NotchWindowController {
     func apply(alongOffset: CGFloat) {
         guard model.alongOffset != alongOffset else { return }
         model.alongOffset = alongOffset
+        relocate()
+    }
+
+    func apply(hoverTextScale: CGFloat) {
+        let value = CGFloat(Preferences.clampHoverTextScale(Double(hoverTextScale)))
+        guard model.hoverTextScale != value else { return }
+        model.hoverTextScale = value
         relocate()
     }
 

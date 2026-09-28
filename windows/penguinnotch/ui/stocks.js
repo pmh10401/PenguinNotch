@@ -99,7 +99,7 @@ function quoteContext(data,quoteAt) {
   }
   return matches.size===1?[...matches.values()][0]:null;
 }
-const changeRate=q=>positive(q?.price)&&positive(q?.previousClose)?(q.price-q.previousClose)/q.previousClose:null;
+const changeRate=q=>{const rate=positive(q?.price)&&positive(q?.previousClose)?(q.price-q.previousClose)/q.previousClose:null;return Number.isFinite(rate)?rate:null;};
 function decodeCandles(data,market) {
   if(!Array.isArray(data?.result?.candles)) throw Error('Invalid candle response');
   const bars=data.result.candles.map(r=>({end:timestamp(r.timestamp,market),open:numeric(r.openPrice),high:numeric(r.highPrice),low:numeric(r.lowPrice),close:numeric(r.closePrice),volume:numeric(r.volume)})).sort((a,b)=>a.end-b.end);
@@ -520,9 +520,9 @@ const dateText=(time,market,lang,clock=true)=>Number.isFinite(time)?new Intl.Dat
 function cells(store,lang,now=store.now()) {
   if(!store.settings.enabled)return [];
   return store.settings.symbols.filter(s=>s.visible).map(stock=>{
-    const id=stockID(stock),q=store.quotes.get(id),rate=changeRate(q),col=stock.color?'#'+stock.color:rate>0?'var(--ample)':rate<0?'var(--crit)':'var(--ink-dim)';
+    const id=stockID(stock),q=store.quotes.get(id),rate=changeRate(q),col=rate>0?'var(--ample)':rate<0?'#FF453A':'var(--ink-dim)';
     const text=rate!==null&&Math.floor(now/(store.settings.displayInterval*1000))%2===0?quotePercentText(q,store.settings.provider):priceText(q?.price,q?.currency,lang);
-    return {id:'widget-stock:'+id,base:'stocks',stock,name:stock.name||store.names.get(id)||stock.symbol,glyph:stock.market==='us'?stock.symbol:stock.name||store.names.get(id)||stock.symbol,meter:{kind:'stock',fraction:rate===null?null:Math.min(1,Math.abs(rate)/0.3),color:col,text,stale:!!store.error||!!q&&(!Number.isFinite(q.quoteAt)||q.quoteAt>now||now-q.quoteAt>120000)}};
+    return {id:'widget-stock:'+id,base:'stocks',stock,name:stock.name||store.names.get(id)||stock.symbol,glyph:stock.market==='us'?stock.symbol:stock.name||store.names.get(id)||stock.symbol,meter:{kind:'stock',fraction:rate===null?null:Math.min(1,Math.abs(rate)/0.3),counterclockwise:rate<0,color:col,text,stale:!!store.error||!!q&&(!Number.isFinite(q.quoteAt)||q.quoteAt>now||now-q.quoteAt>120000)}};
   });
 }
 function domain(values){const lo=Math.min(...values),hi=Math.max(...values),pad=hi>lo?Math.max((hi-lo)*0.08,hi*Number.EPSILON*8):Math.max(hi*0.0005,1e-8);return [Math.max(0,lo-pad),hi+pad];}

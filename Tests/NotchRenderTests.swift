@@ -7,6 +7,44 @@ import XCTest
 /// which is the one thing the arithmetic tests cannot tell you.
 @MainActor
 final class NotchRenderTests: XCTestCase {
+    func testStockRingsPaintGainsClockwiseAndLossesCounterclockwise() throws {
+        for (price, leftShouldWin) in [(Decimal(string: "107.5")!, false),
+                                      (Decimal(string: "92.5")!, true), (100, false)] {
+            var snapshot = StockBoard.snapshot(stock: WatchedStock(symbol: "AAPL", market: .us),
+                quote: StockTick(price: price, volume: nil, timestamp: Date(), currency: "USD"),
+                previousClose: 100, name: nil, link: .live, source: .finnhub)
+            snapshot.systemColor = .blue // A chosen accent must not disguise the direction.
+            let renderer = ImageRenderer(content: ProviderCell(snapshot: snapshot)
+                .frame(width: NotchLayout.ringDiameter, height: NotchLayout.cellExtent)
+                .environment(\.colorScheme, .dark))
+            renderer.scale = 3
+            let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+            var left = 0, right = 0, wrongColor = 0, interiorColor = 0
+            // Ignore the caption below the ring and neutral ticker lettering.
+            for y in 0..<Int(NotchLayout.ringDiameter * renderer.scale) {
+                for x in 0..<bitmap.pixelsWide {
+                    guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                          color.alphaComponent > 0.5 else { continue }
+                    let r = color.redComponent, g = color.greenComponent, b = color.blueComponent
+                    guard max(r, g, b) - min(r, g, b) > 0.2 else { continue }
+                    let center = Double(bitmap.pixelsWide) / 2
+                    if hypot(Double(x) - center, Double(y) - center) < center * 0.7 { interiorColor += 1 }
+                    if leftShouldWin ? r <= max(g, b) : g <= max(r, b) { wrongColor += 1 }
+                    if x < bitmap.pixelsWide / 2 { left += 1 } else { right += 1 }
+                }
+            }
+            XCTAssertEqual(interiorColor, 0, "Stocks use the same hollow ring as other cells, never a filled pie")
+            if price == 100 {
+                XCTAssertEqual(left + right, 0, "An unchanged stock has no colored sweep")
+            } else {
+                XCTAssertEqual(wrongColor, 0, "Gains must be green and losses red")
+                XCTAssertGreaterThan(leftShouldWin ? left : right, 500)
+                XCTAssertLessThan(leftShouldWin ? right : left, (leftShouldWin ? left : right) / 10,
+                                  "The quarter-circle must grow from 12 o'clock in the signed direction")
+            }
+        }
+    }
+
     private func model(edge: NotchEdge, cells: Int = 4) -> NotchViewModel {
         let model = NotchViewModel()
         model.edge = edge
@@ -500,6 +538,29 @@ final class PanelSizingIntegrityTests: XCTestCase {
 /// bargain of a window that sits over everything you are working in.
 @MainActor
 final class ClickThroughTests: XCTestCase {
+    func testEnlargedHoverCardReceivesClicksAcrossItsFullWidth() throws {
+        for edge in NotchEdge.allCases {
+            let controller = NotchWindowController()
+            defer { controller.stop() }
+            let model = controller.model
+            model.edge = edge
+            model.snapshots = Array(Fixtures.snapshots().prefix(1))
+            controller.show()
+            model.isExpanded = true
+            model.hoveredIndex = 0
+            controller.apply(hoverTextScale: 1.5)
+            let content = try XCTUnwrap(controller.panelContentViewForTesting)
+            let hosting = try XCTUnwrap(content.subviews.first as? NotchHostingView<NotchRootView>)
+            let size = model.tooltipCardSize(for: model.snapshots[0])
+            let along = edge.isVertical ? size.height : size.width
+            let across = edge.isVertical ? size.width : size.height
+            let outerPoint = model.placement.point(along: model.tooltipAlong(index: 0, length: along),
+                across: model.tooltipInset + NotchLayout.tailLength * model.hoverTextScale + across - 3)
+            XCTAssertTrue(hosting.interactiveRects.contains { $0.contains(outerPoint) },
+                          "\(edge): enlarged text is outside the click region")
+        }
+    }
+
     private func shownController() -> NotchWindowController {
         let controller = NotchWindowController()
         controller.show()

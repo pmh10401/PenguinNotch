@@ -17,6 +17,40 @@ pub fn snap_scale(scale: f64) -> f64 {
     }
 }
 
+pub fn custom_notch_scale(scale: f64) -> f64 {
+    if scale.is_finite() { scale.clamp(0.75, 1.5) } else { 1.0 }
+}
+
+fn deserialize_custom_notch_scale<'de, D: serde::Deserializer<'de>>(de: D) -> Result<f64, D::Error> {
+    let value = serde_json::Value::deserialize(de)?;
+    Ok(custom_notch_scale(value.as_f64().unwrap_or(1.0)))
+}
+
+pub fn meter_style(value: &str) -> String {
+    if value == "bar" { "bar" } else { "ring" }.into()
+}
+
+fn deserialize_meter_style<'de, D: serde::Deserializer<'de>>(de: D) -> Result<String, D::Error> {
+    let value = serde_json::Value::deserialize(de)?;
+    Ok(meter_style(value.as_str().unwrap_or("ring")))
+}
+
+fn default_meter_style() -> String { "ring".into() }
+
+/// Hover cards scale independently of the notch, in ten-percent steps.
+pub fn hover_text_scale(scale: f64) -> f64 {
+    if !scale.is_finite() {
+        return 1.0;
+    }
+    (scale.clamp(0.8, 1.5) * 10.0).round() / 10.0
+}
+
+fn deserialize_hover_text_scale<'de, D: serde::Deserializer<'de>>(de: D) -> Result<f64, D::Error> {
+    // A malformed preference must not discard the rest of the saved configuration.
+    let value = serde_json::Value::deserialize(de)?;
+    Ok(hover_text_scale(value.as_f64().unwrap_or(1.0)))
+}
+
 /// One ring on the notch: which provider. (A `window` key from older builds is ignored.)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TraySlot {
@@ -61,6 +95,14 @@ pub struct Config {
     /// window grows and its WebView zooms, so the rings, text and hover card keep their proportions.
     #[serde(default = "default_scale")]
     pub scale: f64,
+    #[serde(default, rename = "usesCustomNotchScale")]
+    pub uses_custom_notch_scale: bool,
+    #[serde(default = "default_scale", rename = "customNotchScale", deserialize_with = "deserialize_custom_notch_scale")]
+    pub custom_notch_scale: f64,
+    #[serde(default = "default_meter_style", rename = "notchMeterStyle", deserialize_with = "deserialize_meter_style")]
+    pub notch_meter_style: String,
+    #[serde(default = "default_scale", rename = "hoverTextScale", deserialize_with = "deserialize_hover_text_scale")]
+    pub hover_text_scale: f64,
     /// Where the weekly limit gets a ring of its own: "off", "inside" or "outside".
     #[serde(default = "default_weekly_ring")]
     pub weekly_ring: String,
@@ -179,6 +221,24 @@ fn carry_shared_position(cfg: &mut Config) {
 }
 
 impl Config {
+    pub fn effective_scale(&self) -> f64 {
+        if self.uses_custom_notch_scale { custom_notch_scale(self.custom_notch_scale) } else { snap_scale(self.scale) }
+    }
+
+    /// Keep legacy provider ordering in the full order before a visibility change removes a slot.
+    pub fn set_notch_slots(&mut self, slots: Option<Vec<TraySlot>>) {
+        if self.notch_slots_custom {
+            for slot in &self.notch_slots {
+                if !self.cell_order.contains(&slot.provider) {
+                    self.cell_order.push(slot.provider.clone());
+                }
+            }
+        }
+        self.notch_slots_custom = slots.is_some();
+        self.notch_slots = slots.unwrap_or_default();
+        self.notch_providers = self.notch_slots.iter().map(|s| s.provider.clone()).collect();
+    }
+
     /// Where the notch sits along `edge`: centred until it has been slid somewhere on that edge.
     pub fn along(&self, edge: &str) -> f64 {
         self.notch_along.get(edge).copied().unwrap_or(0.5).clamp(0.0, 1.0)
@@ -245,6 +305,10 @@ impl Default for Config {
             notch_edge: default_notch_edge(),
             notch_monitor: None,
             scale: default_scale(),
+            uses_custom_notch_scale: false,
+            custom_notch_scale: default_scale(),
+            notch_meter_style: default_meter_style(),
+            hover_text_scale: default_scale(),
             weekly_ring: default_weekly_ring(),
             theme: default_theme(),
             notch_providers: Vec::new(), // empty = show them all
@@ -316,6 +380,7 @@ pub fn load() -> Config {
 
     // The old slider's 40–100 %, or a hand-edited file, lands on one of the three sizes
     cfg.scale = snap_scale(cfg.scale);
+    cfg.hover_text_scale = hover_text_scale(cfg.hover_text_scale);
     cfg.weekly_ring = weekly_ring_or_off(&cfg.weekly_ring);
     cfg.theme = theme_or_system(&cfg.theme);
     cfg
@@ -348,6 +413,7 @@ pub fn save(cfg: &Config) {
 
 #[cfg(test)]
 mod tests {
+    use super::{custom_notch_scale, TraySlot};
     use super::{
         carry_shared_position, keep_open_on_upgrade, snap_scale, theme_or_system, weekly_ring_or_off, Config,
     };
@@ -425,6 +491,105 @@ mod tests {
         assert_eq!(snap_scale(1.0), 1.0);
         assert_eq!(snap_scale(1.2), 1.25);
         assert_eq!(snap_scale(3.0), 1.25);
+    }
+
+    #[test]
+    fn custom_size_keeps_the_preset_hover_size_and_placement() {
+        let mut c = Config { scale: 0.8, hover_text_scale: 1.4, notch_monitor: Some("saved display".into()), notch_edge: "bottom".into(), ..Default::default() };
+        for (edge, position) in [("left",0.2),("right",0.7),("top",0.3),("bottom",0.9)] { c.set_along(edge, position); }
+        let positions = c.notch_along.clone();
+        for scale in [0.75, 0.8173, 1.137, 1.5] {
+            c.custom_notch_scale = scale;
+            c.uses_custom_notch_scale = true;
+            assert_eq!(c.effective_scale(), scale);
+            let value = serde_json::to_value(&c).unwrap();
+            assert_eq!(value["customNotchScale"], scale);
+            assert_eq!(value["usesCustomNotchScale"], true);
+            let mut restored: Config = serde_json::from_value(value).unwrap();
+            assert_eq!(restored.effective_scale(), scale);
+            restored.uses_custom_notch_scale = false;
+            assert_eq!(restored.effective_scale(), 0.8);
+            assert_eq!(restored.custom_notch_scale, scale);
+            assert_eq!(restored.hover_text_scale, 1.4);
+            assert_eq!(restored.notch_along, positions);
+            assert_eq!(restored.notch_edge, "bottom");
+            assert_eq!(restored.notch_monitor.as_deref(), Some("saved display"));
+        }
+        assert_eq!(custom_notch_scale(-5.0), 0.75);
+        assert_eq!(custom_notch_scale(7.0), 1.5);
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] { assert_eq!(custom_notch_scale(bad), 1.0); }
+        for bad in [serde_json::Value::Null, serde_json::json!("NaN"), serde_json::json!({})] {
+            let restored: Config = serde_json::from_value(serde_json::json!({"customNotchScale":bad,"notch_edge":"left","scale":1.25})).unwrap();
+            assert_eq!(restored.custom_notch_scale, 1.0);
+            assert_eq!(restored.effective_scale(), 1.25);
+            assert_eq!(restored.notch_edge, "left");
+        }
+    }
+
+    #[test]
+    fn meter_style_round_trips_and_bad_values_do_not_discard_other_preferences() {
+        assert_eq!(Config::default().notch_meter_style, "ring");
+        for input in [serde_json::json!("bar"), serde_json::json!("ring"), serde_json::json!("unknown"), serde_json::Value::Null, serde_json::json!(42)] {
+            let c: Config = serde_json::from_value(serde_json::json!({"notchMeterStyle":input,"notch_edge":"bottom"})).unwrap();
+            assert_eq!(c.notch_meter_style, if input == "bar" { "bar" } else { "ring" });
+            assert_eq!(serde_json::to_value(&c).unwrap()["notchMeterStyle"], c.notch_meter_style);
+            assert_eq!(c.notch_edge, "bottom");
+        }
+    }
+
+    #[test]
+    fn provider_visibility_retains_custom_order_including_hidden_slots() {
+        let slots = |ids: &[&str]| ids.iter().map(|id| TraySlot { provider: (*id).into() }).collect();
+        let mut c = Config { notch_slots_custom: true, notch_slots: slots(&["grok", "claude", "codex"]), ..Default::default() };
+        c.set_notch_slots(Some(slots(&["grok", "codex"])));
+        assert_eq!(c.cell_order, ["grok", "claude", "codex"]);
+        let mut restored: Config = serde_json::from_value(serde_json::to_value(&c).unwrap()).unwrap();
+        restored.set_notch_slots(Some(slots(&["grok", "codex", "claude"])));
+        assert_eq!(restored.cell_order, c.cell_order);
+        restored.cell_order = ["system-cpu", "claude", "widget-stock:us:AAPL", "codex", "grok"].map(String::from).to_vec();
+        let mixed = restored.cell_order.clone();
+        restored.set_notch_slots(Some(Vec::new()));
+        restored.set_notch_slots(None);
+        assert_eq!(restored.cell_order, mixed);
+        c.cell_order = vec!["system-cpu".into()];
+        c.set_notch_slots(Some(Vec::new()));
+        assert_eq!(c.cell_order, ["system-cpu", "grok", "codex"], "a system-only order also remembers provider positions before hiding them");
+    }
+
+    #[test]
+    fn hover_scale_is_bounded_and_independent_of_notch_size() {
+        for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(super::hover_text_scale(invalid), 1.0);
+        }
+        assert_eq!(super::hover_text_scale(-1.0), 0.8);
+        assert_eq!(super::hover_text_scale(10.0), 1.5);
+        assert_eq!(super::hover_text_scale(1.24), 1.2);
+        assert_eq!(super::hover_text_scale(1.25), 1.3);
+        assert_eq!(Config::default().hover_text_scale, 1.0);
+        let old: Config = serde_json::from_str(r#"{"scale":1.25}"#).unwrap();
+        assert_eq!(old.hover_text_scale, 1.0);
+        for step in 8..=15 {
+            let scale = step as f64 / 10.0;
+            let saved = Config { scale: 1.25, hover_text_scale: scale, ..Default::default() };
+            let json = serde_json::to_value(saved).unwrap();
+            assert_eq!(json["hoverTextScale"], scale);
+            assert!(json.get("hover_text_scale").is_none());
+            let restored: Config = serde_json::from_value(json).unwrap();
+            assert_eq!(restored.hover_text_scale, scale);
+            assert_eq!(restored.scale, 1.25);
+        }
+    }
+
+    #[test]
+    fn malformed_hover_preference_preserves_other_settings() {
+        for (raw, expected) in [("null", 1.0), (r#""NaN""#, 1.0), (r#""Infinity""#, 1.0),
+            ("true", 1.0), ("{}", 1.0), ("[]", 1.0), ("-4", 0.8), ("42", 1.5)] {
+            let saved = format!(r#"{{"hoverTextScale":{raw},"scale":1.25,"lang":"ko"}}"#);
+            let restored: Config = serde_json::from_str(&saved).unwrap();
+            assert_eq!(restored.hover_text_scale, expected, "{raw}");
+            assert_eq!(restored.scale, 1.25);
+            assert_eq!(restored.lang, "ko");
+        }
     }
 
     #[test]

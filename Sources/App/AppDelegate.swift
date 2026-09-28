@@ -520,6 +520,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 .store(in: &cancellables)
 
+            preferences.$hoverTextScale.dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak fleet, weak preferences] _ in
+                    guard let preferences else { return }
+                    fleet?.apply(hoverTextScale: CGFloat(preferences.hoverTextScale))
+                }
+                .store(in: &cancellables)
+
             preferences.$notchEdge
                 .receive(on: RunLoop.main)
                 .sink { [weak fleet, weak preferences] edge in
@@ -933,6 +941,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fleet.apply(displayPreference: preferences.displayPreference)
         fleet.apply(alongOffset: preferences.offset(for: preferences.notchEdge))
         fleet.apply(scale: preferences.notchScale)
+        fleet.apply(hoverTextScale: CGFloat(preferences.hoverTextScale))
         fleet.apply(resetTimeFormat: preferences.resetTimeFormat)
         fleet.apply(accentColor: preferences.accentColor)
         fleet.apply(watchLimit: preferences.watchLimit, criticalLimit: preferences.criticalLimit)

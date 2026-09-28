@@ -176,6 +176,20 @@ final class Preferences: ObservableObject {
     /// stops being readable, which is the one thing the notch exists for.
     static let customScaleRange: ClosedRange<Double> = 0.75...1.5
 
+    @Published var hoverTextScale: Double {
+        didSet {
+            let value = Self.clampHoverTextScale(hoverTextScale)
+            if value != hoverTextScale { hoverTextScale = value }
+            defaults.set(value, forKey: Keys.hoverTextScale)
+        }
+    }
+
+    static let hoverTextScaleRange: ClosedRange<Double> = 0.8...1.5
+
+    static func clampHoverTextScale(_ value: Double) -> Double {
+        value.isFinite ? min(max(value, hoverTextScaleRange.lowerBound), hoverTextScaleRange.upperBound) : 1
+    }
+
     /// What the notch is actually drawn at, whichever control is in charge.
     var notchScale: CGFloat {
         usesCustomNotchScale ? CGFloat(customNotchScale) : notchSize.scale
@@ -652,6 +666,7 @@ final class Preferences: ObservableObject {
         static let size = "notchSize"
         static let usesCustomSize = "usesCustomNotchScale"
         static let customSize = "customNotchScale"
+        static let hoverTextScale = "hoverTextScale"
         static let display = "notchDisplay"
         static let resetTimeFormat = "resetTimeFormat"
         static let scope = "notchScope"
@@ -947,6 +962,7 @@ final class Preferences: ObservableObject {
         self.customNotchScale = stored.map {
             min(max($0, Self.customScaleRange.lowerBound), Self.customScaleRange.upperBound)
         } ?? 1
+        self.hoverTextScale = Self.clampHoverTextScale(defaults.object(forKey: Keys.hoverTextScale) as? Double ?? 1)
         self.displayPreference = defaults.string(forKey: Keys.display)
             .map(DisplayPreference.display) ?? .followActiveWindow
         self.resetTimeFormat = defaults.string(forKey: Keys.resetTimeFormat)

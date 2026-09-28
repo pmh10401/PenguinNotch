@@ -157,8 +157,24 @@
         <div class="group">
           <div class="item"><span>Show</span><span class="seg" id="seg-show"><button data-v="show">Always show</button><button data-v="hover">Show on hover</button><button data-v="hide">Hide</button></span></div>
           <div class="item cap" id="cap-show" data-dynamic></div>
-          <div class="item"><span>Size</span><span class="seg" id="seg-size"><button data-v="0.8">Small</button><button data-v="1">Medium</button><button data-v="1.25">Large</button></span></div>
+          <div class="item"><span class="hint">Reveal at the saved position. Hover mode stays open for five seconds.</span><button class="btn" id="show-notch-now">Show notch now</button></div>
+          <div class="item"><span>Meter style</span><span class="seg" id="seg-meter"><button data-v="ring">Circles</button><button data-v="bar">Bars</button></span></div>
+          <div class="item cap">Applies to accounts, system meters and stocks. Stock meters fill at 30% and use green for gains and red for losses.</div>
+          <div class="item"><span>Size</span><span class="seg" id="seg-size-mode"><button data-v="preset">Preset</button><button data-v="custom">Custom</button></span></div>
+          <div class="item" id="row-preset-size"><span>Preset size</span><span class="seg" id="seg-size"><button data-v="0.8">Small</button><button data-v="1">Medium</button><button data-v="1.25">Large</button></span></div>
+          <div class="item" id="row-custom-size" hidden><label for="custom-notch-scale">Custom size</label><span class="controls">
+            <input id="custom-notch-scale" type="range" min="0.75" max="1.5" step="any" value="1" aria-describedby="cap-size"><output id="custom-scale-value" for="custom-notch-scale">100%</output>
+            <button id="reset-custom-scale" aria-label="Reset custom size to 100%">100%</button>
+          </span></div>
           <div class="item cap" id="cap-size" data-dynamic></div>
+          <div class="item"><label for="hover-text-scale">Hover text size</label><span class="controls">
+            <select id="hover-text-scale" aria-describedby="cap-hover-text-scale">
+              <option value="0.8">80%</option><option value="0.9">90%</option><option value="1" selected>100%</option><option value="1.1">110%</option>
+              <option value="1.2">120%</option><option value="1.3">130%</option><option value="1.4">140%</option><option value="1.5">150%</option>
+            </select>
+            <button id="reset-hover-text-scale" aria-label="Reset hover text size to 100%">100%</button>
+          </span></div>
+          <div class="item cap" id="cap-hover-text-scale">Cards and their controls resize with the text. Notch cells stay the same size.</div>
           <div class="item"><span>Theme</span><span class="seg" id="seg-theme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></span></div>
           <div class="item cap" id="cap-theme" data-dynamic></div>
           <div class="item"><span>Weekly ring</span><span class="seg" id="seg-weekly"><button data-v="off">Off</button><button data-v="inside">Inside</button><button data-v="outside">Outside</button></span></div>
@@ -171,7 +187,7 @@
             <select id="screen" aria-label="Screen"></select>
           </div>
           <div class="item cap" id="cap-screen" data-dynamic hidden></div>
-          <div class="item"><span class="hint">Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen's right-hand edge if the screen it was on has been unplugged.</span><button class="btn" id="btn-recentre">Recentre</button></div>
+          <div class="item"><span class="hint">Hold Alt and drag to slide along the edge. Recentre resets only this edge. An unavailable display uses the main screen temporarily; its saved selection and other edge positions are kept.</span><button class="btn" id="btn-recentre">Recentre</button></div>
         </div>
         <div class="sec" id="sec-widgets">System</div>
         <div class="group" id="widget-box" data-dynamic></div>
@@ -683,6 +699,19 @@ const JA_STATIC = {
   'Model data':'モデルのデータ'
 };
 const KO_STATIC = {
+  'Show notch now':'지금 노치 표시',
+  'Reveal at the saved position. Hover mode stays open for five seconds.':'저장된 위치에 표시합니다. 호버 모드에서는 5초 동안 펼쳐집니다.',
+  'Meter style':'미터 모양', 'Circles':'원형', 'Bars':'막대',
+  'Applies to accounts, system meters and stocks. Stock meters fill at 30% and use green for gains and red for losses.':'계정, 시스템 미터, 주식에 적용됩니다. 주식은 등락률 30%에서 가득 차며, 상승은 초록색, 하락은 빨간색입니다.',
+  'Preset':'기본 크기', 'Custom':'사용자 지정', 'Preset size':'기본 크기', 'Custom size':'사용자 지정 크기',
+  'Reset custom size to 100%':'사용자 지정 크기를 100%로 초기화',
+  'Scales the whole notch from 75% to 150%. Hover text size keeps its separate setting.':'전체 노치를 75~150%로 조절합니다. 호버 글자 크기의 별도 설정은 유지됩니다.',
+  'Follow main display':'주 디스플레이 따르기', 'Unavailable display':'연결되지 않은 디스플레이',
+  'Using the main display temporarily. The saved display will be used when it reconnects.':'임시로 주 디스플레이에 표시합니다. 저장된 디스플레이를 다시 연결하면 그곳에 표시됩니다.',
+  'Hold Alt and drag to slide along the edge. Recentre resets only this edge. An unavailable display uses the main screen temporarily; its saved selection and other edge positions are kept.':'Alt를 누르고 드래그하면 가장자리를 따라 이동합니다. 가운데 정렬은 현재 가장자리만 초기화합니다. 디스플레이가 연결되지 않으면 임시로 주 화면을 사용하며, 저장된 디스플레이 선택과 다른 가장자리의 위치는 유지됩니다.',
+  'Hover text size':'호버 글자 크기',
+  'Reset hover text size to 100%':'호버 글자 크기를 100%로 초기화',
+  'Cards and their controls resize with the text. Notch cells stay the same size.':'글자 크기에 맞춰 카드와 버튼도 함께 조절됩니다. 노치 항목의 크기는 바뀌지 않습니다.',
   'Theme':'테마',
   'System':'시스템 따르기',
   'Light':'라이트',
@@ -1138,7 +1167,7 @@ function renderAccounts(){
 }
 function saveNotch(next){
   const ids = providerList().map(p => p.id);
-  const store = next.length === ids.length ? null : next;
+  const store = next.length === ids.length && next.every((sl,i)=>sl.provider===ids[i]) ? null : next;
   const prev = notchSlots;
   notchSlots = store;
   renderAccounts();
@@ -1156,7 +1185,6 @@ function toggleNotch(id){
   } else {
     on.push({ provider:id });
   }
-  on.sort((a, b) => ids.indexOf(a.provider) - ids.indexOf(b.provider));
   saveNotch(on);
 }
 const accountsPane = document.getElementById('pane-accounts');
@@ -1202,6 +1230,7 @@ function drawSeg(id, value, disabled){
   }
 }
 function renderFlags(){
+  document.getElementById('show-notch-now').disabled=flagsBusy;
   drawSeg('seg-show', showMode());
   drawSeg('seg-tray', flags.tray ? 'tray' : 'none', flags.notch ? [] : ['none']);
   const showWhy = { show:SHOW_WHY, hover:HOVER_WHY, hide:HIDE_WHY }[showMode()];
@@ -1212,6 +1241,15 @@ function renderFlags(){
   fix.hidden = !flagsCorrected;
   fix.textContent = ui(KEPT_ON, KEPT_ON);
 }
+document.getElementById('show-notch-now').addEventListener('click', async()=>{
+  if(flagsBusy) return;
+  flagsBusy=true; renderFlags();
+  try{
+    flags=readFlags(await invoke('show_notch_now'));
+    flagsCorrected=false;
+  }catch(e){ strip('show_notch_now failed: '+errText(e)); }
+  finally{ flagsBusy=false; renderFlags(); }
+});
 function saveFlags(wantNotch, wantTray, wantHover){
   if(flagsBusy) return;
   flagsBusy = true;
@@ -1253,15 +1291,31 @@ const SIZE_WHY = {
   '1': 'The size the notch was drawn at.',
   '1.25': 'Easier to read at a glance, and harder to ignore.'
 };
-let notchSize = 1, sizeBusy = false;
+let notchSize=1, customNotchScale=1, usesCustomNotchScale=false, sizeBusy=false, queuedCustomSize=null;
+function normalizeCustomScale(value){return Number.isFinite(value)?Math.min(1.5,Math.max(0.75,value)):1;}
+function readSizePrefs(value){
+  if(!value) return;
+  notchSize=[0.8,1,1.25].includes(value.preset)?value.preset:1;
+  customNotchScale=normalizeCustomScale(value.custom);
+  usesCustomNotchScale=value.uses_custom===true;
+}
 function renderSize(){
+  for(const b of document.querySelectorAll('#seg-size-mode button')){
+    const on=b.dataset.v===(usesCustomNotchScale?'custom':'preset');
+    b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));b.disabled=sizeBusy;
+  }
+  document.getElementById('row-preset-size').hidden=usesCustomNotchScale;
+  document.getElementById('row-custom-size').hidden=!usesCustomNotchScale;
+  document.getElementById('custom-notch-scale').value=String(customNotchScale);
+  document.getElementById('custom-scale-value').textContent=Math.round(customNotchScale*100)+'%';
+  document.getElementById('reset-custom-scale').disabled=customNotchScale===1;
   for(const b of document.querySelectorAll('#seg-size button')){
     const on = Number(b.dataset.v) === notchSize;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     b.disabled = sizeBusy;
   }
-  const why = SIZE_WHY[String(notchSize)] || '';
+  const why = usesCustomNotchScale?'Scales the whole notch from 75% to 150%. Hover text size keeps its separate setting.':SIZE_WHY[String(notchSize)] || '';
   document.getElementById('cap-size').textContent = ui(why, why);
 }
 document.getElementById('seg-size').addEventListener('click', e => {
@@ -1279,11 +1333,87 @@ document.getElementById('seg-size').addEventListener('click', e => {
     })
     .then(() => { sizeBusy = false; renderSize(); });
 });
+async function saveCustomSize(enabled,value){
+  usesCustomNotchScale=enabled;customNotchScale=normalizeCustomScale(value);
+  queuedCustomSize={enabled,scale:customNotchScale};
+  if(sizeBusy){renderSize();return;}
+  sizeBusy=true;renderSize();
+  try{
+    // At most one resize IPC is in flight; dragging keeps only the latest requested size.
+    while(queuedCustomSize){
+      const next=queuedCustomSize;queuedCustomSize=null;
+      try{
+        const saved=await invoke('set_custom_notch_scale',next);
+        if(!queuedCustomSize) readSizePrefs(saved);
+      }catch(e){
+        strip('set_custom_notch_scale failed: '+errText(e));
+        const saved=await call('get_notch_size_prefs',undefined,null);
+        if(!queuedCustomSize) readSizePrefs(saved);
+      }
+    }
+  }finally{sizeBusy=false;renderSize();}
+}
+document.getElementById('seg-size-mode').addEventListener('click',e=>{
+  const b=e.target.closest('button');
+  if(b&&!b.disabled) void saveCustomSize(b.dataset.v==='custom',customNotchScale);
+});
+document.getElementById('custom-notch-scale').addEventListener('input',e=>void saveCustomSize(true,Number(e.target.value)));
+document.getElementById('reset-custom-scale').addEventListener('click',()=>void saveCustomSize(true,1));
+
+/* ---- Appearance: meter style --------------------------------------------- */
+let meterStyle='ring', meterBusy=false;
+function renderMeterStyle(){
+  for(const b of document.querySelectorAll('#seg-meter button')){
+    const on=b.dataset.v===meterStyle;
+    b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));b.disabled=meterBusy;
+  }
+}
+document.getElementById('seg-meter').addEventListener('click',async e=>{
+  const b=e.target.closest('button');
+  if(!b||b.disabled||b.dataset.v===meterStyle) return;
+  meterBusy=true;renderMeterStyle();
+  try{meterStyle=await invoke('set_notch_meter_style',{style:b.dataset.v});}
+  catch(err){strip('set_notch_meter_style failed: '+errText(err));}
+  finally{meterBusy=false;renderMeterStyle();}
+});
+window.__TAURI__.event.listen('notch_meter_style',e=>{meterStyle=e.payload==='bar'?'bar':'ring';renderMeterStyle();}).catch(()=>{});
+
+/* ---- Appearance: hover text size ------------------------------------------ */
+function normalizeHoverTextScale(value){ return Number.isFinite(value)?Math.round(Math.min(1.5,Math.max(0.8,value))*10)/10:1; }
+let hoverTextScale=1, hoverTextBusy=false;
+function renderHoverTextScale(){
+  const select=document.getElementById('hover-text-scale');
+  select.value=String(hoverTextScale);
+  select.disabled=hoverTextBusy;
+  document.getElementById('reset-hover-text-scale').disabled=hoverTextBusy||hoverTextScale===1;
+}
+async function saveHoverTextScale(value){
+  if(hoverTextBusy) return;
+  const previous=hoverTextScale;
+  hoverTextScale=normalizeHoverTextScale(value);
+  hoverTextBusy=true;
+  renderHoverTextScale();
+  try{
+    hoverTextScale=normalizeHoverTextScale(await invoke('set_hover_text_scale',{scale:hoverTextScale}));
+    toast();
+  }catch(err){
+    hoverTextScale=previous;
+    strip('set_hover_text_scale failed: '+errText(err));
+  }finally{
+    hoverTextBusy=false;
+    renderHoverTextScale();
+  }
+}
+document.getElementById('hover-text-scale').addEventListener('change',e=>saveHoverTextScale(e.target.value?Number(e.target.value):NaN));
+document.getElementById('reset-hover-text-scale').addEventListener('click',()=>saveHoverTextScale(1));
+try{ window.__TAURI__.event.listen('hover_text_scale',e=>{
+  if(!hoverTextBusy){ hoverTextScale=normalizeHoverTextScale(e.payload); renderHoverTextScale(); }
+}); }catch(e){ /* read again when settings opens */ }
 
 /* ---- Appearance: edge and screen -------------------------------------------
    The notch stands upright on the left and right edges and lies flat on the top and bottom ones. The
-   screen row only appears once there is more than one to choose between, and a monitor the platform
-   will not name cannot be picked (it has nothing stable to remember), so it is listed disabled. */
+   screen picker keeps the automatic choice available even with one monitor. Unnamed or unplugged
+   displays stay disabled, while an unplugged saved choice remains visible until it reconnects. */
 const EDGE_WHY = {
   left: 'Stands upright on the left-hand edge, with the card opening to its right.',
   right: 'Stands upright on the right-hand edge, the side it was drawn for.',
@@ -1322,21 +1452,22 @@ function renderScreens(){
   const row = document.getElementById('row-screen');
   const cap = document.getElementById('cap-screen');
   const sel = document.getElementById('screen');
-  const many = monitors.length > 1;
-  row.hidden = !many;
-  cap.hidden = !many;
-  if(!many) return;
+  row.hidden = false;
+  cap.hidden = false;
   sel.textContent = '';
+  const automatic=document.createElement('option');
+  automatic.value='';automatic.textContent=ui('Follow main display','Follow main display');
+  automatic.selected=!monitors.some(m=>m.current);sel.appendChild(automatic);
   for(const m of monitors){
     const o = document.createElement('option');
     o.value = m.id || '';
-    o.textContent = m.label + (m.primary ? ' · ' + ui('Main', 'Main') : '');
-    if(!m.id) o.disabled = true;
+    o.textContent = m.available===false?ui('Unavailable display','Unavailable display')+' · '+m.label:m.label + (m.primary ? ' · ' + ui('Main', 'Main') : '');
+    if(!m.id||m.available===false) o.disabled = true;
     if(m.current) o.selected = true;
     sel.appendChild(o);
   }
   const who = monitors.find(m => m.current);
-  const text = 'Which screen the notch lives on.';
+  const text = who&&who.available===false?'Using the main display temporarily. The saved display will be used when it reconnects.':'Which screen the notch lives on.';
   cap.textContent = ui(text, text) + (who && !who.id ? ' (' + ui('this screen cannot be remembered by name', 'this screen cannot be remembered by name') + ')' : '');
 }
 document.getElementById('screen').addEventListener('change', e => {
@@ -1468,6 +1599,9 @@ const METER_ROWS=[
 ];
 const PALETTE=['ff33e1','eb4236','eb8436','ffd400','00ff88','00e5cc','36a8eb','6c5ce7','b026ff','f7f6f5'];
 let widgetPrefs=null;
+window.__TAURI__.event.listen('notch_order',e=>{
+  if(widgetPrefs&&Array.isArray(e.payload)){widgetPrefs.order=e.payload;renderWidgets();}
+}).catch(()=>{});
 function renderWidgets(){
   const box=document.getElementById('widget-box');
   const sec=document.getElementById('sec-widgets');
@@ -1477,6 +1611,7 @@ function renderWidgets(){
   const hidden=new Set(p.hidden||[]);
   const order=(p.order&&p.order.length)?p.order.slice():METER_ROWS.map(row=>row[0]);
   METER_ROWS.forEach(row=>{ if(order.indexOf(row[0])<0) order.push(row[0]); });
+  const meterOrder=order.filter(id=>METER_ROWS.some(row=>row[0]===id));
   const name=id=>wui((METER_ROWS.find(row=>row[0]===id)||[id,id])[1]);
   let html=`<div class="item"><span>${esc(wui('Enable system monitoring'))}</span><button class="switch${p.system?' on':''}" id="sw-system" role="switch" aria-checked="${p.system?'true':'false'}"></button></div>`;
   html+=`<div class="item cap">${esc(wui('Meters refresh about once a second. Hiding one does not stop the others.'))}</div>`;
@@ -1484,12 +1619,12 @@ function renderWidgets(){
   html+=`<div class="item"><span>${esc(wui('Weather'))}</span><button class="switch${p.weather?' on':''}" id="sw-wx" role="switch" aria-checked="${p.weather?'true':'false'}"></button></div>`;
   html+=`<div class="item"><span>${esc(wui('To-do'))}</span><button class="switch${p.todo?' on':''}" id="sw-todo" role="switch" aria-checked="${p.todo?'true':'false'}"></button></div>`;
   html+=`<div class="item cap">${esc(wui('Hidden items keep their color and place.'))}</div>`;
-  order.forEach((id,index)=>{
+  meterOrder.forEach((id,index)=>{
     const on=!hidden.has(id);
     const color=p.colors&&p.colors[id];
     html+=`<div class="item"><span>${esc(name(id))}</span><span class="controls">
       <button data-move="${id}" data-dir="-1" ${index===0?'disabled':''}>${esc(wui('Up'))}</button>
-      <button data-move="${id}" data-dir="1" ${index===order.length-1?'disabled':''}>${esc(wui('Down'))}</button>
+      <button data-move="${id}" data-dir="1" ${index===meterOrder.length-1?'disabled':''}>${esc(wui('Down'))}</button>
       <button class="switch${on?' on':''}" data-hide="${id}" role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(wui('Show'))}"></button>
       <button data-color="${id}" title="${esc(color||'auto')}" style="width:16px;height:16px;border-radius:99px;border:0;background:${color?'#'+color:'#888'}"></button>
     </span></div>`;
@@ -1516,11 +1651,12 @@ function renderWidgets(){
   });
   box.querySelectorAll('[data-move]').forEach(button=>button.onclick=()=>{
     const ids=order.slice();
-    const from=ids.indexOf(button.dataset.move);
+    const from=meterOrder.indexOf(button.dataset.move);
     const to=from+Number(button.dataset.dir);
-    if(from<0||to<0||to>=ids.length) return;
-    const moved=ids.splice(from,1)[0];
-    ids.splice(to,0,moved);
+    if(from<0||to<0||to>=meterOrder.length) return;
+    // This pane reorders system cells only; accounts and stocks keep their saved slots.
+    const a=ids.indexOf(meterOrder[from]),b=ids.indexOf(meterOrder[to]);
+    [ids[a],ids[b]]=[ids[b],ids[a]];
     save(Object.assign(current(),{order:ids}));
   });
   box.querySelectorAll('[data-color]').forEach(button=>button.onclick=()=>{
@@ -1638,6 +1774,8 @@ function renderAll(){
   renderAccounts();
   renderFlags();
   renderSize();
+  renderMeterStyle();
+  renderHoverTextScale();
   renderEdge();
   renderScreens();
   renderWeekly();
@@ -1659,7 +1797,9 @@ function boot(){
   call('get_antigravity_prefs', undefined, null).then(v => { if(v && typeof v === 'object'){ agPrefs = v; renderAccounts(); } });
   call('get_glyphs', undefined, null).then(g => { if(g && typeof g === 'object'){ glyphs = g; renderAccounts(); } });
   try { window.__TAURI__.event.listen('glyphs', e => { if(e.payload){ glyphs = e.payload; renderAccounts(); } }); } catch(e) { /* the letters stay */ }
-  call('get_scale', undefined, null).then(v => { if(typeof v === 'number') notchSize = v; renderSize(); });
+  call('get_notch_size_prefs', undefined, null).then(v => { readSizePrefs(v); renderSize(); });
+  call('get_notch_meter_style', undefined, 'ring').then(v => { meterStyle=v==='bar'?'bar':'ring'; renderMeterStyle(); });
+  call('get_hover_text_scale', undefined, 1).then(v => { hoverTextScale=normalizeHoverTextScale(v); renderHoverTextScale(); });
   call('get_notch_edge', undefined, null).then(v => { if(typeof v === 'string') notchEdge = v; renderEdge(); });
   refreshScreens();
   call('get_weekly_ring', undefined, null).then(v => { if(typeof v === 'string') weeklyRing = v; renderWeekly(); });

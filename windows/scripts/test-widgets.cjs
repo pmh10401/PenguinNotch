@@ -125,3 +125,80 @@ assert.equal(monitorCell({ ...wifiPayload, link: 'other' }, 'system-network').fr
 assert.equal(monitorCell({ ...wifiPayload, netDown: null, netUp: null }, 'system-network').text, '—');
 assert.equal(monitorCell(wifiPayload, 'system-network', 'ko').rows[1].label, 'Wi-Fi 신호');
 console.log('PASS: widget rates, order, hide, colors, calendar, Korean labels, disk volumes, logical CPUs, GPU and Wi-Fi signal');
+
+// Run the page's real card placement and hot-rectangle reporting, including both CSS zooms.
+const fs = require('node:fs'), vm = require('node:vm');
+const notch = fs.readFileSync(path.join(__dirname, '../penguinnotch/ui/notch.html'), 'utf8');
+const settings = fs.readFileSync(path.join(__dirname, '../penguinnotch/ui/settings.html'), 'utf8');
+for (const source of [notch, settings]) {
+  const normalize = vm.runInNewContext(source.match(/function normalizeHoverTextScale[^\n]+/)[0] + '; normalizeHoverTextScale');
+  for (const invalid of [NaN, Infinity, -Infinity, null, undefined, '1.5', {}, []]) assert.equal(normalize(invalid), 1);
+  assert.equal(normalize(-1), 0.8); assert.equal(normalize(42), 1.5);
+  assert.equal(normalize(1.24), 1.2); assert.equal(normalize(1.25), 1.3);
+  for (let step = 8; step <= 15; step++) assert.equal(normalize(step / 10), step / 10);
+}
+const geometry = notch.slice(notch.indexOf('function placeCard(){'), notch.indexOf('function renderMeterCard'));
+const hot = notch.slice(notch.indexOf('function rectOf('), notch.indexOf('/* What wakes the folded notch'));
+const rectangle = (left, top, width, height) => ({left, top, width, height, right:left+width, bottom:top+height});
+for (const edge of ['left', 'right', 'top', 'bottom']) for (const zoom of [0.75, 1, 1.25]) {
+  const vertical = edge === 'left' || edge === 'right', width = (vertical ? 480 : 650) * zoom, height = 420 * zoom;
+  const pillRect = vertical ? rectangle(edge === 'left' ? 0 : width-70*zoom, 30*zoom, 70*zoom, 340*zoom)
+    : rectangle(80*zoom, edge === 'top' ? 0 : height-93*zoom, 450*zoom, 93*zoom);
+  // Near both ends: clamping must keep the entire card on screen, including at the bottom edge.
+  for (const end of [0, 1]) for (let step = 8; step <= 15; step++) {
+    const scale = step / 10, k = zoom * scale;
+    const cellRect = vertical ? rectangle(pillRect.left, (end ? 350 : 30)*zoom, 44*zoom, 44*zoom)
+      : rectangle((end ? 500 : 80)*zoom, pillRect.top, 44*zoom, 44*zoom);
+    const cell = {getBoundingClientRect:()=>cellRect, querySelector:()=>null};
+    const pill = {getBoundingClientRect:()=>pillRect, querySelector:()=>cell};
+    const card = {style:{}, classList:{contains:()=>true}, getBoundingClientRect:()=>rectangle(
+      (parseFloat(card.style.left)||0)*k, (parseFloat(card.style.top)||0)*k,
+      Math.min(246, parseFloat(card.style.maxWidth))*k, Math.min(1000, parseFloat(card.style.maxHeight))*k)};
+    const tail = {style:{}, getBoundingClientRect:()=>rectangle(parseFloat(tail.style.left)*zoom,
+      parseFloat(tail.style.top)*zoom, (vertical?32:36)*zoom, (vertical?36:32)*zoom)};
+    let reported;
+    const context = {card, pill, tail, hoverId:'fixture', hoverTextScale:scale, notchEdge:edge,
+      innerWidth:width, innerHeight:height, insets:[12,9,24,7], folded:false,
+      document:{documentElement:{style:{zoom:String(zoom)}}}, window:{devicePixelRatio:1.5},
+      edgeIsVertical:()=>vertical, placeHandles:()=>false, callq:(cmd,args)=>{assert.equal(cmd,'set_hot');reported=args;return Promise.resolve();}};
+    vm.runInNewContext(geometry + hot + '; placeCard();', context);
+    const box = card.getBoundingClientRect();
+    assert.ok(box.left >= 15*zoom-0.01 && box.right <= width-17*zoom+0.01, `${edge}: horizontal bounds`);
+    assert.ok(box.top >= 20*zoom-0.01 && box.bottom <= height-32*zoom+0.01, `${edge}: vertical bounds`);
+    if (edge === 'left') assert.ok(box.left >= pillRect.right+30*zoom-0.01);
+    if (edge === 'right') assert.ok(box.right <= pillRect.left-30*zoom+0.01);
+    if (edge === 'top') assert.ok(box.top >= pillRect.bottom+30*zoom-0.01);
+    if (edge === 'bottom') assert.ok(box.bottom <= pillRect.top-30*zoom+0.01);
+    assert.equal(reported.expanded, true);
+    assert.deepEqual(Array.from(reported.rects[2]), [box.left,box.top,box.width,box.height].map(v=>v*1.5));
+  }
+}
+const native = fs.readFileSync(path.join(__dirname, '../penguinnotch/src/main.rs'), 'utf8');
+const nativeWidth = Number(native.match(/pub const NOTCH_W: f64 = ([\d.]+)/)[1]);
+assert.equal(nativeWidth, Number(notch.match(/const DESIGN_W_UPRIGHT=([\d.]+)/)[1]), 'fallback zoom must match the native window');
+assert.ok(nativeWidth >= 70+30+246*1.5+10, 'space for 150% cards without changing notch zoom');
+console.log('PASS: hover scale validation, all eight sizes, four edges, viewport bounds, CSS zoom and measured hot rectangles');
+
+// Exercise the actual preview/folding state machine with deterministic timers.
+{
+  let now=0,sequence=0,reports=0;
+  const timers=new Map(),listeners=new Map();
+  const context=vm.createContext({onHover:false,folded:false,pointerIn:false,carrying:false,dragging:false,stockDragging:false,menuOpen:false,foldTimer:null,previewTimer:null,hideTimer:null,
+    document:{body:{classList:{toggle(){}}}},hideCard(){},setHovered(){},reportHot(){reports++;},
+    setTimeout(fn,delay){const id=++sequence;timers.set(id,{fn,at:now+delay});return id;},clearTimeout:id=>timers.delete(id),
+    listen(name,fn){listeners.set(name,fn);return Promise.resolve();}});
+  vm.runInContext(notch.slice(notch.indexOf('const FOLD_GRACE='),notch.indexOf("listen('notch_pointer'")),context);
+  const advance=ms=>{const end=now+ms;while(true){const next=[...timers].filter(([,v])=>v.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;now=next[1].at;timers.delete(next[0]);next[1].fn();}now=end;};
+  context.applyUiFlags({notch_on_hover:true});advance(450);assert.equal(context.folded,true);
+  listeners.get('notch_show_now')();assert.equal(context.folded,false);advance(4999);assert.equal(context.folded,false);
+  advance(451);assert.equal(context.folded,true);
+  for(const guard of ['pointerIn','carrying','dragging','stockDragging','menuOpen']){
+    listeners.get('notch_show_now')();context[guard]=true;advance(6000);assert.equal(context.folded,false,guard+' prevents folding');
+    context[guard]=false;context.scheduleFold();advance(450);assert.equal(context.folded,true);
+  }
+  listeners.get('notch_show_now')();advance(4000);listeners.get('notch_show_now')();advance(4000);assert.equal(context.folded,false,'repeat reveal renews preview');
+  context.applyUiFlags({notch_on_hover:false});advance(6000);assert.equal(context.folded,false,'Keep open cancels preview folding');
+  listeners.get('notch_show_now')();context.applyUiFlags({notch_on_hover:true});advance(450);assert.equal(context.folded,true,'explicit hover choice ends preview');
+  assert.ok(reports>10,'visibility transitions remeasure native hot regions');
+}
+console.log('PASS: reveal duration/renewal, Keep open, hover and drag/menu folding guards');

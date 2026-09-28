@@ -87,13 +87,14 @@ struct NotchRootView: View {
                     UsageResetCard(
                         event: resetEvent,
                         direction: model.edge.tooltipDirection,
-                        tailOffset: tooltipTailOffset(index: index, snapshot: snapshot),
+                        tailOffset: tooltipTailOffset(index: index, length: resetCardLength),
                         onDismiss: {
                             withAnimation(.easeOut(duration: 0.18)) {
                                 model.activeResetAlert = nil
                             }
                         }
                     )
+                    .scaleEffect(model.hoverTextScale)
                     .position(resetCardCentre(place, index: index))
                     .transition(.opacity.combined(with: .offset(
                         x: model.edge.outward.x * Design.px(24),
@@ -132,6 +133,7 @@ struct NotchRootView: View {
                         // far better than one card leaving and another arriving.
                         // What must not interpolate is its contents — see
                         // `TooltipCard`.
+                        .scaleEffect(model.hoverTextScale)
                         .position(tooltipCentre(place, index: index, snapshot: snapshot))
                         .transition(.opacity.combined(with: .offset(
                             x: model.edge.outward.x * Design.px(24),
@@ -145,6 +147,7 @@ struct NotchRootView: View {
         }
         .animation(motion(NotchMotion.unfold), value: model.isExpanded)
         .tint(model.accentColor.color)
+        .environment(\.tooltipHeightLimit, model.tooltipHeightLimit)
         .environment(\.penguinnotchAccentColor, model.accentColor.color)
         .environment(\.notchSurfaceStyle, model.surfaceStyle)
         .environment(\.tooltipSecondaryInk, TooltipGlassContrast.secondaryInk(
@@ -426,12 +429,17 @@ struct NotchRootView: View {
     }
 
     private func tooltipLength(_ snapshot: ProviderSnapshot) -> CGFloat {
-        model.edge.isVertical ? model.cardHeight(for: snapshot) : NotchLayout.cardWidth
+        let size = model.tooltipCardSize(for: snapshot)
+        return model.edge.isVertical ? size.height : size.width
     }
 
     private func tooltipTailOffset(index: Int, snapshot: ProviderSnapshot) -> CGFloat {
-        model.slack + model.ringCenter(index: index) * model.sizeScale
-            - model.tooltipAlong(index: index, length: tooltipLength(snapshot))
+        tooltipTailOffset(index: index, length: tooltipLength(snapshot))
+    }
+
+    private func tooltipTailOffset(index: Int, length: CGFloat) -> CGFloat {
+        (model.slack + model.ringCenter(index: index) * model.sizeScale
+            - model.tooltipAlong(index: index, length: length)) / model.hoverTextScale
     }
 
     /// The tooltip is the card plus its tail; `position` centres that pair, so
@@ -439,23 +447,27 @@ struct NotchRootView: View {
     private func tooltipCentre(
         _ place: NotchPlacement, index: Int, snapshot: ProviderSnapshot
     ) -> CGPoint {
-        let card = model.edge.isVertical ? NotchLayout.cardWidth : model.cardHeight(for: snapshot)
+        let size = model.tooltipCardSize(for: snapshot)
+        let card = model.edge.isVertical ? size.width : size.height
 
         // The ring it points at has moved with the notch, so the tail follows
         // it — but the card beyond the tail is drawn at its own size, and
         // `tooltipInset` already ends where the drawn notch does.
         return place.point(
             along: model.tooltipAlong(index: index, length: tooltipLength(snapshot)),
-            across: model.tooltipInset + (NotchLayout.tailLength + card) / 2
+            across: model.tooltipInset + (NotchLayout.tailLength * model.hoverTextScale + card) / 2
         )
     }
 
+    private var resetCardLength: CGFloat {
+        (model.edge.isVertical ? min(UsageResetCard.cardHeight, model.tooltipHeightLimit) : NotchLayout.cardWidth) * model.hoverTextScale
+    }
+
     private func resetCardCentre(_ place: NotchPlacement, index: Int) -> CGPoint {
-        let card = model.edge.isVertical ? NotchLayout.cardWidth : UsageResetCard.cardHeight
-        let cardAlong = model.edge.isVertical ? UsageResetCard.cardHeight : NotchLayout.cardWidth
+        let card = (model.edge.isVertical ? NotchLayout.cardWidth : min(UsageResetCard.cardHeight, model.tooltipHeightLimit)) * model.hoverTextScale
         return place.point(
-            along: model.tooltipAlong(index: index, length: cardAlong),
-            across: model.tooltipInset + (NotchLayout.tailLength + card) / 2
+            along: model.tooltipAlong(index: index, length: resetCardLength),
+            across: model.tooltipInset + (NotchLayout.tailLength * model.hoverTextScale + card) / 2
         )
     }
 }

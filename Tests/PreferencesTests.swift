@@ -71,6 +71,7 @@ final class PreferencesMigrationTests: XCTestCase {
         XCTAssertEqual(preferences.appPresence, .dock)
         XCTAssertEqual(preferences.notchEdge, .right)
         XCTAssertEqual(preferences.notchSize, .medium)
+        XCTAssertEqual(preferences.hoverTextScale, 1)
         XCTAssertEqual(preferences.weeklyRing, .off)
         XCTAssertTrue(preferences.isConnected("claude"))
         XCTAssertTrue(preferences.isConnected("codex"))
@@ -81,6 +82,24 @@ final class PreferencesMigrationTests: XCTestCase {
         XCTAssertFalse(preferences.isConnected("minimax"))
         XCTAssertTrue(preferences.deepSeekPricingEnabled)
         XCTAssertEqual(preferences.deepSeekPricingSchedule, .current)
+    }
+
+    func testHoverTextSizePersistsIndependentlyAndRejectsInvalidValues() {
+        let (defaults, name) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.notchSize = .small
+        preferences.hoverTextScale = 1.5
+        let reloaded = Preferences(defaults: defaults)
+        XCTAssertEqual(reloaded.hoverTextScale, 1.5)
+        XCTAssertEqual(reloaded.notchScale, NotchSize.small.scale)
+        for (input, expected) in [(99.0, 1.5), (-1, 0.8), (.infinity, 1), (.nan, 1)] {
+            preferences.hoverTextScale = input
+            XCTAssertEqual(preferences.hoverTextScale, expected)
+            XCTAssertEqual(Preferences(defaults: defaults).hoverTextScale, expected)
+            defaults.set(input, forKey: "hoverTextScale")
+            XCTAssertEqual(Preferences(defaults: defaults).hoverTextScale, expected)
+        }
     }
 
     func testLegacyUSStockSourceMigratesAndExplicitChoiceWins() {

@@ -35,11 +35,11 @@ mod stocks;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Logical size of the notch window: the 70 pt pill column on the right plus room for the hover card
-/// and its tail on the left. `fitZoom` in ui/notch.html divides by the same width.
-pub const NOTCH_W: f64 = 360.0;
+/// Logical window width: the 70 px pill, a 246 px card at up to 150%, its tail and margin. Reserve it at
+/// 100% so changing hover text size never resizes or zooms the notch. `fitZoom` uses the same width.
+pub const NOTCH_W: f64 = 480.0;
 /// Hand-bumped build tag, written to run.log at startup so a log can always be matched to the exe that wrote it.
-pub const BUILD: &str = "r44";
+pub const BUILD: &str = "r46";
 /// The upright notch also holds system meters, calendar, weather and to-do cells.
 pub const NOTCH_UPRIGHT_H: f64 = 980.0;
 /// The flat notch needs this much width for its rings and height for its card.
@@ -76,11 +76,11 @@ fn resolved_lang(raw: &str) -> String {
     }
 }
 
-/// The notch size chosen in Settings: Small, Medium or Large, as a multiple of the designed size.
+/// The effective size: the custom slider or the separately remembered preset.
 pub fn ui_scale(app: &AppHandle) -> f64 {
     let st = app.state::<AppState>();
     let c = st.cfg.lock().unwrap();
-    config::snap_scale(c.scale)
+    c.effective_scale()
 }
 
 pub fn broadcast(app: &AppHandle) {
@@ -282,8 +282,8 @@ static NOTCH_INSETS: Mutex<[f64; 4]> = Mutex::new([0.0; 4]);
 /// Pins the notch to the configured edge of the configured monitor.
 /// The notch window's logical size for an edge.
 ///
-/// Upright on the left and right, the pill is a column and 360 wide is plenty; its length is what
-/// needs room, hence `NOTCH_LONG`. Lying flat on the top and bottom it is a row: six 44 px rings,
+/// Upright on the left and right, the pill is a column with room for a 150% hover card beside it.
+/// Lying flat on the top and bottom it is a row: six 44 px rings,
 /// their gaps, the padding, both fillets and the settings orb come to about 504 px, so a 360 px
 /// window clipped the pill once a fifth provider was on. It is square, because the card opens above
 /// or below the pill there instead of beside it, and so needs the pill's own depth on top of its
@@ -405,22 +405,12 @@ fn start_work_area_watch(app: AppHandle) {
     });
 }
 
-/// Older entry point name still used by tray.rs. Recentre puts the notch in the middle of the edge it
-/// is on, and only sends it home to the primary monitor's right edge when the screen it was on is
-/// gone — which is the case the button exists for, and the one where its own edge means nothing.
+/// Recentre changes only the current edge's offset. An unplugged display temporarily falls back
+/// to the primary monitor; its saved identity and every other edge's position stay intact.
 pub fn reset_bar(app: &AppHandle) {
-    let stranded = {
-        let st = app.state::<AppState>();
-        let want = st.cfg.lock().unwrap().notch_monitor.clone();
-        want.is_some_and(|name| !screens(app).iter().any(|s| s.name.as_deref() == Some(name.as_str())))
-    };
     {
         let st = app.state::<AppState>();
         let mut c = st.cfg.lock().unwrap();
-        if stranded {
-            c.notch_edge = "right".into();
-            c.notch_monitor = None;
-        }
         // Only the edge it is on: the others keep wherever they were left, as on the Mac
         let edge = config::edge_or_right(&c.notch_edge);
         c.set_along(&edge, 0.5);
@@ -827,7 +817,7 @@ static ZOOM: Mutex<f64> = Mutex::new(1.0);
 /// The page's devicePixelRatio without that zoom, as last reported; 0 until the page first reports
 static BASE_DPR: Mutex<f64> = Mutex::new(0.0);
 
-/// Keeps the notch page at its designed 360 × 520 CSS px in a window `size` times larger: the
+/// Keeps the notch page at its designed CSS dimensions in a window `size` times larger: the
 /// WebView zooms by `size` on top of whatever brings its DPR back to the monitor's scale, so the
 /// rings, text and hover card scale together, as the Mac's size does.
 fn zoom_notch(w: &tauri::WebviewWindow, monitor_scale: f64, size: f64) {
@@ -1068,10 +1058,78 @@ fn set_scale(app: AppHandle, scale: f64) -> f64 {
         let st = app.state::<AppState>();
         let mut c = st.cfg.lock().unwrap();
         c.scale = config::snap_scale(scale);
+        c.uses_custom_notch_scale = false;
         config::save(&c);
         c.scale
     };
     place_notch(&app);
+    value
+}
+
+#[derive(serde::Serialize)]
+struct NotchSizePrefs {
+    preset: f64,
+    custom: f64,
+    uses_custom: bool,
+}
+
+#[tauri::command]
+fn get_notch_size_prefs(app: AppHandle) -> NotchSizePrefs {
+    let st = app.state::<AppState>();
+    let c = st.cfg.lock().unwrap();
+    NotchSizePrefs { preset: config::snap_scale(c.scale), custom: config::custom_notch_scale(c.custom_notch_scale), uses_custom: c.uses_custom_notch_scale }
+}
+
+#[tauri::command]
+fn set_custom_notch_scale(app: AppHandle, scale: f64, enabled: bool) -> NotchSizePrefs {
+    {
+        let st = app.state::<AppState>();
+        let mut c = st.cfg.lock().unwrap();
+        c.custom_notch_scale = config::custom_notch_scale(scale);
+        c.uses_custom_notch_scale = enabled;
+        config::save(&c);
+    }
+    place_notch(&app);
+    get_notch_size_prefs(app)
+}
+
+#[tauri::command]
+fn get_notch_meter_style(app: AppHandle) -> String {
+    let st = app.state::<AppState>();
+    let c = st.cfg.lock().unwrap();
+    config::meter_style(&c.notch_meter_style)
+}
+
+#[tauri::command]
+fn set_notch_meter_style(app: AppHandle, style: String) -> String {
+    let value = config::meter_style(&style);
+    {
+        let st = app.state::<AppState>();
+        let mut c = st.cfg.lock().unwrap();
+        c.notch_meter_style = value.clone();
+        config::save(&c);
+    }
+    let _ = app.emit("notch_meter_style", &value);
+    value
+}
+
+#[tauri::command]
+fn get_hover_text_scale(app: AppHandle) -> f64 {
+    let st = app.state::<AppState>();
+    let c = st.cfg.lock().unwrap();
+    config::hover_text_scale(c.hover_text_scale)
+}
+
+#[tauri::command]
+fn set_hover_text_scale(app: AppHandle, scale: f64) -> f64 {
+    let value = config::hover_text_scale(scale);
+    {
+        let st = app.state::<AppState>();
+        let mut c = st.cfg.lock().unwrap();
+        c.hover_text_scale = value;
+        config::save(&c);
+    }
+    let _ = app.emit("hover_text_scale", value);
     value
 }
 
@@ -1372,18 +1430,16 @@ fn get_notch_slots(app: AppHandle) -> Option<Vec<config::TraySlot>> {
 
 #[tauri::command]
 fn set_notch_slots(app: AppHandle, slots: Option<Vec<config::TraySlot>>) {
-    let list = {
+    let (list, order) = {
         let st = app.state::<AppState>();
         let mut c = st.cfg.lock().unwrap();
-        c.notch_slots_custom = slots.is_some();
-        c.notch_slots = slots.unwrap_or_default();
-        // Kept in step so an older build reading this file still shows the right providers
-        c.notch_providers = c.notch_slots.iter().map(|s| s.provider.clone()).collect();
+        c.set_notch_slots(slots);
         config::save(&c);
-        c.notch_slots_custom.then(|| c.notch_slots.clone())
+        (c.notch_slots_custom.then(|| c.notch_slots.clone()), c.cell_order.clone())
     };
     // The notch is a separate window and draws its own cells, so it has to be told.
     let _ = app.emit("notch_slots", list);
+    let _ = app.emit("notch_order", order);
 }
 
 /// The application's own icon, so the settings window shows what the taskbar shows.
@@ -1410,6 +1466,23 @@ fn get_ui_flags(app: AppHandle) -> UiFlags {
     let st = app.state::<AppState>();
     let c = st.cfg.lock().unwrap();
     ui_flags(&c)
+}
+
+/// Reveal at the saved placement, without changing Keep open or any position preference.
+#[tauri::command]
+fn show_notch_now(app: AppHandle) -> Result<UiFlags, String> {
+    let window = app.get_webview_window("notch").ok_or("Notch window unavailable")?;
+    window.show().map_err(|e| e.to_string())?;
+    let flags = {
+        let st = app.state::<AppState>();
+        let mut c = st.cfg.lock().unwrap();
+        c.notch_visible = true;
+        config::save(&c);
+        ui_flags(&c)
+    };
+    apply_visibility(&app);
+    app.emit_to("notch", "notch_show_now", ()).map_err(|e| e.to_string())?;
+    Ok(flags)
 }
 
 /// Hiding both would leave the app running with nothing to click, so the tray icon is kept
@@ -1582,6 +1655,7 @@ pub struct MonitorInfo {
     pub label: String,
     pub primary: bool,
     pub current: bool,
+    pub available: bool,
 }
 
 #[tauri::command]
@@ -1592,17 +1666,20 @@ fn get_monitors(app: AppHandle) -> Vec<MonitorInfo> {
         c.notch_monitor.clone()
     };
     let list = screens(&app);
-    let chosen = target_screen(&app).and_then(|s| s.name);
-    list.iter()
+    let mut choices: Vec<_> = list.iter()
         .enumerate()
         .map(|(i, s)| MonitorInfo {
             id: s.name.clone(),
             label: format!("{}  {} × {}", i + 1, s.w, s.h),
             primary: i == 0,
-            // With no explicit choice the primary monitor is the one in use
-            current: if want.is_some() { s.name == chosen } else { i == 0 },
+            current: want.is_some() && s.name == want,
+            available: true,
         })
-        .collect()
+        .collect();
+    if let Some(id) = want.filter(|id| !list.iter().any(|s| s.name.as_ref() == Some(id))) {
+        choices.push(MonitorInfo { label: id.clone(), id: Some(id), primary: false, current: true, available: false });
+    }
+    choices
 }
 
 /// `None` (or a name that is no longer attached) means the primary monitor.
@@ -1834,6 +1911,12 @@ fn main() {
             set_lang,
             get_scale,
             set_scale,
+            get_notch_size_prefs,
+            set_custom_notch_scale,
+            get_notch_meter_style,
+            set_notch_meter_style,
+            get_hover_text_scale,
+            set_hover_text_scale,
             get_weekly_ring,
             set_weekly_ring,
             get_theme,
@@ -1847,6 +1930,7 @@ fn main() {
             get_app_icon,
             get_ui_flags,
             set_ui_flags,
+            show_notch_now,
             get_lang,
             get_lang_resolved,
             get_autostart,
@@ -2032,6 +2116,7 @@ mod tests {
         }
         for edge in ["left", "right"] {
             assert_eq!(notch_window_size(edge), (NOTCH_W, super::NOTCH_UPRIGHT_H));
+            assert!(NOTCH_W >= 70.0 + 30.0 + 246.0 * 1.5 + 10.0);
         }
     }
 

@@ -1,5 +1,16 @@
 import SwiftUI
 
+private struct TooltipHeightLimitKey: EnvironmentKey {
+    static let defaultValue: CGFloat = .infinity
+}
+
+extension EnvironmentValues {
+    var tooltipHeightLimit: CGFloat {
+        get { self[TooltipHeightLimitKey.self] }
+        set { self[TooltipHeightLimitKey.self] = newValue }
+    }
+}
+
 /// The regular Liquid Glass material follows the desktop behind it. A dark
 /// system appearance is not a guarantee of a dark result: a light wallpaper
 /// can still make the card pale enough to erase secondary copy. Keep that
@@ -173,6 +184,9 @@ struct TooltipShell<Content: View>: View {
     @Environment(\.penguinnotchReduceTransparency) private var reduceTransparency
     @Environment(\.notchSurfaceStyle) private var surfaceStyle
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.tooltipHeightLimit) private var heightLimit
+
+    private var visibleHeight: CGFloat { min(height, heightLimit) }
 
     /// Reduce transparency means "no see-through chrome", which for this card
     /// is the solid style — the same precedence the Settings window applies to
@@ -183,6 +197,12 @@ struct TooltipShell<Content: View>: View {
     /// Tinted choice in Appearance settings. `darkGlass` is the one deliberate
     /// exception, and its dim is drawn behind the glass itself, not here.
     private var surfaceFill: Color { glassy ? .clear : Palette.card }
+
+    private var paddedContent: some View {
+        content
+            .padding(NotchLayout.cardPadding)
+            .frame(width: NotchLayout.cardWidth, alignment: .topLeading)
+    }
 
     private var card: some View {
         // The same arrangement that makes the notch fold work: the contents
@@ -197,13 +217,19 @@ struct TooltipShell<Content: View>: View {
         ZStack(alignment: .top) {
             RoundedRectangle(cornerRadius: NotchLayout.cardCorner, style: .circular)
                 .fill(surfaceFill)
-                .frame(width: NotchLayout.cardWidth, height: height)
+                .frame(width: NotchLayout.cardWidth, height: visibleHeight)
 
-            content
-                .padding(NotchLayout.cardPadding)
-                .frame(width: NotchLayout.cardWidth, alignment: .topLeading)
+            if height > heightLimit {
+                ScrollView(.vertical) {
+                    paddedContent
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(width: NotchLayout.cardWidth, height: visibleHeight)
+            } else {
+                paddedContent
+            }
         }
-        .frame(width: NotchLayout.cardWidth, height: height, alignment: .top)
+        .frame(width: NotchLayout.cardWidth, height: visibleHeight, alignment: .top)
         .clipShape(
             RoundedRectangle(cornerRadius: NotchLayout.cardCorner, style: .circular)
         )
@@ -219,7 +245,7 @@ struct TooltipShell<Content: View>: View {
         let size = TooltipTail.size(for: direction)
         switch direction {
         case .leading, .trailing:
-            let maxOffset = max(0, (height / 2) - NotchLayout.cardCorner - (size.height / 2))
+            let maxOffset = max(0, (visibleHeight / 2) - NotchLayout.cardCorner - (size.height / 2))
             return min(max(tailOffset, -maxOffset), maxOffset)
         case .up, .down:
             let maxOffset = max(0, (NotchLayout.cardWidth / 2) - NotchLayout.cardCorner - (size.width / 2))

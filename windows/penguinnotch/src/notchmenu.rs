@@ -45,7 +45,8 @@ pub fn show_notch_menu(window: Window, provider: Option<String>) -> Result<(), S
     let quit = MenuItemBuilder::with_id(format!("{PREFIX}quit"), tr(&lang, "quit_app"))
         .build(app)
         .map_err(err)?;
-    let menu = menu.separator().item(&keep_open).separator().item(&quit).build().map_err(err)?;
+    let settings = MenuItemBuilder::with_id(format!("{PREFIX}settings"), tr(&lang, "settings")).build(app).map_err(err)?;
+    let menu = menu.separator().item(&keep_open).item(&settings).separator().item(&quit).build().map_err(err)?;
     #[cfg(windows)]
     let before = foreground();
     // Returns once the menu has closed
@@ -89,6 +90,7 @@ fn handle(app: &AppHandle, id: &str) {
     match item {
         "refresh" => crate::refresh_all(app),
         "keep_open" => crate::toggle_keep_open(app),
+        "settings" => crate::settings_window::open(app),
         "quit" => app.exit(0),
         _ => {}
     }

@@ -251,6 +251,10 @@ rows preserves other categories’ positions; existing visibility, colors and or
 
 ## Placement
 
+**Settings → Appearance → Hover text size** adjusts hover cards from **80% to 150%**
+(default **100%**) on macOS and Windows. Text and controls grow together; tall cards
+scroll within the screen. This setting is saved separately from the notch size.
+
 The notch lives on any of the four screen edges. Right and left keep a
 vertical column; top and bottom lay the readings out side by side. It pins
 itself to the physical screen edge, so showing or hiding the Dock does not
@@ -264,8 +268,16 @@ slide it, and each edge remembers where you left it, so moving the notch to the
 top and back does not lose the place you chose on the right. **Recentre** in
 Settings → Appearance puts the current edge back in the middle.
 
-**Size** in the same place draws the whole notch — rings, text, tooltip and all
-— smaller or larger. Medium is the size it was designed at.
+On macOS, **Size** in the same place scales the notch's rings and labels;
+hover cards keep their separate size setting. Medium is the original design size.
+
+On Windows, **Appearance → Show notch now** and the tray's **Show notch now**
+reveal the notch at its saved position, even when hidden. Hover mode stays open
+for five seconds. **Meter style** switches all cells between circles and bars;
+**Size → Custom** adjusts the whole notch from **75% to 150%** and remembers its
+value separately from the size preset and hover text size. **Recentre** preserves
+the display selection and other edges' positions. An unavailable display uses
+the main display temporarily and returns to the saved display when it reconnects.
 
 At rest it is a small pill on the screen edge that unfolds when the pointer
 reaches it — configurable in Settings to always show, or to hide entirely.
@@ -418,7 +430,10 @@ are issued in Toss Securities WTS → Settings → Open API and are stored in th
 Keychain. The same screen's allowed-IP list has to include this Mac. Each symbol is its own cell. Settings → Appearance → Meter style chooses circles
 or horizontal bars for every cell, including accounts and system meters. A stock still
 measures the move from its reference close, and 30 percent fills the circle or
-the bar. A rise is green and a fall is red. The notch alternates the change and
+the bar. Stocks use the same hollow ring and stroke thickness as other cells.
+Their arcs start at twelve o'clock: gains fill clockwise in green,
+and losses fill counterclockwise in red on both macOS and Windows. An unchanged
+price draws no colored sweep; ticker text keeps its normal orientation. The notch alternates the change and
 last price every three seconds by default; set a 1–10 second interval under
 Settings → Stocks → Notch quote display. If the previous close is unavailable,
 the change shows `—` while the last price remains in the hover card. A quiet
@@ -695,16 +710,15 @@ ones take over. Bodies are `content-encoding: zstd` and macOS ships no decoder,
 so a decode-only build of Zstandard is vendored under
 [`Sources/Vendor/zstd`](Sources/Vendor/zstd) (BSD-3-Clause).
 
-**Keychain:** Claude's readings do not use it where Claude Code is installed.
-Claude Code files a *new* keychain item on every token rotation, and the new
-item's access list does not carry this app, so an "Always Allow" granted
-against the old one stops working about an hour later — asking `claude` itself
-avoids the question entirely. Where the keychain is still the source (no
-Claude Code on the machine, or Antigravity), the app is signed with a stable
-Developer ID identity so a grant survives rebuilds, and the secret is read
-only when the owning app has actually changed it — checked via the item's
-modification date, which isn't behind the same access prompt as the
-credential — so a valid grant does not mean a prompt on every poll.
+**Keychain:** Claude prefers the Desktop cache and the installed `claude` CLI
+before reading a saved Keychain login. Token rotation can create new items
+whose access permissions differ from earlier ones. Starting with 1.20.1,
+Claude and Antigravity background reads leave a refusal unchanged instead of
+launching `security -w`, which could show another password dialog. When needed,
+choose **Allow access…** in Settings. Credential caches reduce repeated reads.
+The current public DMG is ad-hoc signed, not Developer ID signed; replacing it
+can require new Keychain permission. This change does not remove macOS's first
+access prompts or alter existing Keychain permissions.
 
 **Rate limits:** Claude's endpoint returns 429 if polled too hard, with an
 unhelpful `Retry-After: 0`. The back-off treats that as a floor-raiser only —
