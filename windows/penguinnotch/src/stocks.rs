@@ -327,6 +327,12 @@ impl StockRequest {
             Kind::Accounts | Kind::Holdings => 300,
             Kind::Candles => match self.interval {
                 Some(Interval::TenMinutes) => 600,
+                // Quote baselines must pick up the official close after the bell.
+                Some(Interval::Day)
+                    if self.before.is_none() && self.count.is_some_and(|n| n <= 3) =>
+                {
+                    60
+                }
                 Some(Interval::Day) => 86400,
                 _ => 60,
             },
@@ -886,7 +892,8 @@ impl Transport {
         check()?;
         let reply = StockReply {
             data,
-            fetched_at: Utc::now().timestamp_millis(),
+            // A request begun before the bell cannot certify a post-close candle.
+            fetched_at: wall as i64,
         };
         self.cache.store(&missing, reply, Instant::now(), wall)?;
         self.cache
@@ -2276,7 +2283,6 @@ mod tests {
             kr.key(ms("2026-09-25T14:59:59Z")).unwrap(),
             kr.key(ms("2026-09-25T15:00:00Z")).unwrap()
         );
-        assert_eq!(base.ttl(), Duration::from_secs(86400));
         let mut cache = Cache::default();
         let now = Instant::now();
         cache.put(
@@ -2290,6 +2296,43 @@ mod tests {
         );
         assert!(cache.get("price", now + Duration::from_secs(59)).is_some());
         assert!(cache.get("price", now + Duration::from_secs(60)).is_none());
+    }
+
+    #[test]
+    fn quote_daily_cache_does_not_keep_an_intraday_close_after_the_bell() {
+        let now = Instant::now();
+        let wall = ms("2026-09-25T19:59:30Z");
+        for (count, before, retained) in [
+            (3, None, false),
+            (64, None, true),
+            (3, Some("2026-09-24T20:00:00Z"), true),
+        ] {
+            let query = request(json!({"kind":"candles","symbol":"SOXL","interval":"1d",
+                "count":count,"before":before,"adjusted":true}));
+            let mut cache = Cache::default();
+            cache
+                .store(
+                    &query,
+                    StockReply {
+                        data: json!({"result":{"candles":[]}}),
+                        fetched_at: wall as i64,
+                    },
+                    now,
+                    wall,
+                )
+                .unwrap();
+            assert!(cache
+                .lookup(&query, now + Duration::from_secs(59), wall + 59000.0)
+                .unwrap()
+                .is_some());
+            assert_eq!(
+                cache
+                    .lookup(&query, now + Duration::from_secs(60), wall + 60000.0)
+                    .unwrap()
+                    .is_some(),
+                retained
+            );
+        }
     }
 
     #[test]

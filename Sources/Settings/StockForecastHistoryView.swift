@@ -286,7 +286,7 @@ struct ForecastComparisonView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Text(L10n.t("This version records local GBM predictions. Laya and Jev are not connected. GBM's expected close equals the input price, so its MAPE equals the price-hold baseline. Lower MAPE and Brier are better; these are not investment returns."))
+            Text(L10n.t("GBM's expected close equals the input price, so its MAPE equals the price-hold baseline. Lower MAPE and Brier are better; these are prediction scores, not investment returns."))
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

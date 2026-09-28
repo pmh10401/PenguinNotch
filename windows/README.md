@@ -189,7 +189,7 @@ This fork has its own Tauri signing key. The public key is in
 `penguinnotch/tauri.conf.json`; the private key is stored outside the repository
 and in the `TAURI_SIGNING_PRIVATE_KEY` repository secret. A signed `v*` release
 publishes `latest.json` and the signed updater archive on this fork's GitHub.
-Until that release exists, an installed copy has no update to download.
+Versioned releases include both files; the rolling macOS preview is not a Windows update feed.
 
 Keep the private key. Losing it means no installed copy can be updated again, because every one of
 them checks against the public key it shipped with — they would all have to reinstall by hand.

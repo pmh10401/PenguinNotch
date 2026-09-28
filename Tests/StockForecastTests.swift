@@ -391,6 +391,24 @@ final class StockForecastTests: XCTestCase {
         XCTAssertEqual(store.forecasts["kr:005930"]?.expectedClose, 100)
         let candidate = try XCTUnwrap(store.candidates.first)
         XCTAssertTrue(candidate.isValid)
+        let codex = StockCodexAnalysisStore(clock: { now }, runner: { _, _ in
+            (#"{"status":"forecast","expectedClose":101,"lowerClose":98,"upperClose":110,"riseProbability":0.6,"notes":"Synthetic preview, not a live prediction."}"#, "test-codex")
+        })
+        try await codex.analyze(input: candidate)
+        let originalLocale = L10n.testLocale
+        defer { L10n.testLocale = originalLocale }
+        for language in ["en", "ko"] {
+            L10n.testLocale = Locale(identifier: language)
+            let preview = StockCodexAnalysisView(stockID: candidate.stockID, input: candidate,
+                compact: true, store: codex).frame(width: 220).padding(10)
+                .foregroundStyle(.black).background(.white).environment(\.colorScheme, .light)
+            let rendered = try XCTUnwrap(ImageRenderer(content: preview).cgImage)
+            XCTAssertLessThanOrEqual(CGFloat(rendered.height), NotchLayout.stockForecastSectionHeight,
+                                    "Codex controls must fit the existing hover slot in \(language)")
+            try NSBitmapImageRep(cgImage: rendered).representation(using: .png, properties: [:])?.write(
+                to: URL(fileURLWithPath: "/tmp/PenguinNotch-codex-\(language)-preview.png"))
+        }
+        L10n.testLocale = originalLocale
         XCTAssertEqual(candidate.evidence?.closes.count, 30)
         XCTAssertEqual(candidate.evidence?.closes.first?.price, candidate.previousClose)
         XCTAssertTrue(candidate.evidence?.closes.allSatisfy { $0.date < candidate.sessionStart } == true)

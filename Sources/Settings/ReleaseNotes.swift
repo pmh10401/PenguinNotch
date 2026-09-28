@@ -31,6 +31,11 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.20.0", headline: L10n.t("US quote sessions and manual Codex analysis"),
+                        changes: [.init(title: L10n.t("Use the correct regular close for each US trading session"),
+                                        detail: L10n.t("Day, pre-market, regular and after-hours changes use their dated reference closes. Missing timestamps no longer produce guessed percentages.")),
+                                  .init(title: L10n.t("Analyze with Codex"),
+                                        detail: L10n.t("Manually analyze public stock data, save the exact input and response, and compare later closes with the same-input GBM baseline."))]),
             ReleaseNote(version: "1.19.1", headline: L10n.t("Forecast stocks beyond your holdings"),
                         changes: [.init(title: L10n.t("Estimate the regular close for watchlist stocks"),
                                         detail: L10n.t("Toss watchlist estimates do not need account access. Optionally include a selected account's holdings; saved traces and forecasts remain available."))]),

@@ -89,10 +89,8 @@ jobs:
       # and that the repository's own sidebar advertises, which is what the
       # README can honestly point at.
       #
-      # A single rolling `preview` tag, never `v*`: those belong to `make
-      # publish` and carry the notarized dmg. An unsigned file sitting on the
-      # same release as a signed one is how somebody ends up running the wrong
-      # download and clearing quarantine flags they never needed to.
+      # A single rolling `preview` tag, never `v*`: those are versioned
+      # releases. Each release describes its own signing/notarization status.
       #
       # Marked a prerelease so GitHub keeps the "Latest" badge on the real
       # release, and refreshed in place rather than deleted and recreated, so
@@ -122,7 +120,7 @@ jobs:
 
           If macOS says the app is *damaged*, that is the quarantine flag rather than a bad download — run the command above.
 
-          For a signed and notarized build, take the latest release instead.
+          For a versioned build, use the latest release and check its signing and notarization notes.
 
           Universal binary. Requires macOS 15 or later.
           EOF

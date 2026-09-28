@@ -34,11 +34,15 @@ struct StockForecastTarget: Identifiable {
 struct MarketSessions: Decodable {
     let today: MarketSessionDay
     let previousBusinessDay: MarketSessionDay
+    let nextBusinessDay: MarketSessionDay?
 }
 
 struct MarketSessionDay: Decodable {
     let integrated: IntegratedMarket?
     let regularMarket: TradingSession?
+    let dayMarket: TradingSession?
+    let preMarket: TradingSession?
+    let afterMarket: TradingSession?
 
     func regular(market: WatchedStock.Market) -> TradingSession? {
         market == .kr ? integrated?.regularMarket : regularMarket
@@ -354,8 +358,10 @@ final class StockCloseHistory {
 @MainActor
 final class StockForecastStore: ObservableObject {
     static let shared = StockForecastStore(journal: StockForecastJournal(url: StockForecastJournal.fileURL),
-                                           closeHistoryDirectory: StockCloseHistory.directoryURL)
+                                           closeHistoryDirectory: StockCloseHistory.directoryURL,
+                                           codexAnalyses: .shared)
     let journal: StockForecastJournal
+    private let codexAnalyses: StockCodexAnalysisStore?
     private let history: StockCloseHistory
     private let privateSession = URLSession(configuration: .ephemeral)
     @Published private(set) var accounts: [TossAccount] = []
@@ -379,8 +385,10 @@ final class StockForecastStore: ObservableObject {
     private var chartObservers: Set<UUID> = []
 
     /// Nil storage URLs keep tests isolated from the user's archives.
-    init(journal: StockForecastJournal? = nil, closeHistoryDirectory: URL? = nil, now: Date = Date()) {
+    init(journal: StockForecastJournal? = nil, closeHistoryDirectory: URL? = nil,
+         codexAnalyses: StockCodexAnalysisStore? = nil, now: Date = Date()) {
         self.journal = journal ?? StockForecastJournal()
+        self.codexAnalyses = codexAnalyses
         history = StockCloseHistory(directory: closeHistoryDirectory, now: now)
         closeHistory = history.points
         closeHistoryError = history.errorMessage
@@ -563,6 +571,8 @@ final class StockForecastStore: ObservableObject {
                                                              session: session)
             try checkCurrentSettings()
             await journal.reconcile(token: token.value, session: session, now: now)
+            try checkCurrentSettings()
+            await codexAnalyses?.reconcile(token: token.value, session: session, now: now)
             try checkCurrentSettings()
             if accountSeq != selected {
                 clearHoldings()

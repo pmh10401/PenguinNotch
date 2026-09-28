@@ -138,6 +138,7 @@ struct StockChartSection: View {
     let stock: WatchedStock
     @ObservedObject var portfolio: StockForecastStore = .shared
     @State private var forecastObserver = UUID()
+    @State private var showsCodexAnalysis = false
     @Environment(\.tooltipSecondaryInk) private var secondaryInk
 
     private var key: StockChartStore.Key {
@@ -318,9 +319,20 @@ struct StockChartSection: View {
         }
         VStack(alignment: .leading, spacing: 5) {
             Divider()
-            Text("\(L10n.t("Today's regular close")) · \(preferences.stockChartInterval.rawValue)")
-                .font(Typography.cardBody).fontWeight(.semibold)
-            if let estimate, let record {
+            HStack {
+                Text(showsCodexAnalysis ? L10n.t("Codex · daily inputs")
+                     : "\(L10n.t("Today's regular close")) · \(preferences.stockChartInterval.rawValue)")
+                    .font(Typography.cardBody).fontWeight(.semibold)
+                Spacer(minLength: 2)
+                Button(showsCodexAnalysis ? "GBM" : "Codex") { showsCodexAnalysis.toggle() }
+                    .controlSize(.mini)
+                    .accessibilityLabel(L10n.t(showsCodexAnalysis ? "Show GBM estimate" : "Show Codex analysis"))
+            }
+            if showsCodexAnalysis {
+                ScrollView {
+                    StockCodexAnalysisView(stockID: stock.id, input: record, compact: true)
+                }
+            } else if let estimate, let record {
                 Text("\(L10n.t("Estimated close")): \(StockQuoteCodec.format(price: estimate.expectedClose, currency: record.currency, locale: .current))")
                     .font(Typography.cardBody)
                 Text("\(L10n.t("Rise")) ≈\(Int((estimate.riseProbability * 100).rounded()))% · \(L10n.t("Fall")) ≈\(Int(((1 - estimate.riseProbability) * 100).rounded()))%")
@@ -335,7 +347,7 @@ struct StockChartSection: View {
                 Text(forecastReason(record: record, now: now))
                     .font(Typography.cardBody).fixedSize(horizontal: false, vertical: true)
             }
-            closeHistoryChart(now: now)
+            if !showsCodexAnalysis { closeHistoryChart(now: now) }
         }
         .foregroundStyle(secondaryInk)
         .frame(maxWidth: .infinity, alignment: .leading)

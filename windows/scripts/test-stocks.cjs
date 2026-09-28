@@ -62,6 +62,9 @@ async function main(){
   assert.equal(S.previousClose(daily,date('2026-09-25T22:00:00Z'),'us'),98,'newer-dated candle must not become Friday quote baseline');
   assert.equal(S.previousClose(daily,date('2026-09-29T14:00:00Z'),'us'),105,'new session without candle uses latest preceding close');
   assert.equal(S.previousClose([daily[0]],q.quoteAt,'us'),null);
+  const sundayQuote=date('2026-09-28T03:01:00Z'),soxlDaily=[{date:S.timestamp('2026-09-28','us'),price:144.1},{date:S.timestamp('2026-09-25','us'),price:151.45},{date:S.timestamp('2026-09-24','us'),price:146.33}];
+  assert.equal(S.previousClose(soxlDaily,sundayQuote,'us'),151.45,'a future Monday candle must not make a Sunday quote skip Friday');
+  assert.equal(S.previousClose(soxlDaily.slice(1),sundayQuote,'us'),151.45,'adding a newer candle cannot change the preceding close');
   const missing=S.decodeQuotes({result:[{symbol:'AAPL',lastPrice:100,currency:'USD',timestamp:null}]}).get('us:AAPL');assert.ok(Number.isNaN(missing.quoteAt));assert.equal(S.previousClose(daily,missing.quoteAt,'us'),null);
   const finn=S.decodeFinnhub({c:104,pc:100,t:start/1000});near(S.changeRate(finn),.04);assert.equal(finn.quoteAt,start);
   assert.throws(()=>S.decodeFinnhub({c:0,pc:100,t:100}));
@@ -80,6 +83,19 @@ async function main(){
   assert.equal(S.regularSession(early,'us',date('2026-11-27T17:00:00Z')).end,date('2026-11-27T18:00:00Z'),'official half-day close');
   const korean={result:{today:{integrated:{regularMarket:{startTime:'2026-09-28T09:00:00+09:00',endTime:'2026-09-28T15:30:00+09:00'}}}}};
   assert.equal(S.regularSession(korean,'kr',date('2026-09-28T01:00:00Z')).start,date('2026-09-28T00:00:00Z'));
+  const interval=(startTime,endTime)=>({startTime,endTime});
+  const quoteCalendar={result:{today:{},previousBusinessDay:{regularMarket:interval('2026-09-25T09:30:00-04:00','2026-09-25T16:00:00-04:00'),afterMarket:interval('2026-09-25T16:00:00-04:00','2026-09-25T20:00:00-04:00')},nextBusinessDay:{dayMarket:interval('2026-09-27T20:00:00-04:00','2026-09-28T04:00:00-04:00'),preMarket:interval('2026-09-28T04:00:00-04:00','2026-09-28T09:30:00-04:00'),regularMarket:interval('2026-09-28T09:30:00-04:00','2026-09-28T16:00:00-04:00'),afterMarket:interval('2026-09-28T16:00:00-04:00','2026-09-28T20:00:00-04:00')}}};
+  for(const [at,phase,tradingDay] of [['2026-09-25T19:59:59Z','regularMarket','2026-09-25'],['2026-09-25T20:00:00Z','afterMarket','2026-09-25'],['2026-09-28T03:01:00Z','dayMarket','2026-09-28'],['2026-09-28T08:00:00Z','preMarket','2026-09-28'],['2026-09-28T13:30:00Z','regularMarket','2026-09-28']]) {
+    const context=S.quoteContext(quoteCalendar,date(at));assert.equal(context.phase,phase);assert.equal(context.tradingDay,tradingDay);
+  }
+  assert.equal(S.quoteContext(quoteCalendar,date('2026-09-26T00:00:00Z')),null,'official interval ends are exclusive');
+  assert.equal(S.quoteContext(quoteCalendar,date('2026-09-27T12:00:00Z')),null,'closed market is not inferred to be regular');
+  assert.equal(S.quoteContext(quoteCalendar,NaN),null);assert.equal(S.quoteContext({},sundayQuote),null);
+  const ambiguousCalendar=clone(quoteCalendar);ambiguousCalendar.result.today={...clone(quoteCalendar.result.nextBusinessDay),regularMarket:interval('2026-09-29T09:30:00-04:00','2026-09-29T16:00:00-04:00')};assert.equal(S.quoteContext(ambiguousCalendar,sundayQuote),null,'conflicting official trading days cannot supply a guessed session');
+  assert.equal(S.quoteContext(calendar,date('2026-03-06T14:30:00Z')).regularStart,date('2026-03-06T14:30:00Z'));
+  assert.equal(S.quoteContext(calendar,date('2026-03-09T13:30:00Z')).regularStart,date('2026-03-09T13:30:00Z'));
+  early.result.today.afterMarket=interval('2026-11-27T13:00:00-05:00','2026-11-27T17:00:00-05:00');
+  const halfDay=S.quoteContext(early,date('2026-11-27T18:00:00Z'));assert.equal(halfDay.phase,'afterMarket');assert.equal(halfDay.regularEnd,date('2026-11-27T18:00:00Z'));
 
   const b=bars(),now=b.at(-1).end;
   assert.deepEqual(S.decodeCandles(raw(b.slice().reverse()),'us'),b);
@@ -187,6 +203,71 @@ async function main(){
   assert.deepEqual(watchedCard.holdings,[]);assert.ok(S.cardHTML(watchedCard,watchedStock,'en').includes('<b>Consider buying</b>'),'fresh watched candidate confirms the card pattern without holdings');
   cardNow+=121000;const staleCard=S.cardHTML(watchedCard,watchedStock,'en');assert.ok(!staleCard.includes('<b>Consider buying</b>'));assert.ok(staleCard.includes('Bullish pattern · completed bars'),'stale watched quote still falls back to historical analysis');watchedCard.dispose();
 
+  // Quote sessions are independent of forecasts/accounts and use the trade clock.
+  const quoteFixture=(patch={})=>{
+    const state={now:sundayQuote,quoteAt:sundayQuote,price:144.1,calendar:quoteCalendar,daily:soxlDaily,...patch},requests=[];
+    const result=new S.Store({owner:true,now:()=>state.now,invoke:async(cmd,{request})=>{
+      assert.equal(cmd,'stock_request');requests.push(clone(request));
+      let data;
+      if(request.kind==='prices')data={result:[{symbol:'SOXL',lastPrice:state.price,currency:'USD',timestamp:typeof state.quoteAt==='number'?new Date(state.quoteAt).toISOString():state.quoteAt}]};
+      else if(request.kind==='calendar'){if(state.calendarError)throw Error('Calendar unavailable');data=state.calendar;}
+      else if(request.kind==='candles'){if(state.candleError)throw Error('Candles unavailable');data=dailyRaw(state.daily);}
+      else if(request.kind==='names')data={result:[]};
+      else throw Error('Unexpected quote request '+request.kind);
+      return {data,fetchedAt:request.kind==='candles'?(state.candleFetchedAt??state.now):state.now};
+    }});
+    result.settingsReady=true;result.credentials={toss:true};result.settings=S.normalizeSettings({enabled:true,forecastsEnabled:false,symbols:[{symbol:'SOXL',market:'us',visible:true}]});
+    return {store:result,state,requests};
+  };
+  const sunday=quoteFixture();await sunday.store.refreshQuotes();
+  const sundayResult=sunday.store.quotes.get('us:SOXL');assert.equal(sundayResult.context.tradingDay,'2026-09-28');assert.equal(sundayResult.context.phase,'dayMarket');assert.equal(sundayResult.previousClose,151.45);near(S.changeRate(sundayResult),(144.1-151.45)/151.45);
+  assert.ok(sunday.requests.some(req=>req.kind==='calendar'&&req.date==='2026-09-27'),'calendar uses the quote local date, not Monday UTC');
+  assert.deepEqual(sunday.requests.find(req=>req.kind==='candles'),{kind:'candles',symbol:'SOXL',market:'us',interval:'1d',count:3,adjusted:true});
+  assert.ok(!sunday.requests.some(req=>['accounts','holdings'].includes(req.kind)));
+  const sundayHTML=S.cardHTML(sunday.store,sunday.store.settings.symbols[0],'en');assert.match(sundayHTML,/Day market/);assert.match(sundayHTML,/Change vs prior regular close/);assert.match(sundayHTML,/2026-09-25 ET/);assert.match(sundayHTML,/09\/27\/2026, 23:01:00 ET/);
+  const quoteRequestCount=sunday.requests.length;await sunday.store.refreshQuotes();assert.equal(sunday.requests.length,quoteRequestCount,'display refresh reuses 60-second quote inputs');
+  // Parent verified these price/percentage pairs against public Toss WTS trades.
+  const percentNow=Math.ceil(sundayQuote/6000)*6000,displayedQuote=sunday.store.quotes.get('us:SOXL');
+  for(const [price,display] of [[144.07,'-4.87%'],[144.09,'-4.85%'],[144.11,'-4.84%'],[144.12,'-4.83%'],[158.81,'+4.85%']]) {
+    displayedQuote.price=price;assert.equal(S.cells(sunday.store,'en',percentNow)[0].meter.text,display,'Toss quote percentages truncate toward zero');assert.ok(S.cardHTML(sunday.store,sunday.store.settings.symbols[0],'en').includes(' · '+display+'</p>'));near(S.changeRate(displayedQuote),(price-151.45)/151.45,1e-12);
+  }
+  for(const [price,previousClose,display] of [[100.1,100,'+0.10%'],[99.9,100,'-0.10%'],[1.13,1,'+13.00%'],[99.99999,100,'-0.00%']]) {
+    Object.assign(displayedQuote,{price,previousClose});assert.equal(S.cells(sunday.store,'en',percentNow)[0].meter.text,display,'floating-point noise must not drop an exact hundredth-percent boundary');
+  }
+  displayedQuote.price=144.09;displayedQuote.previousClose=151.45;sunday.store.settings.provider='finnhub';assert.equal(S.cells(sunday.store,'en',percentNow)[0].meter.text,'-4.86%','Finnhub retains rounded percentages');sunday.store.settings.provider='toss';
+  sunday.state.now+=60000;sunday.state.quoteAt=sunday.state.now;await sunday.store.refreshQuotes();assert.equal(sunday.requests.filter(req=>req.kind==='calendar').length,2);assert.equal(sunday.requests.filter(req=>req.kind==='candles').length,2,'latest quote daily bars refresh after one minute');sunday.store.dispose();
+  const after=quoteFixture({quoteAt:date('2026-09-25T23:01:00Z')});await after.store.refreshQuotes();const afterResult=after.store.quotes.get('us:SOXL');assert.equal(afterResult.context.phase,'afterMarket');assert.equal(afterResult.previousClose,151.45,'Friday after-hours uses Friday close even on Sunday wall clock');
+  const afterHTML=S.cardHTML(after.store,after.store.settings.symbols[0],'en');assert.match(afterHTML,/Change vs regular close/);assert.match(afterHTML,/09\/25\/2026, 19:01:00 ET/);assert.ok(!afterHTML.includes('Change vs prior regular close'));after.store.dispose();
+  for(const patch of [{calendar:{}},{calendarError:true},{quoteAt:date('2026-09-27T12:00:00Z')},{quoteAt:null},{quoteAt:'2026-09-28'}]) {
+    const unavailable=quoteFixture(patch);await unavailable.store.refreshQuotes();const value=unavailable.store.quotes.get('us:SOXL');assert.equal(value.price,144.1);assert.equal(value.previousClose,null);assert.equal(value.context,null);
+    assert.ok(!unavailable.requests.some(req=>req.kind==='candles'));assert.match(S.cardHTML(unavailable.store,unavailable.store.settings.symbols[0],'en'),/Session unavailable/);
+    if(patch.quoteAt===null||typeof patch.quoteAt==='string')assert.ok(Number.isNaN(value.quoteAt),'unknown time must not become now or midnight');unavailable.store.dispose();
+  }
+  for(const patch of [{candleError:true},{quoteAt:date('2026-09-25T23:01:00Z'),daily:soxlDaily.slice(2)}]) {
+    const unavailable=quoteFixture(patch);await unavailable.store.refreshQuotes();const value=unavailable.store.quotes.get('us:SOXL');assert.ok(value.context);assert.equal(value.previousClose,null,'no fallback to an older close when the required daily candle is unavailable');assert.equal(S.changeRate(value),null);unavailable.store.dispose();
+  }
+  const futureQuote=quoteFixture({quoteAt:sundayQuote+60000});await futureQuote.store.refreshQuotes();assert.equal(futureQuote.store.quotes.size,0,'future trade rejected, not retimestamped');assert.ok(!futureQuote.requests.some(req=>req.kind==='candles'));futureQuote.store.dispose();
+  const orderedQuote=quoteFixture();await orderedQuote.store.refreshQuotes();orderedQuote.state.now+=60001;orderedQuote.state.quoteAt--;orderedQuote.state.price=999;await orderedQuote.store.refreshQuotes();assert.equal(orderedQuote.store.quotes.get('us:SOXL').price,144.1,'older REST trade cannot replace a newer quote');
+  orderedQuote.state.now+=60001;orderedQuote.state.quoteAt=null;orderedQuote.state.price=145;await orderedQuote.store.refreshQuotes();assert.equal(orderedQuote.store.quotes.get('us:SOXL').price,144.1,'a newer fetch with no trade timestamp cannot replace a known dated quote');assert.equal(orderedQuote.store.quotes.get('us:SOXL').quoteAt,sundayQuote);
+  orderedQuote.state.now+=60001;orderedQuote.state.quoteAt=sundayQuote-1;orderedQuote.state.price=998;await orderedQuote.store.refreshQuotes();assert.equal(orderedQuote.store.quotes.get('us:SOXL').price,144.1,'an unknown timestamp cannot erase the last accepted trade watermark');orderedQuote.store.dispose();
+  const raced=quoteFixture(),quoteIPC=raced.store.invoke;let releaseCalendar,delayCalendar=true;
+  raced.store.invoke=async(cmd,args)=>{if(args.request.kind==='calendar'&&delayCalendar){delayCalendar=false;return new Promise(resolve=>releaseCalendar=resolve);}return quoteIPC(cmd,args);};
+  const earlierRefresh=raced.store.refreshQuotes();await flush();assert.equal(typeof releaseCalendar,'function');
+  raced.state.now+=1000;raced.state.quoteAt=raced.state.now;raced.state.price=145;
+  for(const key of raced.store.cache.keys())if(key.includes('"kind":"prices"')||key.includes('"kind":"calendar"'))raced.store.cache.delete(key);
+  await raced.store.refreshQuotes();releaseCalendar({data:quoteCalendar,fetchedAt:sundayQuote});await earlierRefresh;
+  assert.equal(raced.store.quotes.get('us:SOXL').price,145,'an older refresh completing last cannot overwrite the newer trade');raced.store.dispose();
+  const finnRequests=[],finnStore=new S.Store({owner:true,now:()=>sundayQuote,invoke:async(cmd,{request})=>{assert.equal(cmd,'stock_request');finnRequests.push(request);return {data:{c:104,pc:100,t:sundayQuote/1000},fetchedAt:sundayQuote};}});
+  finnStore.settingsReady=true;finnStore.credentials={finnhub:true};finnStore.settings=S.normalizeSettings({enabled:true,provider:'finnhub',symbols:[{symbol:'SOXL',market:'us',visible:true}]});await finnStore.refreshQuotes();near(S.changeRate(finnStore.quotes.get('us:SOXL')),.04);assert.deepEqual(finnRequests,[{kind:'finnhubQuote',symbol:'SOXL'}],'Finnhub keeps its provider previous close and never requests Toss calendar');finnStore.dispose();
+  const fridayEnd=date('2026-09-25T20:00:00Z'),boundary=quoteFixture({now:fridayEnd-2000,quoteAt:fridayEnd-2000,daily:[{...soxlDaily[1],price:145},soxlDaily[2]]});
+  await boundary.store.refreshQuotes();assert.equal(boundary.store.quotes.get('us:SOXL').previousClose,146.33);
+  boundary.state.now=fridayEnd+1000;boundary.state.quoteAt=boundary.state.now;boundary.state.candleFetchedAt=fridayEnd-2000;
+  // Simulate a fresh price arriving while native daily data is still cached pre-close.
+  boundary.store.cache.delete(JSON.stringify({kind:'prices',symbols:['SOXL']})+'|');await boundary.store.refreshQuotes();
+  assert.equal(boundary.store.quotes.get('us:SOXL').context.phase,'afterMarket');assert.equal(boundary.requests.filter(req=>req.kind==='candles').length,2,'phase change invalidates the frontend daily cache');assert.equal(boundary.store.quotes.get('us:SOXL').previousClose,null,'pre-close native snapshot is never an official closing baseline');
+  assert.equal([...boundary.store.cache.keys()].filter(key=>key.includes('|quote:')).length,1,'old phase cache removed');
+  boundary.state.now=fridayEnd+61001;boundary.state.quoteAt=boundary.state.now;boundary.state.candleFetchedAt=null;boundary.state.daily=soxlDaily;await boundary.store.refreshQuotes();assert.equal(boundary.store.quotes.get('us:SOXL').previousClose,151.45);boundary.store.dispose();
+
   const events=new Map(),calls=[];let persisted=empty(),clock=r.createdAt;
   const invoke=async(cmd,args)=>{
     calls.push({cmd,args:clone(args)});
@@ -204,6 +285,7 @@ async function main(){
       const req=args.request;
       if(req.kind==='prices')return {data:{result:[{symbol:'AAPL',lastPrice:105,currency:'USD',timestamp:new Date(clock).toISOString()}]},fetchedAt:clock};
       if(req.kind==='names')return {data:{result:[{symbol:'AAPL',name:'Apple'}]},fetchedAt:clock};
+      if(req.kind==='calendar')return {data:quoteCalendar,fetchedAt:clock};
       if(req.kind==='candles')return {data:req.count===3?dailyRaw(daily):req.adjusted===false?dailyRaw([{date:S.timestamp('2026-09-28','us'),price:106}]):raw(b),fetchedAt:clock};
       if(req.kind==='finnhubQuote')return {data:{c:105,pc:100,t:clock/1000},fetchedAt:clock};
       throw Error('Unexpected request '+req.kind);

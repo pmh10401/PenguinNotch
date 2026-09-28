@@ -160,13 +160,22 @@ enum TossInvestAPI {
 
     static func regularSession(token: String, market: WatchedStock.Market, at now: Date = Date(),
                                session: URLSession = .shared) async throws -> TradingSession? {
-        var request = URLRequest(url: base.appending(path: "/api/v1/market-calendar/\(market.rawValue.uppercased())"))
+        let calendar = try await marketSessions(token: token, market: market, at: now, session: session)
+        return [calendar.today, calendar.previousBusinessDay, calendar.nextBusinessDay].compactMap { $0?.regular(market: market) }
+            .first { $0.contains(now) }
+    }
+
+    /// Public market data also serves watch quotes when forecasts are disabled.
+    static func marketSessions(token: String, market: WatchedStock.Market, at now: Date = Date(),
+                                session: URLSession = .shared) async throws -> MarketSessions {
+        var components = URLComponents(url: base.appending(path: "/api/v1/market-calendar/\(market.rawValue.uppercased())"),
+                                       resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "date", value: StockQuoteCodec.marketDate(now, market: market))]
+        var request = URLRequest(url: components.url!, cachePolicy: .reloadIgnoringLocalCacheData)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let calendar = try decoder.decode(TossResult<MarketSessions>.self, from: await body(for: request, session: session)).result
-        return [calendar.today, calendar.previousBusinessDay].compactMap { $0.regular(market: market) }
-            .first { $0.contains(now) }
+        return try decoder.decode(TossResult<MarketSessions>.self, from: await body(for: request, session: session)).result
     }
 
     static func forecastCloses(token: String, stock: WatchedStock, session: URLSession = .shared) async throws -> [(date: Date, close: Decimal)] {
@@ -194,11 +203,17 @@ enum TossInvestAPI {
     /// already be dated after the latest quote, so keep one extra older bar.
     static func previousClose(token: String, stock: WatchedStock, priceTime: Date,
                               session: URLSession = .shared) async throws -> Decimal? {
-        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 3,
-                                        session: session)
-        return StockQuoteCodec.previousClose(closes: StockQuoteCodec.dailyCloses(from: data),
-                                             priceTime: priceTime,
+        let daily = try await quoteCloses(token: token, stock: stock, session: session)
+        return StockQuoteCodec.previousClose(closes: daily.values, priceTime: priceTime,
                                              timeZone: StockQuoteCodec.timeZone(for: stock.market))
+    }
+
+    static func quoteCloses(token: String, stock: WatchedStock,
+                            session: URLSession = .shared) async throws -> StockDailyCloses {
+        let requestedAt = Date()
+        let data = try await candleData(token: token, symbol: stock.symbol, interval: "1d", count: 3,
+                                        adjusted: true, session: session)
+        return StockDailyCloses(values: StockQuoteCodec.dailyCloses(from: data), requestedAt: requestedAt)
     }
 
     static func chartCandles(token: String, stock: WatchedStock, interval: StockChartInterval,
@@ -247,7 +262,7 @@ enum TossInvestAPI {
         }
         components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         guard let url = components.url else { throw Failure.invalidResponse }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         return try await body(for: request, session: session)
     }
@@ -297,7 +312,7 @@ enum TossInvestAPI {
         }
         components.queryItems = [URLQueryItem(name: "symbols", value: symbols.joined(separator: ","))]
         guard let url = components.url else { throw Failure.invalidResponse }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         return try await body(for: request, session: session)
     }
@@ -323,6 +338,9 @@ enum TossInvestAPI {
 final class StockQuotesMonitor: ObservableObject {
     @Published private(set) var snapshots: [ProviderSnapshot] = []
     private var quotes: [String: StockTick] = [:]
+    private var dailyCloses: [String: StockDailyCloses] = [:]
+    private var usCalendar: MarketSessions?
+    // Finnhub supplies its own previous close; preserve that provider's semantics.
     private var closes: [String: Decimal] = [:]
     private var names: [String: String] = [:]
     private var link: StockLink = .idle
@@ -333,8 +351,16 @@ final class StockQuotesMonitor: ObservableObject {
     private var task: Task<Void, Never>?
     private var generation = UUID()
     private var cancellables = Set<AnyCancellable>()
+    private let session: URLSession
+    private let loadCredentials: () -> (clientID: String, clientSecret: String)
+    private let stream: (String, [WatchedStock], @escaping @MainActor (TossSocketEvent) -> Void) async throws -> Void
 
-    init(preferences: Preferences) {
+    init(preferences: Preferences, session: URLSession = .shared,
+         loadCredentials: @escaping () -> (clientID: String, clientSecret: String) = TossCredentials.load,
+         stream: @escaping (String, [WatchedStock], @escaping @MainActor (TossSocketEvent) -> Void) async throws -> Void = TossInvestAPI.stream) {
+        self.session = session
+        self.loadCredentials = loadCredentials
+        self.stream = stream
         preferences.$showsStocks.combineLatest(preferences.$stockSymbols, preferences.$stockSettingsRevision)
             .sink { [weak self] shows, symbols, _ in
                 self?.restart(shows: shows, symbols: WatchedStock.parseList(symbols),
@@ -362,6 +388,8 @@ final class StockQuotesMonitor: ObservableObject {
             names.removeAll()
             self.source = source
         }
+        dailyCloses.removeAll()
+        usCalendar = nil
         enabled = shows
         stocks = symbols
         let ids = Set(symbols.map(\.id))
@@ -385,7 +413,7 @@ final class StockQuotesMonitor: ObservableObject {
         if !supported.isEmpty {
             switch source {
             case .toss:
-                let credentials = TossCredentials.load()
+                let credentials = loadCredentials()
                 if credentials.clientID.isEmpty || credentials.clientSecret.isEmpty {
                     link = .failed(L10n.t("Add Toss Securities API keys in Settings → Stocks."))
                 } else {
@@ -409,36 +437,36 @@ final class StockQuotesMonitor: ObservableObject {
 
     private func run(_ symbols: [WatchedStock], credentials: (clientID: String, clientSecret: String),
                      generation token: UUID) async {
+        guard generation == token, !Task.isCancelled else { return }
+        // The socket supplies trades, not session rollover or final
+        // regular closes. Keep REST/calendar/daily data fresh beside it.
+        let polling = Task {
+            while generation == token, !Task.isCancelled {
+                let startedAt = Date()
+                do {
+                    let current = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
+                                                                      clientSecret: credentials.clientSecret, session: session)
+                    guard generation == token, !Task.isCancelled else { return }
+                    await refreshToss(symbols, accessToken: current.value, generation: token)
+                } catch {
+                    guard generation == token, !Task.isCancelled else { return }
+                    link = .reconnecting
+                    publish()
+                }
+                try? await Task.sleep(for: .seconds(max(1, 60 - Date().timeIntervalSince(startedAt))))
+            }
+        }
+        defer { polling.cancel() }
         var delay: Double = 1
         while !Task.isCancelled, generation == token {
             do {
                 let access = try await TossInvestAPI.accessToken(clientID: credentials.clientID,
-                                                                  clientSecret: credentials.clientSecret)
-                let symbolsOnly = symbols.map(\.symbol)
-                async let fetchedNames = TossInvestAPI.names(token: access.value, symbols: symbolsOnly)
-                let prices = try await TossInvestAPI.prices(token: access.value, symbols: symbolsOnly)
-                guard generation == token else { return }
-                quotes.merge(prices) { _, new in new }
-                publish()
-                let resolvedNames = (try? await fetchedNames) ?? [:]
-                guard generation == token else { return }
+                                                                  clientSecret: credentials.clientSecret, session: session)
+                let resolvedNames = (try? await TossInvestAPI.names(token: access.value, symbols: symbols.map(\.symbol), session: session)) ?? [:]
+                guard generation == token, !Task.isCancelled else { return }
                 names.merge(resolvedNames) { _, new in new }
-                link = .live
                 publish()
-                // Daily candles are per-symbol; let trades start while rings fill in.
-                let candles = Task {
-                    for stock in symbols {
-                        guard generation == token, !Task.isCancelled else { return }
-                        let priceTime = quotes[stock.id]?.timestamp ?? Date()
-                        if let close = try? await TossInvestAPI.previousClose(token: access.value, stock: stock, priceTime: priceTime) {
-                            guard generation == token, !Task.isCancelled else { return }
-                            closes[stock.id] = close
-                            publish()
-                        }
-                    }
-                }
-                defer { candles.cancel() }
-                try await TossInvestAPI.stream(token: access.value, stocks: symbols) { [weak self] event in
+                try await stream(access.value, symbols) { [weak self] event in
                     guard let self, self.generation == token else { return }
                     self.absorb(event)
                 }
@@ -461,9 +489,41 @@ final class StockQuotesMonitor: ObservableObject {
         }
     }
 
+    private func refreshToss(_ symbols: [WatchedStock], accessToken: String, generation token: UUID) async {
+        async let fetchedPrices = TossInvestAPI.prices(token: accessToken, symbols: symbols.map(\.symbol), session: session)
+        if symbols.contains(where: { $0.market == .us }) {
+            let calendar = try? await TossInvestAPI.marketSessions(token: accessToken, market: .us, session: session)
+            guard generation == token, !Task.isCancelled else { return }
+            // A failed/unknown calendar must not authorize an old percentage.
+            usCalendar = calendar
+        }
+        do {
+            let prices = try await fetchedPrices
+            guard generation == token, !Task.isCancelled else { return }
+            for (id, tick) in prices where StockQuoteCodec.accepts(tick, replacing: quotes[id], now: Date()) {
+                quotes[id] = tick
+            }
+            link = .live
+        } catch {
+            guard generation == token, !Task.isCancelled else { return }
+            link = .reconnecting
+        }
+        publish()
+        for stock in symbols {
+            guard generation == token, !Task.isCancelled else { return }
+            let daily = try? await TossInvestAPI.quoteCloses(token: accessToken, stock: stock, session: session)
+            guard generation == token, !Task.isCancelled else { return }
+            dailyCloses[stock.id] = daily
+            publish()
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+    }
+
     private func absorb(_ event: TossSocketEvent) {
         switch event {
         case .tick(let id, let tick):
+            guard stocks.contains(where: { $0.id == id }),
+                  StockQuoteCodec.accepts(tick, replacing: quotes[id], now: Date()) else { return }
             quotes[id] = tick
             link = .live
         case .subscribed:
@@ -515,8 +575,14 @@ final class StockQuotesMonitor: ObservableObject {
     private func publish() {
         let next = stocks.map { stock in
             let link = stockLinks[stock.id] ?? self.link
-            return StockBoard.snapshot(stock: stock, quote: quotes[stock.id], previousClose: closes[stock.id],
-                                       name: names[stock.id], link: link, source: source)
+            let quote = quotes[stock.id]
+            let session = quote.flatMap { $0.hasTimestamp ? StockQuoteCodec.usSession(at: $0.timestamp, calendar: usCalendar) : nil }
+            let basis = quote.flatMap { StockQuoteCodec.changeBasis(daily: dailyCloses[stock.id], quote: $0,
+                                                                     market: stock.market, session: session) }
+            return StockBoard.snapshot(stock: stock, quote: quote,
+                                       previousClose: source == .finnhub ? closes[stock.id] : basis?.close,
+                                       name: names[stock.id], link: link, source: source,
+                                       quoteSession: session, basisDate: basis?.date)
         }
         if next != snapshots { snapshots = next }
     }

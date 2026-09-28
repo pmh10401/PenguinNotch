@@ -58,6 +58,33 @@ struct StockTick: Equatable {
     var volume: Decimal?
     var timestamp: Date
     var currency: String
+    // Missing provider timestamps use a sentinel, never the receipt time.
+    var hasTimestamp = true
+}
+
+struct StockQuoteSession: Equatable {
+    enum Phase: String { case day, pre, regular, after }
+    let phase: Phase
+    let tradingDay: Date
+    let startTime: Date
+    let endTime: Date
+    let regularStart: Date
+    let regularEnd: Date
+
+    var label: String {
+        switch phase {
+        case .day: return L10n.t("Day market")
+        case .pre: return L10n.t("Pre-market")
+        case .regular: return L10n.t("Regular market")
+        case .after: return L10n.t("After-hours")
+        }
+    }
+}
+
+struct StockDailyCloses {
+    let values: [(date: Date, close: Decimal)]
+    // A request crossing the closing bell must not certify an unfinished bar.
+    let requestedAt: Date
 }
 
 enum StockQuoteSource: String, CaseIterable, Identifiable {
@@ -113,12 +140,13 @@ enum StockQuoteCodec {
             guard let symbol = row["symbol"] as? String,
                   let stock = WatchedStock.parse(symbol),
                   let price = decimal(row["lastPrice"]),
-                  let currency = row["currency"] as? String,
-                  let timestamp = date(row["timestamp"]) ?? (requireTimestamp ? nil : Date())
+                  let currency = row["currency"] as? String
             else { continue }
+            let timestamp = date(row["timestamp"], allowDateOnly: false)
+            if requireTimestamp && timestamp == nil { continue }
             quotes[stock.id] = StockTick(price: price, volume: nil,
-                                          timestamp: timestamp,
-                                          currency: currency)
+                                          timestamp: timestamp ?? .distantPast,
+                                          currency: currency, hasTimestamp: timestamp != nil)
         }
         return quotes
     }
@@ -159,9 +187,10 @@ enum StockQuoteCodec {
                   let currency = payload["currency"] as? String,
                   let stock = stock(fromTopic: topic)
             else { return nil }
+            let timestamp = date(payload["timestamp"], allowDateOnly: false)
             let tick = StockTick(price: price, volume: decimal(payload["volume"]),
-                                 timestamp: date(payload["timestamp"]) ?? Date(),
-                                 currency: currency)
+                                 timestamp: timestamp ?? .distantPast,
+                                 currency: currency, hasTimestamp: timestamp != nil)
             return .tick(id: stock.id, tick: tick)
         case "error":
             let error = object["error"] as? [String: Any]
@@ -221,12 +250,14 @@ enum StockQuoteCodec {
         return min(max(scaled, 0), 1)
     }
 
-    static func formatChange(_ rate: Decimal, locale: Locale) -> String {
+    static func formatChange(_ rate: Decimal, locale: Locale,
+                             roundingMode: NumberFormatter.RoundingMode? = nil) -> String {
         let formatter = NumberFormatter()
         formatter.locale = locale
         formatter.numberStyle = .decimal
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
+        if let roundingMode { formatter.roundingMode = roundingMode }
         formatter.positivePrefix = formatter.plusSign
         formatter.negativePrefix = formatter.minusSign
         let text = formatter.string(from: NSDecimalNumber(decimal: rate * 100)) ?? "0.00"
@@ -240,22 +271,83 @@ enum StockQuoteCodec {
         }
     }
 
+    static func marketDate(_ date: Date, market: WatchedStock.Market, includeTime: Bool = false) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone(for: market)
+        formatter.dateFormat = includeTime ? "yyyy-MM-dd HH:mm:ss" : "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    /// REST snapshots can arrive after a newer socket trade. Neither older
+    /// nor future trades may replace it, and an undated price cannot date it.
+    static func accepts(_ tick: StockTick, replacing old: StockTick?, now: Date) -> Bool {
+        if !tick.hasTimestamp { return old?.hasTimestamp != true }
+        guard tick.timestamp.timeIntervalSince1970.isFinite, tick.timestamp <= now else { return false }
+        if let old, old.hasTimestamp { return tick.timestamp >= old.timestamp }
+        return true
+    }
+
+    static func usSession(at timestamp: Date, calendar: MarketSessions?) -> StockQuoteSession? {
+        guard timestamp.timeIntervalSince1970.isFinite, let calendar else { return nil }
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = timeZone(for: .us)
+        var match: StockQuoteSession?
+        for day in [calendar.previousBusinessDay, calendar.today, calendar.nextBusinessDay].compactMap({ $0 }) {
+            guard let regular = day.regularMarket, regular.duration.isFinite, regular.duration > 0 else { continue }
+            let phases: [(StockQuoteSession.Phase, TradingSession?)] = [
+                (.day, day.dayMarket), (.pre, day.preMarket), (.regular, regular), (.after, day.afterMarket)
+            ]
+            for (phase, session) in phases {
+                guard let session, session.duration.isFinite, session.contains(timestamp) else { continue }
+                switch phase {
+                case .day, .pre: guard session.endTime <= regular.startTime else { continue }
+                case .after: guard session.startTime >= regular.endTime else { continue }
+                case .regular: break
+                }
+                let candidate = StockQuoteSession(phase: phase, tradingDay: local.startOfDay(for: regular.startTime),
+                    startTime: session.startTime, endTime: session.endTime,
+                    regularStart: regular.startTime, regularEnd: regular.endTime)
+                if let match, match != candidate { return nil }
+                match = candidate
+            }
+        }
+        return match
+    }
+
+    static func changeBasis(daily: StockDailyCloses?, quote: StockTick, market: WatchedStock.Market,
+                            session: StockQuoteSession?) -> (date: Date, close: Decimal)? {
+        guard quote.hasTimestamp, let daily else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone(for: market)
+        let tradingDay: Date
+        if market == .us {
+            guard let session, session.startTime <= quote.timestamp, quote.timestamp < session.endTime,
+                  daily.requestedAt >= session.startTime else { return nil }
+            tradingDay = session.tradingDay
+            if session.phase == .after {
+                guard daily.requestedAt >= session.regularEnd else { return nil }
+                // US DAILY candles contain only regular trading. Never fall
+                // back to the preceding day for an after-hours percentage.
+                return daily.values.first { calendar.isDate($0.date, inSameDayAs: tradingDay) && $0.close > 0 }
+            }
+        } else {
+            tradingDay = calendar.startOfDay(for: quote.timestamp)
+        }
+        return daily.values.filter { calendar.startOfDay(for: $0.date) < tradingDay && $0.close > 0 }
+            .max { $0.date < $1.date }
+    }
+
     /// Daily candles are newest first. The close before the session that owns
     /// `priceTime` is the previous close. A new day with no candle yet uses
     /// the newest close, which is that previous session.
     static func previousClose(closes: [(date: Date, close: Decimal)], priceTime: Date,
                               timeZone: TimeZone) -> Decimal? {
-        let ordered = closes.sorted { $0.date > $1.date }
-        guard let newest = ordered.first else { return nil }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let priceDay = calendar.startOfDay(for: priceTime)
-        let newestDay = calendar.startOfDay(for: newest.date)
-        if priceDay > newestDay { return newest.close }
-        guard let index = ordered.firstIndex(where: { calendar.startOfDay(for: $0.date) <= priceDay }),
-              ordered.indices.contains(index + 1)
-        else { return nil }
-        return ordered[index + 1].close
+        return closes.filter { calendar.startOfDay(for: $0.date) < priceDay }
+            .max { $0.date < $1.date }?.close
     }
 
     static func dailyCloses(from data: Data) -> [(date: Date, close: Decimal)] {
@@ -371,13 +463,18 @@ enum StockQuoteCodec {
         }
     }
 
-    private static func date(_ value: Any?) -> Date? {
+    private static func date(_ value: Any?, allowDateOnly: Bool = true) -> Date? {
         guard let text = value as? String else { return nil }
+        if !allowDateOnly {
+            guard text.range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"#,
+                             options: .regularExpression) != nil else { return nil }
+        }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = formatter.date(from: text) { return date }
         formatter.formatOptions = [.withInternetDateTime]
         if let date = formatter.date(from: text) { return date }
+        guard allowDateOnly else { return nil }
         let day = DateFormatter()
         day.calendar = Calendar(identifier: .gregorian)
         day.locale = Locale(identifier: "en_US_POSIX")
@@ -419,7 +516,8 @@ enum StockBoard {
 
     static func snapshot(stock: WatchedStock, quote: StockTick?, previousClose: Decimal?, name: String?,
                          link: StockLink, locale: Locale = L10n.locale,
-                         source: StockQuoteSource = .toss) -> ProviderSnapshot {
+                         source: StockQuoteSource = .toss, quoteSession: StockQuoteSession? = nil,
+                         basisDate: Date? = nil) -> ProviderSnapshot {
         let provider = source.title
         let title = (stock.market == .kr ? KoreanStockDirectory.shared.name(for: stock.symbol) : nil)
             ?? name?.precomposedStringWithCanonicalMapping ?? stock.symbol
@@ -429,33 +527,49 @@ enum StockBoard {
                                     status: .unsupported(emptyMessage(link)), windows: [], kind: .stocks,
                                     ringLabel: label, plan: provider)
         }
+        let tossUS = source == .toss && stock.market == .us
+        let previousClose = quote.hasTimestamp && (!tossUS || quoteSession != nil) ? previousClose : nil
+        let changeLabel = tossUS
+            ? L10n.t(quoteSession?.phase == .after ? "Change vs same-day regular close" : "Change vs previous regular close")
+            : L10n.t("Change")
         let priceText = StockQuoteCodec.format(price: quote.price, currency: quote.currency, locale: locale)
         var windows: [LimitWindow] = []
         if let previousClose,
            let rate = StockQuoteCodec.changeRate(price: quote.price, previousClose: previousClose) {
-            let percent = StockQuoteCodec.formatChange(rate, locale: locale)
+            let percent = StockQuoteCodec.formatChange(rate, locale: locale,
+                                                       roundingMode: source == .toss ? .down : nil)
             let band: UsageBand? = rate > 0 ? .ample : (rate < 0 ? .critical : nil)
-            windows.append(LimitWindow(id: "change", label: L10n.t("Change"),
+            windows.append(LimitWindow(id: "change", label: changeLabel,
                                        usedFraction: StockQuoteCodec.ringFraction(for: rate),
                                        usedText: percent,
                                        detail: percent,
                                        bandOverride: band, prefersUsedText: true))
-            windows.append(LimitWindow(id: "previous", label: L10n.t("Previous close"),
-                                       detail: StockQuoteCodec.format(price: previousClose, currency: quote.currency, locale: locale)))
+            let basisPrice = StockQuoteCodec.format(price: previousClose, currency: quote.currency, locale: locale)
+            let basisText = basisDate.map { "\(StockQuoteCodec.marketDate($0, market: stock.market)) · \(basisPrice)" } ?? basisPrice
+            windows.append(LimitWindow(id: "previous", label: tossUS ? L10n.t("Regular close basis") : L10n.t("Previous close"),
+                                       detail: basisText))
         } else {
-            windows.append(LimitWindow(id: "change", label: L10n.t("Change"),
+            windows.append(LimitWindow(id: "change", label: changeLabel,
                                        usedText: "—", detail: L10n.t("Previous close unavailable"),
                                        prefersUsedText: true))
         }
         windows.append(LimitWindow(id: "price", label: L10n.t("Last price"),
                                    usedText: priceText, detail: priceText, prefersUsedText: true))
+        if tossUS {
+            let context = quoteSession.map { "\($0.label) · \(StockQuoteCodec.marketDate($0.tradingDay, market: .us)) ET" }
+                ?? L10n.t("Session unavailable")
+            windows.append(LimitWindow(id: "session", label: L10n.t("US session"), detail: context))
+        }
+        let traded = tossUS ? "\(StockQuoteCodec.marketDate(quote.timestamp, market: .us, includeTime: true)) ET"
+            : StockQuoteCodec.clock(quote.timestamp, locale: locale)
         windows.append(LimitWindow(id: "traded", label: L10n.t("Last trade"),
-                                   detail: "\(quote.currency) · \(StockQuoteCodec.clock(quote.timestamp, locale: locale))"))
+                                   detail: quote.hasTimestamp ? "\(quote.currency) · \(traded)" : L10n.t("Trade time unavailable")))
         if link != .live {
             windows.append(LimitWindow(id: "link", label: L10n.t("Connection"), detail: linkText(link, source: source)))
         }
         return ProviderSnapshot(id: cellID(stock), displayName: title, glyph: .stock, fidelity: .official,
-                                status: .ok, windows: windows, headlineID: "change", kind: .stocks,
+                                status: .ok, windows: windows,
+                                headlineID: previousClose == nil && (tossUS || !quote.hasTimestamp) ? "price" : "change", kind: .stocks,
                                 ringLabel: label, plan: provider)
     }
 

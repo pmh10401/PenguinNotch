@@ -12,6 +12,7 @@ struct StockSettings: View {
     @State private var showsFinnhubKeys = false
     @State private var showsTossKeys = false
     @State private var showsForecastHistory = false
+    @State private var showsCodexHistory = false
     @State private var forecastSaveMessage: String?
 
     var body: some View {
@@ -174,6 +175,25 @@ struct StockSettings: View {
                     }
                 }
             }
+            Section(L10n.t("Codex analysis")) {
+                Text(L10n.t("Manual analysis sends this symbol, quote and completed daily closes to Codex. It uses your signed-in Codex allowance."))
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(L10n.t("Install Codex CLI and sign in with ChatGPT first. One prediction per stock and trading day is saved separately from GBM; account balances and holdings are not sent."))
+                    .font(.caption).foregroundStyle(.secondary)
+                if preferences.stockQuoteSource == .toss && preferences.portfolioForecastEnabled {
+                    ForEach(preferences.orderedStocks) { stock in
+                        DisclosureGroup(stock.symbol) {
+                            StockCodexAnalysisView(stockID: stock.id,
+                                input: portfolio.candidates.first { $0.stockID == stock.id })
+                                .padding(.vertical, 6)
+                        }
+                    }
+                } else {
+                    Text(L10n.t("Enable Toss watchlist estimates to analyze with Codex."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Button(L10n.t("View Codex analysis history…")) { showsCodexHistory = true }
+            }
             Section(L10n.t("Forecast history")) {
                 Button(L10n.t("View forecast history and accuracy…")) { showsForecastHistory = true }
                 Text(L10n.t("Compare saved predictions with the matching Toss daily close after the next local calendar date. Automatic and manual records are scored separately."))
@@ -301,6 +321,7 @@ struct StockSettings: View {
         .sheet(isPresented: $showsForecastHistory) {
             StockForecastHistoryView(journal: portfolio.journal)
         }
+        .sheet(isPresented: $showsCodexHistory) { StockCodexHistoryView() }
         .onAppear { portfolio.setSettingsVisible(true) }
         .onDisappear { portfolio.setSettingsVisible(false) }
         .onChange(of: preferences.stockQuoteSource) { _, _ in

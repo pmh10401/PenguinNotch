@@ -93,6 +93,270 @@ final class StockQuoteTests: XCTestCase {
             .queryItems?.first(where: { $0.name == "count" })?.value, "3")
     }
 
+    func testPreviousCloseSkipsFutureBarWithoutSkippingFriday() throws {
+        let iso = ISO8601DateFormatter()
+        let friday = try XCTUnwrap(iso.date(from: "2026-09-25T04:00:00Z"))
+        let closes: [(date: Date, close: Decimal)] = [
+            (try XCTUnwrap(iso.date(from: "2026-09-28T04:00:00Z")), 150),
+            (friday, Decimal(string: "151.45")!),
+            (try XCTUnwrap(iso.date(from: "2026-09-24T04:00:00Z")), Decimal(string: "146.33")!)
+        ]
+        let close = StockQuoteCodec.previousClose(closes: closes,
+            priceTime: try XCTUnwrap(iso.date(from: "2026-09-28T00:30:00Z")),
+            timeZone: StockQuoteCodec.timeZone(for: .us))
+        XCTAssertEqual(close, Decimal(string: "151.45"))
+        XCTAssertEqual(StockQuoteCodec.formatChange(try XCTUnwrap(StockQuoteCodec.changeRate(
+            price: Decimal(string: "144.1")!, previousClose: try XCTUnwrap(close))),
+            locale: Locale(identifier: "en_US_POSIX")), "-4.85%")
+        XCTAssertEqual(StockQuoteCodec.previousClose(closes: [closes[0], closes[1]],
+            priceTime: friday.addingTimeInterval(2 * 86400),
+            timeZone: StockQuoteCodec.timeZone(for: .us)), Decimal(string: "151.45"))
+    }
+
+    func testUntimestampedUSQuoteNeverShowsAPercentageOrInventedTradeTime() throws {
+        let data = Data(#"{"result":[{"symbol":"SOXL","lastPrice":"144.1","currency":"USD","timestamp":null}]}"#.utf8)
+        let tick = try XCTUnwrap(StockQuoteCodec.prices(from: data)["us:SOXL"])
+        let snapshot = StockBoard.snapshot(stock: WatchedStock(symbol: "SOXL", market: .us),
+            quote: tick, previousClose: Decimal(string: "146.33"), name: nil, link: .live,
+            locale: Locale(identifier: "en_US_POSIX"))
+        XCTAssertEqual(snapshot.headlineText, "$144.10")
+        XCTAssertEqual(snapshot.windows.first(where: { $0.id == "change" })?.usedText, "—")
+        XCTAssertEqual(snapshot.windows.first(where: { $0.id == "traded" })?.detail, "Trade time unavailable")
+        XCTAssertTrue(StockQuoteCodec.prices(from: data, requireTimestamp: true).isEmpty)
+    }
+
+    private func instant(_ text: String) -> Date { ISO8601DateFormatter().date(from: text)! }
+
+    private func marketCalendar(today: String = "{}", previous: String = "{}", next: String = "{}") throws -> MarketSessions {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(MarketSessions.self,
+            from: Data("{\"today\":\(today),\"previousBusinessDay\":\(previous),\"nextBusinessDay\":\(next)}".utf8))
+    }
+
+    private let mondaySessions = #"{"date":"2026-09-28","dayMarket":{"startTime":"2026-09-28T09:00:00+09:00","endTime":"2026-09-28T16:50:00+09:00"},"preMarket":{"startTime":"2026-09-28T17:00:00+09:00","endTime":"2026-09-28T22:30:00+09:00"},"regularMarket":{"startTime":"2026-09-28T22:30:00+09:00","endTime":"2026-09-29T05:00:00+09:00"},"afterMarket":{"startTime":"2026-09-29T05:00:00+09:00","endTime":"2026-09-29T09:00:00+09:00"}}"#
+    private let fridaySessions = #"{"date":"2026-09-25","regularMarket":{"startTime":"2026-09-25T13:30:00Z","endTime":"2026-09-25T20:00:00Z"},"afterMarket":{"startTime":"2026-09-25T20:00:00Z","endTime":"2026-09-26T00:00:00Z"}}"#
+
+    func testSundayNightUsesNextBusinessDayAndFridayClose() throws {
+        let calendar = try marketCalendar(next: mondaySessions)
+        let quote = StockTick(price: Decimal(string: "144.1")!, volume: nil,
+                             timestamp: instant("2026-09-28T00:30:00Z"), currency: "USD")
+        let session = try XCTUnwrap(StockQuoteCodec.usSession(at: quote.timestamp, calendar: calendar))
+        XCTAssertEqual(session.phase, .day)
+        XCTAssertEqual(session.tradingDay, instant("2026-09-28T04:00:00Z"))
+        let daily = StockDailyCloses(values: [(instant("2026-09-28T04:00:00Z"), 144),
+            (instant("2026-09-25T04:00:00Z"), Decimal(string: "151.45")!),
+            (instant("2026-09-24T04:00:00Z"), Decimal(string: "146.33")!)], requestedAt: quote.timestamp)
+        let basis = try XCTUnwrap(StockQuoteCodec.changeBasis(daily: daily, quote: quote, market: .us, session: session))
+        XCTAssertEqual(basis.close, Decimal(string: "151.45"))
+        XCTAssertEqual(basis.date, instant("2026-09-25T04:00:00Z"))
+        let snapshot = StockBoard.snapshot(stock: WatchedStock(symbol: "SOXL", market: .us), quote: quote,
+            previousClose: basis.close, name: nil, link: .live, locale: Locale(identifier: "en_US_POSIX"),
+            quoteSession: session, basisDate: basis.date)
+        XCTAssertEqual(snapshot.headlineText, "-4.85%")
+        XCTAssertTrue(snapshot.windows.first { $0.id == "traded" }?.detail?.contains("2026-09-27 20:30:00 ET") == true)
+        XCTAssertTrue(snapshot.windows.first { $0.id == "previous" }?.detail?.contains("2026-09-25 · $151.45") == true)
+        XCTAssertTrue(snapshot.windows.first { $0.id == "session" }?.detail?.contains("Day market") == true)
+        XCTAssertTrue(snapshot.windows.first { $0.id == "change" }?.label.contains("previous regular close") == true)
+        // The documented ten-minute gap belongs to no phase; calendar absence
+        // and the after-market's exclusive end must also remain unknown.
+        XCTAssertNil(StockQuoteCodec.usSession(at: instant("2026-09-28T07:55:00Z"), calendar: calendar))
+        XCTAssertNil(StockQuoteCodec.usSession(at: instant("2026-09-29T00:00:00Z"), calendar: calendar))
+        XCTAssertNil(StockQuoteCodec.usSession(at: quote.timestamp, calendar: nil))
+        XCTAssertNil(StockQuoteCodec.changeBasis(daily: daily, quote: quote, market: .us, session: nil))
+        let unknown = StockBoard.snapshot(stock: WatchedStock(symbol: "SOXL", market: .us), quote: quote,
+            previousClose: 146, name: nil, link: .live, locale: Locale(identifier: "en_US_POSIX"))
+        XCTAssertEqual(unknown.headlineText, "$144.10")
+        XCTAssertEqual(unknown.windows.first { $0.id == "session" }?.detail, "Session unavailable")
+    }
+
+    func testFridayAfterHoursNeedsFreshSameDayRegularClose() throws {
+        let calendar = try marketCalendar(previous: fridaySessions)
+        let quote = StockTick(price: Decimal(string: "144.1")!, volume: nil,
+                             timestamp: instant("2026-09-25T20:01:00Z"), currency: "USD")
+        let phase = try XCTUnwrap(StockQuoteCodec.usSession(at: quote.timestamp, calendar: calendar))
+        XCTAssertEqual(phase.phase, .after)
+        let values: [(date: Date, close: Decimal)] = [
+            (instant("2026-09-25T04:00:00Z"), Decimal(string: "151.45")!),
+            (instant("2026-09-24T04:00:00Z"), Decimal(string: "146.33")!)]
+        let stale = StockDailyCloses(values: values, requestedAt: instant("2026-09-25T19:59:59Z"))
+        XCTAssertNil(StockQuoteCodec.changeBasis(daily: stale, quote: quote, market: .us, session: phase))
+        let fresh = StockDailyCloses(values: values, requestedAt: instant("2026-09-25T20:00:00Z"))
+        let basis = try XCTUnwrap(StockQuoteCodec.changeBasis(daily: fresh, quote: quote, market: .us, session: phase))
+        XCTAssertEqual(basis.close, Decimal(string: "151.45"))
+        let missing = StockDailyCloses(values: [values[1]], requestedAt: fresh.requestedAt)
+        XCTAssertNil(StockQuoteCodec.changeBasis(daily: missing, quote: quote, market: .us, session: phase))
+        let before = StockTick(price: 145, volume: nil, timestamp: instant("2026-09-25T19:59:00Z"), currency: "USD")
+        let regular = try XCTUnwrap(StockQuoteCodec.usSession(at: before.timestamp, calendar: calendar))
+        XCTAssertEqual(regular.phase, .regular)
+        XCTAssertEqual(StockQuoteCodec.changeBasis(daily: stale, quote: before, market: .us, session: regular)?.close,
+                       Decimal(string: "146.33"))
+        let snapshot = StockBoard.snapshot(stock: WatchedStock(symbol: "SOXL", market: .us), quote: quote,
+            previousClose: basis.close, name: nil, link: .live, quoteSession: phase, basisDate: basis.date)
+        XCTAssertTrue(snapshot.windows.first { $0.id == "change" }?.label.contains("same-day regular close") == true)
+    }
+
+    func testOfficialSessionTimesRespectDSTEarlyCloseAndPhaseTransitions() throws {
+        let early = #"{"regularMarket":{"startTime":"2026-11-27T09:30:00-05:00","endTime":"2026-11-27T13:00:00-05:00"},"afterMarket":{"startTime":"2026-11-27T13:00:00-05:00","endTime":"2026-11-27T17:00:00-05:00"}}"#
+        let calendar = try marketCalendar(today: early, next: mondaySessions)
+        XCTAssertEqual(StockQuoteCodec.usSession(at: instant("2026-11-27T17:59:59Z"), calendar: calendar)?.phase, .regular)
+        let after = try XCTUnwrap(StockQuoteCodec.usSession(at: instant("2026-11-27T18:00:00Z"), calendar: calendar))
+        XCTAssertEqual(after.phase, .after)
+        XCTAssertEqual(after.tradingDay, instant("2026-11-27T05:00:00Z"))
+        XCTAssertNil(StockQuoteCodec.usSession(at: instant("2026-11-27T22:00:00Z"), calendar: calendar))
+        XCTAssertEqual(StockQuoteCodec.usSession(at: instant("2026-09-28T08:00:00Z"), calendar: calendar)?.phase, .pre)
+        let quote = StockTick(price: 144, volume: nil, timestamp: instant("2026-09-28T13:30:00Z"), currency: "USD")
+        let regular = try XCTUnwrap(StockQuoteCodec.usSession(at: quote.timestamp, calendar: calendar))
+        XCTAssertEqual(regular.phase, .regular)
+        let preFetched = StockDailyCloses(values: [(instant("2026-09-25T04:00:00Z"), 151)],
+                                         requestedAt: instant("2026-09-28T13:29:59Z"))
+        XCTAssertNil(StockQuoteCodec.changeBasis(daily: preFetched, quote: quote, market: .us, session: regular))
+    }
+
+    func testTossPercentTruncatesWhileFinnhubKeepsRounding() throws {
+        let time = instant("2026-09-28T00:30:00Z")
+        let session = try XCTUnwrap(StockQuoteCodec.usSession(at: time, calendar: try marketCalendar(next: mondaySessions)))
+        for (price, toss, finnhub) in [("144.09", "-4.85%", "-4.86%"), ("144.11", "-4.84%", "-4.85%"),
+                                      ("144.12", "-4.83%", "-4.84%"), ("152.2", "+0.49%", "+0.50%")] {
+            let quote = StockTick(price: Decimal(string: price)!, volume: nil, timestamp: time, currency: "USD")
+            for source in StockQuoteSource.allCases {
+                let snapshot = StockBoard.snapshot(stock: WatchedStock(symbol: "SOXL", market: .us), quote: quote,
+                    previousClose: Decimal(string: "151.45"), name: nil, link: .live,
+                    locale: Locale(identifier: "en_US_POSIX"), source: source, quoteSession: session)
+                XCTAssertEqual(snapshot.headlineText, source == .toss ? toss : finnhub, "\(source): \(price)")
+            }
+        }
+    }
+
+    func testQuoteTimestampsRequireFullTimeAndZoneWhileCandlesKeepDateOnly() throws {
+        let base = instant("2026-09-28T00:30:00Z")
+        let samples: [(String, Date?)] = [
+            ("2026-09-28T00:30:00Z", base),
+            ("2026-09-28T09:30:00+09:00", base),
+            ("2026-09-27T20:30:00.125-04:00", base.addingTimeInterval(0.125)),
+            ("2026-09-28", nil), ("2026-09-28T00:30:00", nil),
+            ("2026-09-28T00:30Z", nil), ("2026-09-28T09:30:00+0900", nil),
+            ("2026-09-28T99:30:00Z", nil)
+        ]
+        for (timestamp, expected) in samples {
+            let row = ["symbol": "SOXL", "lastPrice": "144.1", "currency": "USD", "timestamp": timestamp]
+            let data = try JSONSerialization.data(withJSONObject: ["result": [row]])
+            let tick = try XCTUnwrap(StockQuoteCodec.prices(from: data)["us:SOXL"])
+            XCTAssertEqual(tick.price, Decimal(string: "144.1"))
+            XCTAssertEqual(tick.hasTimestamp, expected != nil, timestamp)
+            XCTAssertEqual(tick.timestamp, expected ?? .distantPast, timestamp)
+            XCTAssertEqual(StockQuoteCodec.prices(from: data, requireTimestamp: true).isEmpty, expected == nil, timestamp)
+            let frame = "{\"type\":\"message\",\"topic\":\"trade:us:SOXL\",\"data\":{\"price\":\"144.1\",\"currency\":\"USD\",\"timestamp\":\"\(timestamp)\"}}"
+            guard case .tick(_, let trade) = StockQuoteCodec.event(from: frame) else { return XCTFail("Missing price") }
+            XCTAssertEqual(trade.hasTimestamp, expected != nil, timestamp)
+            XCTAssertEqual(trade.timestamp, expected ?? .distantPast, timestamp)
+        }
+        let daily = Data(#"{"result":{"candles":[{"timestamp":"2026-09-28","openPrice":"144","highPrice":"145","lowPrice":"143","closePrice":"144.1","volume":"10"}]}}"#.utf8)
+        XCTAssertEqual(StockQuoteCodec.dailyCloses(from: daily).first?.date, instant("2026-09-27T15:00:00Z"))
+        XCTAssertEqual(StockQuoteCodec.candles(from: daily)?.first?.end, instant("2026-09-27T15:00:00Z"))
+    }
+
+    func testUSSessionRejectsInvalidOverlappingAndAmbiguousMatches() throws {
+        let regular = #""regularMarket":{"startTime":"2026-09-28T13:30:00Z","endTime":"2026-09-28T20:00:00Z"}"#
+        for (field, start, end, quote) in [
+            ("dayMarket", "12:00:00", "14:00:00", "12:30:00"),
+            ("preMarket", "12:00:00", "14:00:00", "12:30:00"),
+            ("afterMarket", "19:00:00", "21:00:00", "20:30:00"),
+            ("dayMarket", "08:00:00", "07:00:00", "07:30:00")
+        ] {
+            let day = "{\(regular),\"\(field)\":{\"startTime\":\"2026-09-28T\(start)Z\",\"endTime\":\"2026-09-28T\(end)Z\"}}"
+            XCTAssertNil(StockQuoteCodec.usSession(at: instant("2026-09-28T\(quote)Z"),
+                                                  calendar: try marketCalendar(today: day)), field)
+        }
+        let overlap = "{\(regular)," + #""dayMarket":{"startTime":"2026-09-28T00:00:00Z","endTime":"2026-09-28T08:00:00Z"},"preMarket":{"startTime":"2026-09-28T07:00:00Z","endTime":"2026-09-28T13:30:00Z"}}"#
+        XCTAssertNil(StockQuoteCodec.usSession(at: instant("2026-09-28T07:30:00Z"),
+                                              calendar: try marketCalendar(today: overlap)))
+        let badRegular = "{" + regular.replacingOccurrences(of: "20:00:00", with: "13:00:00") + "}"
+        XCTAssertNil(StockQuoteCodec.usSession(at: instant("2026-09-28T13:15:00Z"),
+                                              calendar: try marketCalendar(today: badRegular)))
+        let quote = instant("2026-09-28T00:30:00Z")
+        let conflicting = mondaySessions.replacingOccurrences(of: "22:30:00", with: "23:00:00")
+        XCTAssertNil(StockQuoteCodec.usSession(at: quote,
+            calendar: try marketCalendar(today: conflicting, next: mondaySessions)))
+        // Repeated aliases for the same official context are not ambiguous.
+        XCTAssertEqual(StockQuoteCodec.usSession(at: quote,
+            calendar: try marketCalendar(today: mondaySessions, next: mondaySessions))?.phase, .day)
+    }
+
+    func testQuoteOrderingRejectsFutureOlderAndUndatedReplacement() throws {
+        let now = instant("2026-09-28T00:30:00Z")
+        let current = StockTick(price: 144, volume: nil, timestamp: now, currency: "USD")
+        var incoming = current
+        incoming.timestamp = now.addingTimeInterval(-1)
+        XCTAssertFalse(StockQuoteCodec.accepts(incoming, replacing: current, now: now))
+        incoming.timestamp = now.addingTimeInterval(0.001)
+        XCTAssertFalse(StockQuoteCodec.accepts(incoming, replacing: nil, now: now))
+        XCTAssertTrue(StockQuoteCodec.accepts(current, replacing: nil, now: now))
+        let frame = #"{"type":"message","topic":"trade:us:SOXL","data":{"price":"144.1","currency":"USD","timestamp":null}}"#
+        guard case .tick(_, let undated) = StockQuoteCodec.event(from: frame) else { return XCTFail("Missing price") }
+        XCTAssertFalse(undated.hasTimestamp)
+        XCTAssertEqual(undated.timestamp, .distantPast)
+        XCTAssertTrue(StockQuoteCodec.accepts(undated, replacing: nil, now: now))
+        XCTAssertFalse(StockQuoteCodec.accepts(undated, replacing: current, now: now))
+        XCTAssertTrue(StockQuoteCodec.accepts(current, replacing: undated, now: now))
+    }
+
+    func testQuoteDailyAndCalendarRequestsAreFreshPublicAndAdjusted() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        StockPricesEndpoint.reset(calendar: "{\"result\":{\"today\":{},\"previousBusinessDay\":{},\"nextBusinessDay\":\(mondaySessions)}}")
+        let before = Date()
+        let daily = try await TossInvestAPI.quoteCloses(token: "test-token", stock: WatchedStock(symbol: "SOXL", market: .us), session: session)
+        let calendar = try await TossInvestAPI.marketSessions(token: "test-token", market: .us,
+            at: instant("2026-09-28T00:30:00Z"), session: session)
+        XCTAssertEqual(daily.values.count, 3)
+        XCTAssertGreaterThanOrEqual(daily.requestedAt, before)
+        XCTAssertLessThanOrEqual(daily.requestedAt, try XCTUnwrap(StockPricesEndpoint.firstRequestAt))
+        XCTAssertEqual(StockQuoteCodec.usSession(at: instant("2026-09-28T00:30:00Z"), calendar: calendar)?.phase, .day)
+        XCTAssertEqual(StockPricesEndpoint.requests.count, 2)
+        for request in StockPricesEndpoint.requests {
+            XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+            let query = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems ?? []
+            if request.url?.path == "/api/v1/candles" {
+                XCTAssertEqual(query.first { $0.name == "adjusted" }?.value, "true")
+                XCTAssertEqual(query.first { $0.name == "count" }?.value, "3")
+                XCTAssertEqual(query.first { $0.name == "interval" }?.value, "1d")
+            } else {
+                XCTAssertEqual(request.url?.path, "/api/v1/market-calendar/US")
+                XCTAssertEqual(query.first { $0.name == "date" }?.value, "2026-09-27")
+            }
+        }
+    }
+
+    @MainActor
+    func testRESTQuoteSurvivesImmediateWebSocketFailure() async throws {
+        let name = "StockREST.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.stockSymbols = ["us:SOXL"]
+        preferences.showsStocks = true
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        StockPricesEndpoint.reset(delayedQuote: true)
+        let monitor = StockQuotesMonitor(preferences: preferences, session: session,
+            loadCredentials: { ("monitor-\(name)", "synthetic-secret") },
+            stream: { _, _, _ in throw TossInvestAPI.Failure.http(503) })
+        defer { monitor.stop() }
+        let displayed = expectation(description: "REST remains usable with the socket unavailable")
+        let subscription = monitor.$snapshots.sink { snapshots in
+            if snapshots.first?.windows.first(where: { $0.id == "price" })?.usedText == "$144.10" {
+                displayed.fulfill()
+            }
+        }
+        defer { subscription.cancel() }
+        await fulfillment(of: [displayed], timeout: 2)
+    }
+
     @MainActor
     func testTossQuoteAndChartShareOneTokenAndRenewAfterUnauthorizedResponse() async throws {
         let configuration = URLSessionConfiguration.ephemeral
@@ -187,7 +451,7 @@ final class StockQuoteTests: XCTestCase {
         let falling = StockBoard.snapshot(stock: apple,
                                           quote: StockTick(price: Decimal(string: "90")!, volume: nil, timestamp: today, currency: "USD"),
                                           previousClose: 100, name: nil, link: .live,
-                                          locale: Locale(identifier: "en_US_POSIX"))
+                                          locale: Locale(identifier: "en_US_POSIX"), source: .finnhub)
         XCTAssertEqual(rising.id, "widget-stock:kr:005930")
         XCTAssertEqual(falling.id, "widget-stock:us:AAPL")
         XCTAssertEqual(rising.ringLabel, "삼성전자")
@@ -207,7 +471,7 @@ final class StockQuoteTests: XCTestCase {
         let noClose = StockBoard.snapshot(stock: apple,
                                           quote: StockTick(price: 90, volume: nil, timestamp: today, currency: "USD"),
                                           previousClose: nil, name: nil, link: .live,
-                                          locale: Locale(identifier: "en_US_POSIX"))
+                                          locale: Locale(identifier: "en_US_POSIX"), source: .finnhub)
         XCTAssertEqual(noClose.headlineID, "change")
         XCTAssertEqual(noClose.headlineText, "—")
         XCTAssertEqual(noClose.windows.first(where: { $0.id == "price" })?.usedText, "$90.00")
@@ -316,16 +580,33 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
     private static var recorded: [URLRequest] = []
     static var requests: [URLRequest] { lock.withLock { recorded } }
 
-    static func reset() { lock.withLock { recorded = [] } }
+    private static var calendarPayload = ""
+    private static var startedAt: Date?
+    private static var delaysQuote = false
+    private var responseTask: DispatchWorkItem?
+    static var firstRequestAt: Date? { lock.withLock { startedAt } }
+    static func reset(calendar: String = "", delayedQuote: Bool = false) {
+        lock.withLock { recorded = []; calendarPayload = calendar; startedAt = nil; delaysQuote = delayedQuote }
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func stopLoading() {}
+    override func stopLoading() { responseTask?.cancel() }
 
     override func startLoading() {
-        Self.lock.withLock { Self.recorded.append(request) }
+        let (calendar, delayedQuote) = Self.lock.withLock {
+            if Self.startedAt == nil { Self.startedAt = Date() }
+            Self.recorded.append(request)
+            return (Self.calendarPayload, Self.delaysQuote)
+        }
         let data: Data
-        if request.url?.path == "/api/v1/candles" {
+        if request.url?.path == "/oauth2/token" {
+            data = Data(#"{"access_token":"monitor-test-token","expires_in":3600}"#.utf8)
+        } else if delayedQuote && request.url?.path == "/api/v1/prices" {
+            data = Data(#"{"result":[{"symbol":"SOXL","lastPrice":"144.1","currency":"USD","timestamp":null}]}"#.utf8)
+        } else if request.url?.path == "/api/v1/market-calendar/US" {
+            data = Data(calendar.utf8)
+        } else if request.url?.path == "/api/v1/candles" {
             let count = Int(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "count" })?.value ?? "") ?? 0
             let candles = [
@@ -342,9 +623,14 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
         }
         let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
                                        headerFields: ["Content-Type": "application/json"])!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
-        client?.urlProtocolDidFinishLoading(self)
+        let finish = DispatchWorkItem { [weak self] in
+            guard let self, self.responseTask?.isCancelled != true else { return }
+            self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            self.client?.urlProtocol(self, didLoad: data)
+            self.client?.urlProtocolDidFinishLoading(self)
+        }
+        responseTask = finish
+        DispatchQueue.global().asyncAfter(deadline: .now() + (delayedQuote && request.url?.path == "/api/v1/prices" ? 0.1 : 0), execute: finish)
     }
 }
 

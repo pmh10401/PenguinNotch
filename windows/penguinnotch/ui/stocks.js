@@ -63,7 +63,7 @@ function decodeQuotes(data) {
   const quotes=new Map();
   for(const row of data.result) {
     const s=parseStock(row.symbol), price=numeric(row.lastPrice);
-    if(s&&positive(price)&&row.currency===(s.market==='kr'?'KRW':'USD')) quotes.set(stockID(s),{price,currency:row.currency,quoteAt:timestamp(row.timestamp,s.market)});
+    if(s&&positive(price)&&row.currency===(s.market==='kr'?'KRW':'USD')) quotes.set(stockID(s),{price,currency:row.currency,quoteAt:typeof row.timestamp==='string'&&!/T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(row.timestamp)?NaN:timestamp(row.timestamp,s.market)});
   }
   return quotes;
 }
@@ -76,12 +76,28 @@ function dailyCloses(data,market) {
   if(!Array.isArray(data?.result?.candles)) throw Error('Invalid candle response');
   return data.result.candles.map(row=>({date:timestamp(row.timestamp,market),price:numeric(row.closePrice)}));
 }
+function closeForDay(closes,day,market,sameDay=false) {
+  if(!day||!Array.isArray(closes)||closes.some(c=>!positive(c.price)||!historyTime(c.date)))return null;
+  return closes.slice().sort((a,b)=>b.date-a.date).find(c=>sameDay?dayKey(c.date,market)===day:dayKey(c.date,market)<day)||null;
+}
 function previousClose(closes,priceTime,market) {
-  if(!Number.isFinite(priceTime)||!closes.length||closes.some(c=>!positive(c.price)||!Number.isFinite(c.date))) return null;
-  const ordered=closes.slice().sort((a,b)=>b.date-a.date),day=dayKey(priceTime,market);
-  if(day>dayKey(ordered[0].date,market)) return ordered[0].price;
-  const index=ordered.findIndex(c=>dayKey(c.date,market)<=day);
-  return index>=0?ordered[index+1]?.price??null:null;
+  return historyTime(priceTime)?closeForDay(closes,dayKey(priceTime,market),market)?.price??null:null;
+}
+function quoteContext(data,quoteAt) {
+  if(!historyTime(quoteAt))return null;
+  const matches=new Map();
+  for(const key of ['today','previousBusinessDay','nextBusinessDay']) {
+    const day=data?.result?.[key],regularStart=timestamp(day?.regularMarket?.startTime,'us'),regularEnd=timestamp(day?.regularMarket?.endTime,'us');
+    if(!historyTime(regularStart)||!historyTime(regularEnd)||regularEnd<=regularStart)continue;
+    for(const phase of ['dayMarket','preMarket','regularMarket','afterMarket']) {
+      const start=timestamp(day?.[phase]?.startTime,'us'),end=timestamp(day?.[phase]?.endTime,'us');
+      if(!historyTime(start)||!historyTime(end)||!(start<=quoteAt&&quoteAt<end))continue;
+      if(phase==='afterMarket'?start<regularEnd:phase!=='regularMarket'&&end>regularStart)continue;
+      const context={phase,tradingDay:dayKey(regularStart,'us'),regularStart,regularEnd};
+      matches.set(JSON.stringify(context),context);
+    }
+  }
+  return matches.size===1?[...matches.values()][0]:null;
 }
 const changeRate=q=>positive(q?.price)&&positive(q?.previousClose)?(q.price-q.previousClose)/q.previousClose:null;
 function decodeCandles(data,market) {
@@ -264,7 +280,7 @@ function csv(records,trace=false) {
 class Store {
   constructor({invoke,listen,emit=async()=>{},now=Date.now,owner=false,onChange=()=>{}}) {
     Object.assign(this,{invoke,listen,emit,now,owner,onChange,settings:normalizeSettings(),credentials:{toss:false,finnhub:false},quotes:new Map(),names:new Map(),charts:new Map(),cache:new Map(),accounts:[],holdings:[],forecastStocks:[],candidates:[],reasons:new Map(),history:null,historyError:'',error:'',forecastError:'',accountError:'',accountsBusy:false,revision:0,settingsReady:false,busy:false,activeStock:null,visible:false});
-    this.writes=Promise.resolve();this.reconcileAttempts=new Map();this.unlisten=[];
+    this.writes=Promise.resolve();this.reconcileAttempts=new Map();this.quoteTimes=new Map();this.unlisten=[];
   }
   changed(){this.onChange(this);}
   async init() {
@@ -284,7 +300,7 @@ class Store {
     await this.tick();
   }
   async reloadCredentials(){try{this.credentials=await this.invoke('get_stock_credential_status');this.invalidate();this.changed();await this.tick();}catch(_){this.error='Credential status unavailable';this.changed();}}
-  invalidate(){this.revision++;this.cache.clear();this.quotes.clear();this.charts.clear();this.accounts=[];this.holdings=[];this.forecastStocks=[];this.candidates=[];this.reasons.clear();this.forecastError='';this.accountError='';this.reconciliationError='';}
+  invalidate(){this.revision++;this.cache.clear();this.quotes.clear();this.quoteTimes.clear();this.charts.clear();this.accounts=[];this.holdings=[];this.forecastStocks=[];this.candidates=[];this.reasons.clear();this.forecastError='';this.accountError='';this.reconciliationError='';}
   configure(value) {
     const next=normalizeSettings(value),prior=this.settings;
     this.settingsReady=true;
@@ -302,6 +318,14 @@ class Store {
     finally{this.busy=false;this.changed();}
   }
   active(){return this.settingsReady&&this.settings.enabled&&this.credentials[this.settings.provider];}
+  canAcceptQuote(id,q) {
+    return !(q.fetchedAt<this.quotes.get(id)?.fetchedAt)&&(Number.isFinite(q.quoteAt)?historyTime(q.quoteAt)&&q.quoteAt<=this.now()&&q.quoteAt>=(this.quoteTimes.get(id)??0):!this.quoteTimes.has(id));
+  }
+  setQuote(id,q) {
+    if(!this.canAcceptQuote(id,q))return;
+    if(Number.isFinite(q.quoteAt))this.quoteTimes.set(id,q.quoteAt);
+    this.quotes.set(id,q);
+  }
   async request(request,ttl=60000,scope='') {
     const s=this.settings;
     if(!this.active()||s.provider==='finnhub'&&request.kind!=='finnhubQuote'||s.provider==='toss'&&request.kind==='finnhubQuote'||['accounts','holdings'].includes(request.kind)&&!s.forecastsEnabled||request.kind==='holdings'&&(!(s.accountSeq>0)||(request.accountSeq??s.accountSeq)!==s.accountSeq)) throw Error('Stock requests are disabled');
@@ -322,15 +346,33 @@ class Store {
     if(!stocks.length)return;
     try {
       if(s.provider==='finnhub') {
-        for(const stock of stocks){const r=await this.request({kind:'finnhubQuote',symbol:stock.symbol});if(revision!==this.revision)return;this.quotes.set(stockID(stock),{...decodeFinnhub(r.data),fetchedAt:r.fetchedAt});}
+        for(const stock of stocks){const r=await this.request({kind:'finnhubQuote',symbol:stock.symbol});if(revision!==this.revision)return;this.setQuote(stockID(stock),{...decodeFinnhub(r.data),fetchedAt:r.fetchedAt});}
       } else {
         const symbols=stocks.map(x=>x.symbol),r=await this.request({kind:'prices',symbols}),quotes=decodeQuotes(r.data);
         for(const stock of stocks) {
           if(revision!==this.revision)return;
-          const q=quotes.get(stockID(stock));if(!q)continue;
-          try{const daily=await this.request({kind:'candles',symbol:stock.symbol,market:stock.market,interval:'1d',count:3},TTL['1d'],dayKey(q.quoteAt,stock.market));q.previousClose=previousClose(dailyCloses(daily.data,stock.market),q.quoteAt,stock.market);}catch(_){q.previousClose=null;}
+          const id=stockID(stock),q=quotes.get(id);if(!q)continue;
+          q.fetchedAt=r.fetchedAt;if(!this.canAcceptQuote(id,q))continue;
+          q.previousClose=null;q.basisDate=null;q.context=null;
+          if(stock.market==='us'&&historyTime(q.quoteAt)) {
+            try{const calendar=await this.request({kind:'calendar',market:'us',date:dayKey(q.quoteAt,'us')},60000);q.context=quoteContext(calendar.data,q.quoteAt);}catch(_){}
+          }
           if(revision!==this.revision)return;
-          this.quotes.set(stockID(stock),{...q,fetchedAt:r.fetchedAt});
+          const request={kind:'candles',symbol:stock.symbol,market:stock.market,interval:'1d',count:3,adjusted:true},prefix=JSON.stringify(request)+'|quote:';
+          q.contextKey=q.context?JSON.stringify(q.context):stock.market==='kr'?dayKey(q.quoteAt,'kr'):'';
+          if(this.quotes.get(id)?.contextKey!==q.contextKey)for(const key of this.cache.keys())if(key.startsWith(prefix))this.cache.delete(key);
+          if(historyTime(q.quoteAt)&&(stock.market==='kr'||q.context)) {
+            try{
+              const daily=await this.request(request,60000,'quote:'+q.contextKey),after=q.context?.phase==='afterMarket';
+              // A cached, still-open daily candle is not the official after-hours baseline.
+              if(!after||daily.fetchedAt>=q.context.regularEnd) {
+                const basis=closeForDay(dailyCloses(daily.data,stock.market),q.context?.tradingDay||dayKey(q.quoteAt,stock.market),stock.market,after);
+                if(basis){q.previousClose=basis.price;q.basisDate=dayKey(basis.date,stock.market);}
+              }
+            }catch(_){}
+          }
+          if(revision!==this.revision)return;
+          this.setQuote(id,q);
         }
         try{const names=await this.request({kind:'names',symbols},TTL['1d']);if(revision!==this.revision)return;for(const row of names.data?.result||[]){const stock=parseStock(row.symbol);if(stock&&typeof(row.name||row.englishName)==='string')this.names.set(stockID(stock),(row.name||row.englishName).normalize('NFC'));}}catch(_){}
       }
@@ -449,6 +491,7 @@ class Store {
   dispose(){if(!this.owner)void this.emit('stock-view-state',{visible:false}).catch(()=>{});clearInterval(this.timer);this.revision++;this.unlisten.forEach(f=>f());}
 }
 const KO={
+ 'Quote session':'거래 시간대','Day market':'데이마켓','Pre-market':'프리마켓','Regular market':'정규장','After-market':'애프터마켓','Session unavailable':'거래 시간대 확인 불가','Trading day':'거래일','Change vs prior regular close':'직전 거래일 정규장 종가 대비','Change vs regular close':'당일 정규장 종가 대비','Prior regular close':'직전 거래일 정규장 종가','Regular close':'당일 정규장 종가','Quote basis unavailable':'등락률 기준 종가를 확인할 수 없습니다',
  'Stock forecasts':'주식 예측','Show forecasts for watched stocks':'관심 종목의 예측 표시','Watched stocks use public quotes and candles. Loading accounts is optional; select an account only to include its holdings.':'관심 종목은 공개 시세와 캔들로 예측합니다. 계좌 조회는 선택 사항이며, 계좌를 선택하면 해당 보유 종목도 포함합니다.','Load accounts (optional)':'계좌 불러오기(선택)','Watchlist only · no account access':'관심 종목만 · 계좌 조회 안 함','Saved account selection':'이전에 선택한 계좌','Add a watched stock to see forecasts.':'관심 종목을 추가하면 예측을 확인할 수 있습니다.','Could not load accounts. Watchlist forecasts remain available.':'계좌를 불러오지 못했습니다. 관심 종목은 계속 예측합니다.','Could not load holdings. Watchlist forecasts remain available.':'보유 종목을 불러오지 못했습니다. 관심 종목은 계속 예측합니다.','Could not load daily prediction inputs. They will be retried.':'예측에 필요한 일봉을 불러오지 못했습니다. 다시 시도합니다.','Could not load estimates. Check saved keys, market data access and allowed IP.':'추정치를 불러오지 못했습니다. 저장한 키, 시세 접근 권한, 허용 IP를 확인하세요.',
  'Stock':'종목','Prediction evidence':'예측 근거','Input price':'입력 가격','Quote time':'체결 시각','Prediction time':'예측 시각','Target regular close':'대상 정규장 마감','Source: Toss Securities · completed, adjusted daily closes':'출처: 토스증권 · 완료된 수정 일별 종가','Daily volatility':'일별 변동성','Past 5-session return':'최근 5거래일 수익률','Past 20-session return':'최근 20거래일 수익률','Completed daily closes':'완료된 일별 종가','Date':'날짜','Close':'종가','GBM assumes zero expected return from the input price to the close. Daily volatility sizes the price range; historical returns are context, not a trend prediction. No news or AI API is used.':'GBM은 입력 가격부터 마감까지 기대 수익률을 0으로 가정합니다. 일별 변동성으로 가격 구간을 계산하며, 과거 수익률은 추세 예측이 아닌 참고 정보입니다. 뉴스나 AI API는 사용하지 않습니다.','Evidence for the daily GBM model, independent of the selected chart interval.':'선택한 차트 간격과 별개인 일봉 GBM 모델의 근거입니다.',
  'Model comparison':'모델 비교','All recorded models in the stock, day and capture filters are compared, regardless of the model filter.':'모델 필터와 관계없이 종목·거래일·기록 방식 필터에 해당하는 모든 기록 모델을 비교합니다.','Only completed records shared by every listed model are compared. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns.':'표시된 모든 모델이 공유하는 평가 완료 기록만 비교합니다. 종목, 체결 시각, 입력 가격, 일봉 근거, 정규장, 기록 방식이 같아야 합니다. 짝이 없는 기록은 두 오차 열 모두에서 제외합니다.','Saved / pending':'저장 / 대기','Paired samples':'대응 표본 수','No completed records with matching inputs yet.':'입력이 일치하는 평가 완료 기록이 없습니다.','This version records local GBM predictions. Its expected close equals the input price, so its MAPE equals the price-hold baseline. Lower MAPE and Brier are better; these are not investment returns.':'이 버전은 로컬 GBM 예측을 기록합니다. 기대 종가가 입력 가격과 같아 MAPE도 현재가 유지 기준과 같습니다. MAPE와 Brier는 낮을수록 좋으며 투자 수익률이 아닙니다.','Export comparison CSV':'비교 CSV 내보내기',
@@ -465,13 +508,21 @@ const KO={
 const t=(lang,key)=>lang==='ko'?(KO[key]||key):key;
 const priceText=(price,currency,lang)=>positive(price)?(currency==='USD'?'$':'')+new Intl.NumberFormat(lang==='ko'?'ko-KR':'en-US',{minimumFractionDigits:currency==='KRW'?0:2,maximumFractionDigits:currency==='KRW'?0:2}).format(price):'—';
 const percentText=rate=>rate===null||!Number.isFinite(rate)?'—':(rate>=0?'+':'')+(rate*100).toFixed(2)+'%';
+function quotePercentText(quote,provider) {
+  const rate=changeRate(quote);
+  if(provider!=='toss')return percentText(rate);
+  if(rate===null||!Number.isFinite(rate*10000))return '—';
+  // Remove arithmetic roundoff at exact boundaries (100 -> 100.1 is +0.10%, not +0.09%).
+  const roundoff=Number.EPSILON*40000*Math.max(1,quote.price/quote.previousClose);
+  return (rate<0?'-':'+')+(Math.trunc(Math.abs(rate)*10000+roundoff)/100).toFixed(2)+'%';
+}
 const dateText=(time,market,lang,clock=true)=>Number.isFinite(time)?new Intl.DateTimeFormat(lang==='ko'?'ko-KR':'en-US',{timeZone:zone(market),month:'2-digit',day:'2-digit',...(clock?{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}:{})}).format(time):'—';
 function cells(store,lang,now=store.now()) {
   if(!store.settings.enabled)return [];
   return store.settings.symbols.filter(s=>s.visible).map(stock=>{
     const id=stockID(stock),q=store.quotes.get(id),rate=changeRate(q),col=stock.color?'#'+stock.color:rate>0?'var(--ample)':rate<0?'var(--crit)':'var(--ink-dim)';
-    const text=rate!==null&&Math.floor(now/(store.settings.displayInterval*1000))%2===0?percentText(rate):priceText(q?.price,q?.currency,lang);
-    return {id:'widget-stock:'+id,base:'stocks',stock,name:stock.name||store.names.get(id)||stock.symbol,glyph:stock.market==='us'?stock.symbol:stock.name||store.names.get(id)||stock.symbol,meter:{kind:'stock',fraction:rate===null?null:Math.min(1,Math.abs(rate)/0.3),color:col,text,stale:!!store.error||!!q&&(!Number.isFinite(q.quoteAt)||now-q.quoteAt>120000)}};
+    const text=rate!==null&&Math.floor(now/(store.settings.displayInterval*1000))%2===0?quotePercentText(q,store.settings.provider):priceText(q?.price,q?.currency,lang);
+    return {id:'widget-stock:'+id,base:'stocks',stock,name:stock.name||store.names.get(id)||stock.symbol,glyph:stock.market==='us'?stock.symbol:stock.name||store.names.get(id)||stock.symbol,meter:{kind:'stock',fraction:rate===null?null:Math.min(1,Math.abs(rate)/0.3),color:col,text,stale:!!store.error||!!q&&(!Number.isFinite(q.quoteAt)||q.quoteAt>now||now-q.quoteAt>120000)}};
   });
 }
 function domain(values){const lo=Math.min(...values),hi=Math.max(...values),pad=hi>lo?Math.max((hi-lo)*0.08,hi*Number.EPSILON*8):Math.max(hi*0.0005,1e-8);return [Math.max(0,lo-pad),hi+pad];}
@@ -534,7 +585,13 @@ function probabilityHTML(records,lang) {
 function cardHTML(store,stock,lang) {
   const tr=key=>esc(t(lang,key)),s=store.settings,id=stockID(stock),q=store.quotes.get(id),now=store.now(),name=stock.name||store.names.get(id)||stock.symbol;
   let html=`<div class="stock-card"><div class="c-head"><span class="c-title">${esc(name)}</span></div><div class="stock-small">${esc(id)} · ${tr(s.provider==='toss'?'Toss Securities':'Finnhub')}</div>`;
-  html+=`<p><b>${priceText(q?.price,q?.currency,lang)}</b> · ${percentText(changeRate(q))}</p><p class="stock-small">${tr('Previous close')}: ${positive(q?.previousClose)?priceText(q.previousClose,q.currency,lang):tr('Previous close unavailable')}</p><p class="stock-small">${Number.isFinite(q?.quoteAt)?tr('Last trade')+': '+esc(dateText(q.quoteAt,stock.market,lang))+' · '+zone(stock.market):tr('Quote timestamp unavailable')}</p>`;
+  html+=`<p><b>${priceText(q?.price,q?.currency,lang)}</b> · ${quotePercentText(q,s.provider)}</p>`;
+  if(s.provider==='toss'&&stock.market==='us') {
+    const context=q?.context,after=context?.phase==='afterMarket',phase={dayMarket:'Day market',preMarket:'Pre-market',regularMarket:'Regular market',afterMarket:'After-market'}[context?.phase];
+    html+=`<p class="stock-small">${tr('Quote session')}: ${tr(phase||'Session unavailable')}${context?' · '+tr('Trading day')+' '+esc(context.tradingDay):''}</p>`;
+    if(context)html+=`<p class="stock-small">${tr(after?'Change vs regular close':'Change vs prior regular close')}: ${quotePercentText(q,s.provider)}</p><p class="stock-small">${tr(after?'Regular close':'Prior regular close')}: ${positive(q?.previousClose)?priceText(q.previousClose,q.currency,lang)+' · '+esc(q.basisDate)+' ET':tr('Quote basis unavailable')}</p>`;
+  }else html+=`<p class="stock-small">${tr('Previous close')}: ${positive(q?.previousClose)?priceText(q.previousClose,q.currency,lang):tr('Previous close unavailable')}</p>`;
+  html+=`<p class="stock-small">${Number.isFinite(q?.quoteAt)?tr('Last trade')+': '+esc(new Intl.DateTimeFormat(lang==='ko'?'ko-KR':'en-US',{timeZone:zone(stock.market),year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(q.quoteAt))+' '+(stock.market==='us'?'ET':'KST'):tr('Quote timestamp unavailable')}</p>`;
   if(store.error)html+=`<p class="stock-error">${tr(store.error)}</p>`;
   if(!q)html+=`<p>${tr('Waiting for a quote')}</p>`;
   const index=s.symbols.findIndex(x=>stockID(x)===id);
@@ -748,7 +805,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
   render();
   return {render,show(visible){store.visible=visible;void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();requestAnimationFrame(()=>element.querySelector('#stock-symbol')?.focus());void store.tick();}}};
 }
-const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,dailyCloses,previousClose,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
+const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 else root.PenguinNotchStocks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
