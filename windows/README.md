@@ -47,7 +47,8 @@ the reading is missing, the cell stays empty. A failed network or CPU read keeps
 the last good counters, and a gap longer than ten seconds is not billed. Weather
 is Celsius from Open-Meteo and is fetched off the sampling thread. Refresh asks
 again for the saved city and does not clear it. Order, hide and per-cell color
-are in Settings → System. Hiding one meter does not stop the others; turning off
+are in Settings → Computer monitoring for hardware and Settings → Daily widgets
+for calendar, weather and to-dos. Hiding one meter does not stop the others; turning off
 system monitoring does.
 
 ### Stocks and local history
@@ -219,6 +220,24 @@ cd penguinnotch
 npx @tauri-apps/cli@2 build --config tauri.bundle.conf.json
 # → ..\target\release\bundle\nsis\PenguinNotch_<version>_x64-setup.exe
 ```
+
+### Settings by task
+
+The sidebar follows macOS: **AI subscriptions → Stocks → Computer monitoring →
+Daily widgets → Appearance → General**. AI accounts and the weekly ring stay together;
+hardware meters have their own page; calendar, weather city and to-do visibility/colors
+are under Daily widgets. Appearance controls notch placement and size. General holds
+language, the tray icon, startup and updates. Existing settings and the last selected
+page survive the change. Moving items within a section leaves other categories in place.
+Features not implemented on Windows do not get empty settings pages.
+
+The browser regression uses synthetic native responses, with no real credentials or API calls:
+
+```sh
+node scripts/test-settings-browser.cjs
+```
+
+It requires an already-installed Playwright package (use `NODE_PATH` if needed).
 
 Tray menu: the readings themselves — a line per provider with its headline figure, and under it
 one line per limit window — then **Show notch now**, **Refresh all**, **Settings…** and **Quit PenguinNotch**. Clicking a

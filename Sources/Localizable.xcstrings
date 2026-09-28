@@ -50332,7 +50332,10 @@
     "Daily history survives restarts and settings changes. Missing samples are not reconstructed, and saved history stays separate from scored predictions.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "앱 재실행이나 설정 변경 후에도 거래일별 기록을 유지합니다. 누락된 값을 역산하지 않으며 추이 기록과 예측 성과 기록을 별도로 보관합니다."}}}},
     "Saved locally · today's minute samples · GBM estimate equals the quote": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "로컬 저장 · 오늘의 분 단위 기록 · GBM 예상 종가 = 현재가"}}}},
     "Could not read close history. Unreadable files will not be overwritten.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "추이 기록을 읽지 못했습니다. 읽을 수 없는 파일은 덮어쓰지 않습니다."}}}},
-    "Could not save close history. Check disk space and permissions.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "추이 기록을 저장하지 못했습니다. 디스크 여유 공간과 권한을 확인하세요."}}}}
+    "Could not save close history. Check disk space and permissions.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "추이 기록을 저장하지 못했습니다. 디스크 여유 공간과 권한을 확인하세요."}}}},
+    "Windows settings organized by task": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "Windows 설정을 작업별로 정리했습니다"}}}},
+    "Find monitoring and daily widgets in their own sections": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "모니터링과 생활 위젯을 별도 항목에서 설정합니다"}}}},
+    "Windows settings now follow the macOS section order. Existing choices, colors and positions are preserved; language and the app icon are under General.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "Windows 설정 순서를 macOS와 맞췄습니다. 기존 선택·색상·위치는 유지되며 언어와 앱 아이콘 설정은 일반에 있습니다."}}}}
   },
   "version": "1.0"
 }

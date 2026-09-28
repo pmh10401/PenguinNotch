@@ -31,6 +31,9 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.20.5", headline: L10n.t("Windows settings organized by task"),
+                        changes: [.init(title: L10n.t("Find monitoring and daily widgets in their own sections"),
+                                        detail: L10n.t("Windows settings now follow the macOS section order. Existing choices, colors and positions are preserved; language and the app icon are under General."))]),
             ReleaseNote(version: "1.20.4", headline: L10n.t("Scroll through every notch item"),
                         changes: [.init(title: L10n.t("Use the wheel when the notch fills the screen"),
                                         detail: L10n.t("Scroll overflowing items with the mouse wheel or trackpad on all four edges. The notch stays within the display, and hover cards keep their own scrolling."))]),

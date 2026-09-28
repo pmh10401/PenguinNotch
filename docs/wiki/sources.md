@@ -45,3 +45,12 @@
 - 기준 커밋: S2와 동일.
 - [Claude 인증 읽기](https://github.com/pmh10401/PenguinNotch/blob/b7b1b69d29944f76f7431933d5d78a41c135f81f/Sources/Providers/ClaudeCredentials.swift), [Antigravity 인증 읽기](https://github.com/pmh10401/PenguinNotch/blob/b7b1b69d29944f76f7431933d5d78a41c135f81f/Sources/Providers/AntigravityCredentials.swift), [기여 문서](https://github.com/pmh10401/PenguinNotch/blob/b7b1b69d29944f76f7431933d5d78a41c135f81f/CONTRIBUTING.md), [릴리즈 노트](https://github.com/pmh10401/PenguinNotch/blob/b7b1b69d29944f76f7431933d5d78a41c135f81f/Sources/Settings/ReleaseNotes.swift).
 - 용도: 백그라운드 키체인 읽기와 과거 기여 문서 사이의 불일치 확인.
+
+## S8
+
+- 확인: 2026-09-28 UTC (한국 시각 2026-09-29). 기준 커밋 `5453e76207717135562039cb2b41b617895fb569` 이후의 1.20.5 작업 트리이며 아직 게시되지 않았습니다. S2의 배포 기준을 대체하지 않습니다.
+- [Windows 설정 구현](../../windows/penguinnotch/ui/settings.html)의 SHA-256: `497ec253022fbfe3037a296aa98d9b9c9c7db17240c4b5b6de0c346290d00de4`.
+- [브라우저 회귀 검사](../../windows/scripts/test-settings-browser.cjs)의 SHA-256: `d7fafb221ee11e4b5e7b6bc554eba90222840b6dde98b8200f990716824a6831`.
+- macOS 분류의 근거: [설정 섹션](../../Sources/Settings/SettingsView.swift), [모니터링·생활 위젯 페이지](../../Sources/Settings/WidgetSettingsPanes.swift).
+- Playwright Chromium에서 실제 HTML을 실행하고 네이티브 호출은 가짜 공개 데이터로 대체했습니다. 24개 배치와 설정 저장·복원·실패 경로 검사가 통과했습니다. 별도의 Browser 플러그인/스킬이 없어 설치된 Playwright를 사용했습니다. 계좌·인증 파일·실제 API에는 접근하지 않았습니다. 실제 Windows WebView2 검증은 아닙니다.
+- 추가 검사: `check-ui-scripts.mjs`, `test-stocks.cjs`, `test-widgets.cjs`, `test-claude-auth-ui.cjs`, `test-ko-i18n.cjs` 모두 종료 코드 0. 버전 메타데이터와 번역 JSON, 변경 공백 검사를 통과했습니다.

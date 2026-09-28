@@ -41,8 +41,10 @@
   #app{display:flex;height:100%;background:var(--pane)}
 
   /* ---- sidebar: a card inset from the window, as on the Mac ---- */
-  #side{width:196px;margin:4px;border-radius:14px;background:var(--side);border:1px solid var(--line);
+  #side{width:204px;margin:4px;border-radius:14px;background:var(--side);border:1px solid var(--line);
     box-shadow:inset 0 1px 0 var(--hi);display:flex;flex-direction:column;padding:0 8px 8px;flex:none}
+  #side{overflow-y:auto;scrollbar-width:thin}
+  #side .row{flex-shrink:0}
   #side .band{height:48px;flex:none}
   #side .grow{flex:1}
   .row{position:relative;display:flex;align-items:center;gap:9px;width:100%;min-height:32px;padding:4px 8px;margin-bottom:2px;
@@ -53,13 +55,18 @@
   .badge{width:20px;height:20px;border-radius:5.5px;display:grid;place-items:center;flex:none}
   .badge svg{width:12px;height:12px;fill:#fff}
   .b-blue{background:linear-gradient(#4fa6ff,#0a6cff)}
+  .b-green{background:linear-gradient(#41cb72,#239746)}
+  .b-orange{background:linear-gradient(#ffa144,#dd7519)}
+  .b-teal{background:linear-gradient(#49cbc4,#228f9b)}
   .b-indigo{background:linear-gradient(#8784ff,#5856d6)}
   .b-gray{background:linear-gradient(#a6a6ab,#727277)}
   .b-red{background:linear-gradient(#ff6d62,#dd3328)}
 
   /* ---- pane ---- */
   #pane{flex:1;display:flex;flex-direction:column;min-width:0}
-  #head{height:52px;display:flex;align-items:center;padding-left:24px;position:relative;flex:none}
+  #head{min-height:82px;display:flex;align-items:center;padding:14px 54px 14px 24px;position:relative;flex:none}
+  #head > div{min-width:0}
+  #subtitle{margin:5px 0 0;font-size:12px;color:var(--text2)}
   #head h1{font-size:22px;font-weight:600;margin:0}
   #close{position:absolute;top:0;right:0;width:46px;height:34px;border:0;background:transparent;color:var(--text2);
     display:grid;place-items:center;border-top-right-radius:8px}
@@ -80,6 +87,7 @@
   .item .controls{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;min-width:0}
   .item .controls input{width:120px;min-width:0;max-width:100%}
   .controls button:not(.switch):not([data-color]),#wx-results button{border:0;border-radius:6px;background:var(--btn);padding:4px 8px;cursor:pointer}
+  .controls button[data-color]{width:20px;height:20px;padding:0;border-radius:50%;border:1px solid var(--text2)}
   .controls button:disabled{opacity:.45;cursor:default}
   #wx-results button{display:block;width:100%;text-align:left;margin:2px 0}
   .item.cap{min-height:0;padding:8px 12px;font-size:12px;color:var(--text2);display:block}
@@ -127,17 +135,19 @@
 <div id="app">
   <nav id="side" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
     <div class="band" data-tauri-drag-region></div>
-    <button class="row" id="tab-accounts" role="tab" aria-controls="pane-accounts" aria-selected="false" tabindex="-1"><span class="badge b-blue"><svg viewBox="0 0 12 12"><circle cx="6" cy="4" r="2.4"/><path d="M1.5 11.2c.4-2.5 2.3-3.9 4.5-3.9s4.1 1.4 4.5 3.9z"/></svg></span><span>Accounts</span></button>
-    <button class="row" id="tab-appearance" role="tab" aria-controls="pane-appearance" aria-selected="false" tabindex="-1"><span class="badge b-indigo"><svg viewBox="0 0 12 12"><path d="M10 .9a.8.8 0 0 1 1.1 1.1L6.4 6.7 5.3 5.6zM4.6 6.3l1.1 1.1c.2 1.9-1.9 3.6-4.7 3.1.9-.4 1.2-1 1.3-1.8.1-1.3 1.1-2.3 2.3-2.4z"/></svg></span><span>Appearance</span></button>
-    <button class="row" id="tab-stocks" role="tab" aria-controls="pane-stocks" aria-selected="false" tabindex="-1"><span class="badge b-blue">↗</span><span data-dynamic id="stock-tab-label">Stocks</span></button>
-    <button class="row" id="tab-general" role="tab" aria-controls="pane-general" aria-selected="false" tabindex="-1"><span class="badge b-gray"><svg viewBox="0 0 12 12"><path fill-rule="evenodd" d="M5.1.6h1.8l.3 1.5 1.1.5 1.3-.8 1.3 1.3-.8 1.3.5 1.1 1.5.3v1.8l-1.5.3-.5 1.1.8 1.3-1.3 1.3-1.3-.8-1.1.5-.3 1.5H5.1l-.3-1.5-1.1-.5-1.3.8-1.3-1.3.8-1.3-.5-1.1L.6 6.9V5.1l1.5-.3.5-1.1-.8-1.3 1.3-1.3 1.3.8 1.1-.5zM6 4.1a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg></span><span>General</span></button>
+    <button class="row" id="tab-accounts" role="tab" aria-controls="pane-accounts" aria-selected="false" tabindex="-1"><span aria-hidden="true" class="badge b-blue"><svg viewBox="0 0 12 12"><circle cx="6" cy="4" r="2.4"/><path d="M1.5 11.2c.4-2.5 2.3-3.9 4.5-3.9s4.1 1.4 4.5 3.9z"/></svg></span><span>AI subscriptions</span></button>
+    <button class="row" id="tab-stocks" role="tab" aria-controls="pane-stocks" aria-selected="false" tabindex="-1"><span aria-hidden="true" class="badge b-green">↗</span><span data-dynamic id="stock-tab-label">Stocks</span></button>
+    <button class="row" id="tab-monitoring" role="tab" aria-controls="pane-monitoring" aria-selected="false" tabindex="-1"><span aria-hidden="true" class="badge b-orange"><svg viewBox="0 0 12 12"><path d="M1 1h10v7H7v2h2v1H3v-1h2V8H1zm1 1v5h8V2z"/></svg></span><span>Computer monitoring</span></button>
+    <button class="row" id="tab-widgets" role="tab" aria-controls="pane-widgets" aria-selected="false" tabindex="-1"><span aria-hidden="true" class="badge b-teal"><svg viewBox="0 0 12 12"><path d="M1 1h4v4H1zm6 0h4v4H7zM1 7h4v4H1zm6 0h4v4H7z"/></svg></span><span>Daily widgets</span></button>
+    <button class="row" id="tab-appearance" role="tab" aria-controls="pane-appearance" aria-selected="false" tabindex="-1"><span aria-hidden="true" class="badge b-indigo"><svg viewBox="0 0 12 12"><path d="M10 .9a.8.8 0 0 1 1.1 1.1L6.4 6.7 5.3 5.6zM4.6 6.3l1.1 1.1c.2 1.9-1.9 3.6-4.7 3.1.9-.4 1.2-1 1.3-1.8.1-1.3 1.1-2.3 2.3-2.4z"/></svg></span><span>Appearance</span></button>
+    <button class="row" id="tab-general" role="tab" aria-controls="pane-general" aria-selected="false" tabindex="-1"><span aria-hidden="true" class="badge b-gray"><svg viewBox="0 0 12 12"><path fill-rule="evenodd" d="M5.1.6h1.8l.3 1.5 1.1.5 1.3-.8 1.3 1.3-.8 1.3.5 1.1 1.5.3v1.8l-1.5.3-.5 1.1.8 1.3-1.3 1.3-1.3-.8-1.1.5-.3 1.5H5.1l-.3-1.5-1.1-.5-1.3.8-1.3-1.3.8-1.3-.5-1.1L.6 6.9V5.1l1.5-.3.5-1.1-.8-1.3 1.3-1.3 1.3.8 1.1-.5zM6 4.1a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg></span><span>General</span></button>
     <div class="grow" data-tauri-drag-region></div>
-    <button class="row" id="quit"><span class="badge b-red"><svg viewBox="0 0 12 12"><path d="M6 1.2v4.3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M3.4 3.1a3.9 3.9 0 1 0 5.2 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span><span>Quit PenguinNotch</span></button>
+    <button class="row" id="quit"><span aria-hidden="true" class="badge b-red"><svg viewBox="0 0 12 12"><path d="M6 1.2v4.3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M3.4 3.1a3.9 3.9 0 1 0 5.2 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span><span>Quit PenguinNotch</span></button>
   </nav>
 
   <main id="pane">
     <div id="head" data-tauri-drag-region>
-      <h1 id="title" data-tauri-drag-region data-dynamic>Accounts</h1>
+      <div data-tauri-drag-region><h1 id="title" data-tauri-drag-region data-dynamic>AI subscriptions</h1><p id="subtitle" data-tauri-drag-region data-dynamic></p></div>
       <button id="close" title="Close" aria-label="Close"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1L1 9"/></svg></button>
     </div>
     <div id="strip" data-dynamic hidden></div>
@@ -149,6 +159,11 @@
         <div id="acc-off-wrap" hidden>
           <div class="sec">Not connected</div>
           <div class="group" id="acc-off" data-dynamic></div>
+        </div>
+        <div class="sec">Usage display</div>
+        <div class="group">
+          <div class="item"><span>Weekly ring</span><span class="seg" id="seg-weekly"><button data-v="off">Off</button><button data-v="inside">Inside</button><button data-v="outside">Outside</button></span></div>
+          <div class="item cap" id="cap-weekly" data-dynamic></div>
         </div>
       </section>
 
@@ -177,8 +192,7 @@
           <div class="item cap" id="cap-hover-text-scale">Cards and their controls resize with the text. Notch cells stay the same size.</div>
           <div class="item"><span>Theme</span><span class="seg" id="seg-theme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></span></div>
           <div class="item cap" id="cap-theme" data-dynamic></div>
-          <div class="item"><span>Weekly ring</span><span class="seg" id="seg-weekly"><button data-v="off">Off</button><button data-v="inside">Inside</button><button data-v="outside">Outside</button></span></div>
-          <div class="item cap" id="cap-weekly" data-dynamic></div>
+
           <div class="item"><span>Edge</span><span class="seg" id="seg-edge"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="top">Top</button><button data-v="bottom">Bottom</button></span></div>
           <div class="item cap" id="cap-edge" data-dynamic></div>
           <div class="item"><span>Show move handle</span><button class="switch" id="sw-move" role="switch" aria-checked="false" aria-label="Show move handle"></button></div>
@@ -189,8 +203,20 @@
           <div class="item cap" id="cap-screen" data-dynamic hidden></div>
           <div class="item"><span class="hint">Hold Alt and drag to slide along the edge. Recentre resets only this edge. An unavailable display uses the main screen temporarily; its saved selection and other edge positions are kept.</span><button class="btn" id="btn-recentre">Recentre</button></div>
         </div>
-        <div class="sec" id="sec-widgets">System</div>
-        <div class="group" id="widget-box" data-dynamic></div>
+
+      </section>
+
+      <section class="pane" id="pane-monitoring" role="tabpanel" aria-labelledby="tab-monitoring" hidden>
+        <div id="monitoring-box" data-dynamic></div>
+      </section>
+
+      <section class="pane" id="pane-widgets" role="tabpanel" aria-labelledby="tab-widgets" hidden>
+        <div id="widget-box" data-dynamic></div>
+      </section>
+
+      <section class="pane" id="pane-stocks" role="tabpanel" aria-labelledby="tab-stocks" data-dynamic hidden></section>
+
+      <section class="pane" id="pane-general" role="tabpanel" aria-labelledby="tab-general" hidden>
         <div class="sec">App</div>
         <div class="group">
           <div class="item"><span>App icon</span><span class="seg" id="seg-tray"><button data-v="tray">System tray</button><button data-v="none">Neither</button></span></div>
@@ -210,13 +236,10 @@
             </select>
           </div>
           <div class="item cap">Sets the language used by PenguinNotch. “Follow system” uses the language Windows itself is set to.</div>
+
         </div>
-      </section>
-
-      <section class="pane" id="pane-stocks" role="tabpanel" aria-labelledby="tab-stocks" data-dynamic hidden></section>
-
-      <section class="pane" id="pane-general" role="tabpanel" aria-labelledby="tab-general" hidden>
         <div class="group">
+
           <div class="item"><span>Open PenguinNotch at login</span><button class="switch" id="sw-autostart" role="switch" aria-checked="false" aria-label="Open PenguinNotch at login"></button></div>
           <div class="item cap">PenguinNotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open PenguinNotch yourself.</div>
           <div class="item"><span>Version</span><span class="value" id="about-version" data-dynamic>0.3.0</span></div>
@@ -241,7 +264,7 @@
 <script>
 let stockSettingsView=null, stockSettingsStore=null;
 /* ---------------------------------------------------------------------------
-   PenguinNotch settings: the Mac's three panes — Accounts, Appearance, General.
+   PenguinNotch settings: the Mac's task-based sections for features available on Windows.
 
    Every value on screen comes from a Rust command and is written back by one.
    Every call is wrapped so a failure paints the strip under the title instead
@@ -269,6 +292,8 @@ function esc(s){
    Windows page keep the Russian #141 gave them. `applyStaticUi()` matches a text node exactly, so
    rewording any string here means changing its key in every table. */
 const PT_BR_STATIC = {
+  "How the notch looks and where it sits.":"Como o notch aparece e onde fica.",
+  "Startup, updates and everything else.":"Inicialização, atualizações e todo o resto.",
   'Theme':'Tema',
   'System':'Do sistema',
   'Light':'Clara',
@@ -367,6 +392,9 @@ const PT_BR_STATIC = {
   'Saved':'Salvo'
 };
 const RU_STATIC = {
+  "How the notch looks and where it sits.":"Как выглядит панель и где она находится.",
+  "Startup, updates and everything else.":"Запуск, обновления и всё остальное.",
+  "Automatic":"Автоматически",
   'Theme':'Тема',
   'System':'Системная',
   'Light':'Светлая',
@@ -430,6 +458,9 @@ const RU_STATIC = {
   'App designed and developed by':'Приложение разработал', 'Saved':'Сохранено'
 };
 const ZH_STATIC = {
+  "How the notch looks and where it sits.":"刘海的外观与位置。",
+  "Startup, updates and everything else.":"启动、更新及其他一切。",
+  "Automatic":"自动",
   'Theme':'主题',
   'System':'跟随系统',
   'Light':'浅色',
@@ -524,6 +555,9 @@ const ZH_STATIC = {
   'this screen cannot be remembered by name':'这块屏幕无法按名称记住'
 };
 const ZH_HANT_STATIC = {
+  "How the notch looks and where it sits.":"瀏海的外觀與位置。",
+  "Startup, updates and everything else.":"啟動、更新及其他一切。",
+  "Automatic":"自動",
   'Theme':'主題',
   'System':'跟隨系統',
   'Light':'淺色',
@@ -618,6 +652,9 @@ const ZH_HANT_STATIC = {
   'this screen cannot be remembered by name':'這塊螢幕無法按名稱記住'
 };
 const JA_STATIC = {
+  "How the notch looks and where it sits.":"ノッチの見た目と位置。",
+  "Startup, updates and everything else.":"起動、アップデート、その他すべて。",
+  "Automatic":"自動",
   'Theme':'テーマ',
   'System':'システムに合わせる',
   'Light':'ライト',
@@ -699,6 +736,24 @@ const JA_STATIC = {
   'Model data':'モデルのデータ'
 };
 const KO_STATIC = {
+  "AI subscriptions":"AI 구독",
+  "Computer monitoring":"컴퓨터 모니터링",
+  "Daily widgets":"생활 위젯",
+  "Manage AI accounts, usage display and limits.":"AI 계정 연결, 사용량 표시와 한도를 관리합니다.",
+  "Manage your watchlist, quote sources and charts.":"관심 종목, 시세 제공처와 차트를 관리합니다.",
+  "Choose hardware meters, visibility and colors.":"하드웨어 지표의 표시 여부와 색상을 설정합니다.",
+  "Calendar, weather and today’s tasks.":"달력, 날씨와 오늘의 할 일을 관리합니다.",
+  "How the notch looks and where it sits.":"노치의 모양과 위치를 설정합니다.",
+  "Startup, updates and everything else.":"시작, 업데이트 및 기타 항목을 설정합니다.",
+  "Hardware meters":"하드웨어 지표",
+  "Today’s tasks":"오늘의 할 일",
+  "See today’s date and hover to open the monthly calendar.":"오늘 날짜를 표시하고 마우스를 올리면 월간 달력을 엽니다.",
+  "Hover over TODO to add tasks, mark them done or remove them. Unfinished tasks carry over to tomorrow.":"노치의 TODO에 마우스를 올려 할 일을 추가·완료·삭제합니다. 미완료 항목은 다음 날에도 유지됩니다.",
+  "Samples every second. Turn monitoring off to stop collection; your meter choices and colors are kept.":"1초마다 측정합니다. 모니터링을 끄면 수집을 중지하며 항목별 표시 선택과 색상은 유지합니다.",
+  "Choose a color and switch each meter on or off.":"각 지표의 색상과 노치 표시 여부를 선택하세요.",
+  "Color":"색상",
+  "Automatic":"자동",
+  "Usage display":"사용량 표시",
   'Show notch now':'지금 노치 표시',
   'Reveal at the saved position. Hover mode stays open for five seconds.':'저장된 위치에 표시합니다. 호버 모드에서는 5초 동안 펼쳐집니다.',
   'Meter style':'미터 모양', 'Circles':'원형', 'Bars':'막대',
@@ -809,6 +864,9 @@ const KO_STATIC = {
   'Русский':'Русский'
 };
 const UK_STATIC = {
+  "How the notch looks and where it sits.":"Як виглядає виріз і де він розташований.",
+  "Startup, updates and everything else.":"Запуск, оновлення та все інше.",
+  "Automatic":"Автоматично",
   'Theme':'Тема',
   'System':'Системна',
   'Light':'Світла',
@@ -1009,8 +1067,17 @@ function loadLook(){
 try { window.__TAURI__.event.listen('theme_resolved', e => { if(e.payload) applyTheme(e.payload); }); } catch(e) { /* asked for again below */ }
 
 /* ---- the sidebar -------------------------------------------------------- */
-const TABS = ['accounts', 'appearance', 'stocks', 'general'];
-const TITLES = { accounts:'Accounts', appearance:'Appearance', stocks:'Stocks', general:'General' };
+const TABS = ['accounts', 'stocks', 'monitoring', 'widgets', 'appearance', 'general'];
+const TITLES = { accounts:'AI subscriptions', stocks:'Stocks', monitoring:'Computer monitoring', widgets:'Daily widgets', appearance:'Appearance', general:'General' };
+const SUBTITLES = {
+  accounts:'Manage AI accounts, usage display and limits.', stocks:'Manage your watchlist, quote sources and charts.',
+  monitoring:'Choose hardware meters, visibility and colors.', widgets:'Calendar, weather and today’s tasks.',
+  appearance:'How the notch looks and where it sits.', general:'Startup, updates and everything else.'
+};
+function renderSectionTitle(){
+  document.getElementById('title').textContent=curTab==='stocks'?PenguinNotchStocks.t(uiLang,'Stocks'):ui(TITLES[curTab],TITLES[curTab]);
+  document.getElementById('subtitle').textContent=ui(SUBTITLES[curTab],SUBTITLES[curTab]);
+}
 const TAB_KEY = 'penguinnotch.settings.pane';
 let curTab = TABS[0];
 function showTab(id, moveFocus){
@@ -1024,7 +1091,7 @@ function showTab(id, moveFocus){
     btn.tabIndex = on ? 0 : -1;
     document.getElementById('pane-' + t).hidden = !on;
   }
-  document.getElementById('title').textContent = id==='stocks'?PenguinNotchStocks.t(uiLang,'Stocks'):ui(TITLES[id], TITLES[id]);
+  renderSectionTitle();
   document.getElementById('body').scrollTop = 0;
   try { localStorage.setItem(TAB_KEY, id); } catch(e) { /* not remembered, that is all */ }
   if(moveFocus) document.getElementById('tab-' + id).focus();
@@ -1516,7 +1583,7 @@ document.getElementById('seg-theme').addEventListener('click', e => {
     .then(() => { themeBusy = false; renderTheme(); });
 });
 
-/* ---- Appearance: the weekly ring ------------------------------------------- */
+/* ---- AI subscriptions: the weekly ring ------------------------------------------- */
 const WEEKLY_WHY = {
   off: 'One ring per provider, showing the headline limit. The weekly allowance stays in the hover card.',
   inside: 'A thinner ring for the weekly limit, drawn inside the main one. It shares the gap with the working indicator.',
@@ -1591,7 +1658,7 @@ const WIDGET_UI = {
     'Search city':'Знайти місто', 'Search':'Знайти', 'Add to-do':'Додати справу'
   }
 };
-function wui(key){ const table=WIDGET_UI[uiLang]; return (table&&table[key])||key; }
+function wui(key){ const table=WIDGET_UI[uiLang]; return (table&&table[key])||ui(key,key); }
 const METER_ROWS=[
   ['system-cpu','CPU'],['system-memory','RAM'],['system-gpu','GPU'],['system-disk','DISK'],
   ['system-network','NET'],['system-battery','BAT'],['system-power','PWR'],
@@ -1599,94 +1666,104 @@ const METER_ROWS=[
 ];
 const PALETTE=['ff33e1','eb4236','eb8436','ffd400','00ff88','00e5cc','36a8eb','6c5ce7','b026ff','f7f6f5'];
 let widgetPrefs=null;
+let widgetSaving=false;
 window.__TAURI__.event.listen('notch_order',e=>{
   if(widgetPrefs&&Array.isArray(e.payload)){widgetPrefs.order=e.payload;renderWidgets();}
 }).catch(()=>{});
 function renderWidgets(){
+  const monitoring=document.getElementById('monitoring-box');
   const box=document.getElementById('widget-box');
-  const sec=document.getElementById('sec-widgets');
-  if(!box||!widgetPrefs) return;
-  sec.textContent=wui('System');
+  if(!monitoring||!box||!widgetPrefs) return;
   const p=widgetPrefs;
   const hidden=new Set(p.hidden||[]);
   const order=(p.order&&p.order.length)?p.order.slice():METER_ROWS.map(row=>row[0]);
   METER_ROWS.forEach(row=>{ if(order.indexOf(row[0])<0) order.push(row[0]); });
-  const meterOrder=order.filter(id=>METER_ROWS.some(row=>row[0]===id));
+  const meterOrder=order.filter(id=>METER_ROWS.some(row=>row[0]===id)&&id.startsWith('system-'));
+  const widgetOrder=order.filter(id=>METER_ROWS.some(row=>row[0]===id)&&id.startsWith('widget-'));
+  const widgetFlag={'widget-calendar':'calendar','widget-weather':'weather','widget-todo':'todo'};
   const name=id=>wui((METER_ROWS.find(row=>row[0]===id)||[id,id])[1]);
-  let html=`<div class="item"><span>${esc(wui('Enable system monitoring'))}</span><button class="switch${p.system?' on':''}" id="sw-system" role="switch" aria-checked="${p.system?'true':'false'}"></button></div>`;
-  html+=`<div class="item cap">${esc(wui('Meters refresh about once a second. Hiding one does not stop the others.'))}</div>`;
-  html+=`<div class="item"><span>${esc(wui('Calendar'))}</span><button class="switch${p.calendar?' on':''}" id="sw-cal" role="switch" aria-checked="${p.calendar?'true':'false'}"></button></div>`;
-  html+=`<div class="item"><span>${esc(wui('Weather'))}</span><button class="switch${p.weather?' on':''}" id="sw-wx" role="switch" aria-checked="${p.weather?'true':'false'}"></button></div>`;
-  html+=`<div class="item"><span>${esc(wui('To-do'))}</span><button class="switch${p.todo?' on':''}" id="sw-todo" role="switch" aria-checked="${p.todo?'true':'false'}"></button></div>`;
-  html+=`<div class="item cap">${esc(wui('Hidden items keep their color and place.'))}</div>`;
-  meterOrder.forEach((id,index)=>{
-    const on=!hidden.has(id);
-    const color=p.colors&&p.colors[id];
-    html+=`<div class="item"><span>${esc(name(id))}</span><span class="controls">
-      <button data-move="${id}" data-dir="-1" ${index===0?'disabled':''}>${esc(wui('Up'))}</button>
-      <button data-move="${id}" data-dir="1" ${index===meterOrder.length-1?'disabled':''}>${esc(wui('Down'))}</button>
-      <button class="switch${on?' on':''}" data-hide="${id}" role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(wui('Show'))}"></button>
-      <button data-color="${id}" title="${esc(color||'auto')}" style="width:16px;height:16px;border-radius:99px;border:0;background:${color?'#'+color:'#888'}"></button>
+  const shown=id=>!hidden.has(id)&&(!widgetFlag[id]||p[widgetFlag[id]]);
+  const row=(id,ids)=>{
+    const index=ids.indexOf(id),color=p.colors&&p.colors[id],label=name(id);
+    return `<div class="item"><span>${esc(label)}</span><span class="controls">
+      <button data-move="${id}" data-dir="-1" aria-label="${esc(label+' · '+wui('Up'))}" ${index===0||widgetSaving?'disabled':''}>${esc(wui('Up'))}</button>
+      <button data-move="${id}" data-dir="1" aria-label="${esc(label+' · '+wui('Down'))}" ${index===ids.length-1||widgetSaving?'disabled':''}>${esc(wui('Down'))}</button>
+      <button class="switch${shown(id)?' on':''}" data-hide="${id}" role="switch" aria-checked="${shown(id)?'true':'false'}" aria-label="${esc(label+' · '+wui('Show'))}" ${widgetSaving||id.startsWith('system-')&&!p.system?'disabled':''}></button>
+      <button data-color="${id}" aria-label="${esc(label+' · '+wui('Color'))}" title="${esc(color||wui('Automatic'))}" style="background:${color?'#'+esc(color):'#888'}" ${widgetSaving?'disabled':''}></button>
     </span></div>`;
-  });
+  };
+  monitoring.innerHTML=`<div class="group"><div class="item"><span>${esc(wui('Enable system monitoring'))}</span><button class="switch${p.system?' on':''}" id="sw-system" role="switch" aria-label="${esc(wui('Enable system monitoring'))}" aria-checked="${p.system?'true':'false'}" ${widgetSaving?'disabled':''}></button></div>
+    <div class="item cap">${esc(wui('Samples every second. Turn monitoring off to stop collection; your meter choices and colors are kept.'))}</div></div>
+    <div class="sec">${esc(wui('Hardware meters'))}</div><div class="group"><div class="item cap">${esc(wui('Choose a color and switch each meter on or off.'))}</div>${meterOrder.map(id=>row(id,meterOrder)).join('')}</div>`;
   const city=p.weatherCity&&p.weatherCity.name||'';
-  html+=`<div class="item"><span>${esc(wui('Search city'))}</span><span class="controls"><input id="wx-q" value="" placeholder="${esc(city||wui('Search city'))}" aria-label="${esc(wui('Search city'))}"><button id="wx-go">${esc(wui('Search'))}</button></span></div>`;
-  html+=`<div class="item cap" id="wx-msg">${city?esc(city)+' · ':esc(wui('Choose a weather city in Settings.'))+' '}${esc(wui('Celsius, from Open-Meteo. Refreshes every 15 minutes.'))}</div>`;
-  html+=`<div id="wx-results"></div>`;
-  box.innerHTML=html;
-  const save=next=>invoke('set_widget_prefs',{prefs:next}).then(renderFromPayload).catch(e=>strip('set_widget_prefs failed: '+errText(e)));
+  const captions={
+    'widget-calendar':'See today’s date and hover to open the monthly calendar.',
+    'widget-todo':'Hover over TODO to add tasks, mark them done or remove them. Unfinished tasks carry over to tomorrow.'
+  };
+  box.innerHTML=widgetOrder.map(id=>`<div class="sec">${esc(id==='widget-todo'?wui('Today’s tasks'):name(id))}</div><div class="group">${row(id,widgetOrder)}${id==='widget-weather'?
+    `<div class="item"><label for="wx-q">${esc(wui('Search city'))}</label><span class="controls"><input id="wx-q" placeholder="${esc(city||wui('Search city'))}"><button id="wx-go" ${widgetSaving?'disabled':''}>${esc(wui('Search'))}</button></span></div>
+     <div class="item cap" id="wx-msg">${city?esc(city)+' · ':esc(wui('Choose a weather city in Settings.'))+' '}${esc(wui('Celsius, from Open-Meteo. Refreshes every 15 minutes.'))}</div><div id="wx-results"></div>`:
+    `<div class="item cap">${esc(wui(captions[id]))}</div>`}</div>`).join('');
+  const save=next=>{
+    if(widgetSaving) return;
+    widgetSaving=true;
+    renderWidgets();
+    return invoke('set_widget_prefs',{prefs:next}).then(renderFromPayload)
+      .catch(e=>strip('set_widget_prefs failed: '+errText(e)))
+      .finally(()=>{widgetSaving=false;renderWidgets();});
+  };
   const current=()=>({
     system:p.system, calendar:p.calendar, weather:p.weather, todo:p.todo,
     hidden:p.hidden||[], order:order, colors:p.colors||{}
   });
-  box.querySelector('#sw-system').onclick=()=>save(Object.assign(current(),{system:!p.system}));
-  box.querySelector('#sw-cal').onclick=()=>save(Object.assign(current(),{calendar:!p.calendar}));
-  box.querySelector('#sw-wx').onclick=()=>save(Object.assign(current(),{weather:!p.weather}));
-  box.querySelector('#sw-todo').onclick=()=>save(Object.assign(current(),{todo:!p.todo}));
-  box.querySelectorAll('[data-hide]').forEach(button=>button.onclick=()=>{
-    const id=button.dataset.hide;
-    const hidden=new Set(p.hidden||[]);
-    if(hidden.has(id)) hidden.delete(id); else hidden.add(id);
-    save(Object.assign(current(),{hidden:[...hidden]}));
-  });
-  box.querySelectorAll('[data-move]').forEach(button=>button.onclick=()=>{
-    const ids=order.slice();
-    const from=meterOrder.indexOf(button.dataset.move);
-    const to=from+Number(button.dataset.dir);
-    if(from<0||to<0||to>=meterOrder.length) return;
-    // This pane reorders system cells only; accounts and stocks keep their saved slots.
-    const a=ids.indexOf(meterOrder[from]),b=ids.indexOf(meterOrder[to]);
-    [ids[a],ids[b]]=[ids[b],ids[a]];
-    save(Object.assign(current(),{order:ids}));
-  });
-  box.querySelectorAll('[data-color]').forEach(button=>button.onclick=()=>{
-    const id=button.dataset.color;
-    const colors=Object.assign({}, p.colors||{});
-    const now=colors[id];
-    const next=PALETTE[(PALETTE.indexOf(now)+1)%PALETTE.length];
-    if(now&&PALETTE.indexOf(now)===PALETTE.length-1) delete colors[id];
-    else colors[id]=next;
-    save(Object.assign(current(),{colors:colors}));
-  });
+  monitoring.querySelector('#sw-system').onclick=()=>save({...current(),system:!p.system});
+  for(const host of [monitoring,box]){
+    host.querySelectorAll('[data-hide]').forEach(button=>button.onclick=()=>{
+      const id=button.dataset.hide,next=current(),hidden=new Set(p.hidden||[]);
+      if(widgetFlag[id]){
+        // Older settings had both a widget switch and a hidden-item switch. One control now
+        // reflects their effective visibility; explicitly enabling it clears the legacy hide.
+        next[widgetFlag[id]]=!shown(id);
+        hidden.delete(id);
+      }else if(hidden.has(id)) hidden.delete(id); else hidden.add(id);
+      save({...next,hidden:[...hidden]});
+    });
+    host.querySelectorAll('[data-move]').forEach(button=>button.onclick=()=>{
+      const ids=order.slice(),peers=host===monitoring?meterOrder:widgetOrder;
+      const from=peers.indexOf(button.dataset.move),to=from+Number(button.dataset.dir);
+      if(from<0||to<0||to>=peers.length) return;
+      // Only swap this section's slots; subscriptions, stocks and the other section stay put.
+      const a=ids.indexOf(peers[from]),b=ids.indexOf(peers[to]);
+      [ids[a],ids[b]]=[ids[b],ids[a]];
+      save({...current(),order:ids});
+    });
+    host.querySelectorAll('[data-color]').forEach(button=>button.onclick=()=>{
+      const id=button.dataset.color,colors={...p.colors},now=colors[id];
+      if(now&&PALETTE.indexOf(now)===PALETTE.length-1) delete colors[id];
+      else colors[id]=PALETTE[(PALETTE.indexOf(now)+1)%PALETTE.length];
+      save({...current(),colors});
+    });
+  }
   box.querySelector('#wx-go').onclick=()=>{
     const name=box.querySelector('#wx-q').value;
     const go=box.querySelector('#wx-go');
     go.disabled=true;
-    invoke('search_weather_cities',{name:name}).then(rows=>{
+    invoke('search_weather_cities',{name}).then(rows=>{
       const host=box.querySelector('#wx-results');
       host.innerHTML='';
       if(!rows||!rows.length){ box.querySelector('#wx-msg').textContent=wui('No matching city.'); return; }
       rows.forEach(city=>{
         const b=document.createElement('button');
         b.textContent=[city.name, city.admin1, city.country].filter(Boolean).join(', ');
-        b.onclick=()=>invoke('set_weather_city',{city:city})
+        b.onclick=()=>invoke('set_weather_city',{city})
           .then(()=>call('get_widget_prefs',undefined,null).then(renderFromPayload))
           .catch(e=>strip('set_weather_city failed: '+errText(e)));
         host.appendChild(b);
       });
     }).catch(e=>{ box.querySelector('#wx-msg').textContent=wui('City search failed.')+' '+errText(e); })
-      .finally(()=>{go.disabled=false});
+      .finally(()=>{go.disabled=false;});
   };
+  box.querySelector('#wx-q').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();box.querySelector('#wx-go').click();}};
 }
 function renderFromPayload(v){
   if(!v) return;
@@ -1711,7 +1788,7 @@ document.getElementById('btn-recentre').addEventListener('click', () => {
     .catch(e => strip('reset_notch_position failed: ' + errText(e)));
 });
 
-/* ---- Appearance: language ------------------------------------------------ */
+/* ---- General: language ------------------------------------------------ */
 // Must list every <option> in the picker above: a value missing here is
 // discarded on save and read back as 'auto', so the language is unreachable.
 const LANGS = ['auto', 'en', 'pt-BR', 'zh', 'zh-Hant', 'ja', 'ko', 'ru', 'uk'];
@@ -1781,7 +1858,8 @@ function renderAll(){
   renderWeekly();
   drawSwitch(document.getElementById('sw-autostart'), autostart);
   drawSwitch(document.getElementById('sw-move'), moveHandle);
-  document.getElementById('title').textContent = curTab==='stocks'?PenguinNotchStocks.t(uiLang,'Stocks'):ui(TITLES[curTab], TITLES[curTab]);
+  renderSectionTitle();
+  renderWidgets();
   document.getElementById('stock-tab-label').textContent=PenguinNotchStocks.t(uiLang,'Stocks');
   if(stockSettingsView) stockSettingsView.render();
 }

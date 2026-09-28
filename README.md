@@ -253,8 +253,16 @@ have their own visibility and color controls. Stocks starts with one quote-provi
 and keeps API credentials collapsed until needed; AI usage formatting and thresholds live with AI accounts. App language, accent
 color and Dock/menu-bar settings are under **General**.
 
+Windows follows the same section order for its supported features: **AI subscriptions →
+Stocks → Computer monitoring → Daily widgets → Appearance → General**. Hardware meters
+and calendar/weather/to-do settings have separate pages. The weekly ring is under
+**AI subscriptions → Usage display**; language and the tray icon are under **General**.
+Existing visibility, colors, order and weather city are kept. Moving items within one
+page preserves the other categories' slots. macOS-only services and alerts are not shown
+as empty Windows settings pages.
+
 Under **Appearance → Notch items and order → Manage visible items and order**, filter
-by category or choose **Group by category** to gather related cells. Filtering and moving
+by category on macOS or choose **Group by category** to gather related cells. Filtering and moving
 rows preserves other categories’ positions; existing visibility, colors and order are kept.
 
 ## Placement
