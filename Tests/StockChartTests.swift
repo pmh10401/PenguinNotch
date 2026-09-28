@@ -28,10 +28,10 @@ final class StockChartTests: XCTestCase {
 
     func testMovingAveragesUseHiddenHistoryWithoutPartialWindowsOrFuturePrices() throws {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
-        var candles = (1...140).map { index in
-            StockCandle(end: start.addingTimeInterval(Double(index) * 86400),
-                        open: Decimal(index), high: Decimal(index), low: Decimal(index),
-                        close: Decimal(index), volume: 100)
+        var candles: [StockCandle] = (1...140).map { (index: Int) -> StockCandle in
+            let price = Decimal(index)
+            let end = start.addingTimeInterval(TimeInterval(index) * 86_400)
+            return StockCandle(end: end, open: price, high: price, low: price, close: price, volume: 100)
         }
         for period in StockQuoteCodec.movingAveragePeriods {
             let values = StockQuoteCodec.movingAverages(for: candles, period: period)
