@@ -303,6 +303,8 @@ Scripts/sign-local.sh   # /Applications/PenguinNotch.app 서명; 다른 경로�
 
 ## 기여
 
+[개발 지식 위키](docs/wiki/index.md)에서 프로젝트 목표, 주식 데이터 규칙, 릴리즈 근거와 문서 간 불일치를 먼저 확인할 수 있습니다. 출처 버전과 유지 절차는 [Karpathy의 LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 방식을 적용했습니다.
+
 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
 
 ## 라이선스

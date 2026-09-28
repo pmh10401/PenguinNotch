@@ -771,6 +771,10 @@ unified log.
 
 ## Contributing
 
+Start with the [developer knowledge wiki](docs/wiki/index.md) (Korean) for project
+goals, stock-data rules, release evidence and known documentation conflicts.
+Its source revisions and maintenance workflow follow [Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
