@@ -31,7 +31,7 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
-            ReleaseNote(version: "1.20.3", headline: L10n.t("Scroll through every notch item"),
+            ReleaseNote(version: "1.20.4", headline: L10n.t("Scroll through every notch item"),
                         changes: [.init(title: L10n.t("Use the wheel when the notch fills the screen"),
                                         detail: L10n.t("Scroll overflowing items with the mouse wheel or trackpad on all four edges. The notch stays within the display, and hover cards keep their own scrolling."))]),
             ReleaseNote(version: "1.20.2", headline: L10n.t("Read stock direction at a glance"),

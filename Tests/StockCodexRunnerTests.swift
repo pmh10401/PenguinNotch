@@ -246,8 +246,10 @@ final class StockCodexRunnerTests: XCTestCase {
 
     func testCancellationKillsProcessGroupAndRejectsConcurrentCall() async throws {
         let fixture = try Fixture("cancel")
-        let task = Task { try await run(fixture) }
-        for _ in 0..<200 where fixture.capture()?["child"] == nil { try await Task.sleep(nanoseconds: 10_000_000) }
+        // CI can take several seconds to cold-start Python. Time cancellation only after readiness.
+        let task = Task { try await run(fixture, timeout: 15) }
+        defer { task.cancel() }
+        for _ in 0..<1000 where fixture.capture()?["child"] == nil { try await Task.sleep(nanoseconds: 10_000_000) }
         XCTAssertNotNil(fixture.capture()?["child"])
         do { _ = try await run(fixture); XCTFail("Only one active invocation is allowed") }
         catch { XCTAssertEqual(error as? StockCodexRunner.Failure, .busy) }
