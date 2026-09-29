@@ -287,6 +287,7 @@ fn window_from(
         used: (pct / 100.0).clamp(0.0, 1.0),
         resets_at: reset_at_ms(w, now, "reset_at", "reset_after_seconds"),
         group: group.map(str::to_string),
+        duration: crate::usage::finite_positive_secs(num(w.get("limit_window_seconds"))),
         ..Default::default()
     })
 }
@@ -494,6 +495,7 @@ pub fn snapshot_from_rollout(text: &str) -> Option<(Vec<LimitWindow>, Option<u64
                 label: label_for(num(w.get("window_minutes")), id),
                 used: (pct / 100.0).clamp(0.0, 1.0),
                 resets_at: reset_at_ms(w, now, "resets_at", "resets_in_seconds"),
+                duration: crate::usage::minutes_to_secs(num(w.get("window_minutes"))),
                 ..Default::default()
             });
         }
@@ -540,6 +542,7 @@ fn app_server_snapshot(result: &serde_json::Value) -> Option<UsageSnapshot> {
             label: label_for(w.get("windowDurationMins").and_then(|x| x.as_f64()), id),
             used: (used / 100.0).clamp(0.0, 1.0),
             resets_at: w.get("resetsAt").and_then(|x| x.as_u64()).map(|s| s.saturating_mul(1000)),
+            duration: crate::usage::minutes_to_secs(w.get("windowDurationMins").and_then(|x| x.as_f64())),
             ..Default::default()
         });
     }
@@ -1117,6 +1120,88 @@ mod tests {
         );
         assert_eq!(ids(&ws), ["primary"]);
         assert_eq!(ws[0].label, "Monthly limit");
+        assert_eq!(ws[0].duration, Some(2_592_000.0));
         assert!((ws[0].used - 0.16).abs() < 1e-4);
+    }
+
+    #[test]
+    fn week_primary_and_five_hour_secondary_keep_reported_durations() {
+        let ws = windows(
+            r#"{"rate_limit":{
+              "primary_window":{"used_percent":8,"limit_window_seconds":604800},
+              "secondary_window":{"used_percent":0,"limit_window_seconds":18000}}}"#,
+        );
+        assert_eq!(ids(&ws), ["primary", "secondary"]);
+        assert_eq!(ws[0].duration, Some(604_800.0));
+        assert_eq!(ws[1].duration, Some(18_000.0));
+        assert_eq!(ws[0].label, "Weekly limit");
+        assert_eq!(ws[1].label, "5h limit");
+    }
+
+    #[test]
+    fn rest_duration_is_limit_window_seconds() {
+        let ws = windows(
+            r#"{
+            "rate_limit":{
+              "primary_window":{"used_percent":25,"limit_window_seconds":18000,"reset_at":1800001000},
+              "secondary_window":{"used_percent":10,"limit_window_seconds":604800,"reset_at":1800600000}},
+            "additional_rate_limits":[{"limit_name":"Spark","rate_limit":{
+              "primary_window":{"used_percent":99,"limit_window_seconds":18000},
+              "secondary_window":{"used_percent":12,"limit_window_seconds":604800}}}],
+            "code_review_rate_limit":{
+              "primary_window":{"used_percent":90,"limit_window_seconds":604800},
+              "secondary_window":{"used_percent":15,"limit_window_seconds":18000}}
+        }"#,
+        );
+        assert_eq!(ids(&ws), ["primary", "secondary", "spark", "spark-secondary", "code-review", "code-review-secondary"]);
+        assert_eq!(
+            ws.iter().map(|w| w.duration).collect::<Vec<_>>(),
+            [Some(18_000.0), Some(604_800.0), Some(18_000.0), Some(604_800.0), Some(604_800.0), Some(18_000.0)]
+        );
+    }
+
+    #[test]
+    fn invalid_or_missing_native_durations_are_none() {
+        let ws = windows(
+            r#"{"rate_limit":{
+              "primary_window":{"used_percent":8,"limit_window_seconds":0},
+              "secondary_window":{"used_percent":1,"limit_window_seconds":-5}}}"#,
+        );
+        assert_eq!(ws[0].duration, None);
+        assert_eq!(ws[1].duration, None);
+        let missing = windows(r#"{"rate_limit":{"primary_window":{"used_percent":8}}}"#);
+        assert_eq!(missing[0].duration, None);
+        assert_eq!(missing[0].label, "Current session");
+    }
+
+    #[test]
+    fn rollout_converts_window_minutes_to_seconds() {
+        let core = r#"{"rate_limits":{"primary":{"used_percent":32,"window_minutes":10080},"secondary":{"used_percent":10,"window_minutes":300}}}"#;
+        let (ws, _, _) = snapshot_from_rollout(core).unwrap();
+        assert_eq!(ids(&ws), ["primary", "secondary"]);
+        assert_eq!(ws[0].duration, Some(604_800.0));
+        assert_eq!(ws[1].duration, Some(18_000.0));
+        let missing = snapshot_from_rollout(r#"{"rate_limits":{"primary":{"used_percent":1}}}"#).unwrap().0;
+        assert_eq!(missing[0].duration, None);
+        let invalid = snapshot_from_rollout(r#"{"rate_limits":{"primary":{"used_percent":1,"window_minutes":0}}}"#).unwrap().0;
+        assert_eq!(invalid[0].duration, None);
+    }
+
+    #[test]
+    fn app_server_converts_window_duration_mins_to_seconds() {
+        let value = serde_json::json!({"rateLimits": {
+            "primary": {"usedPercent": 25, "windowDurationMins": 300, "resetsAt": 1800000000u64},
+            "secondary": {"usedPercent": 42, "windowDurationMins": 10080}
+        }, "rateLimitsByLimitId": null});
+        let snap = app_server_snapshot(&value).unwrap();
+        assert_eq!(snap.windows[0].duration, Some(18_000.0));
+        assert_eq!(snap.windows[1].duration, Some(604_800.0));
+        let week_primary = serde_json::json!({"rateLimitsByLimitId":{"codex":{"limitId":"codex",
+            "primary":{"usedPercent":32,"windowDurationMins":10080},"secondary":{"usedPercent":5,"windowDurationMins":300}}}});
+        let snap = app_server_snapshot(&week_primary).unwrap();
+        assert_eq!(snap.windows[0].duration, Some(604_800.0));
+        assert_eq!(snap.windows[1].duration, Some(18_000.0));
+        let missing = app_server_snapshot(&serde_json::json!({"rateLimits":{"primary":{"usedPercent":7}}})).unwrap();
+        assert_eq!(missing.windows[0].duration, None);
     }
 }

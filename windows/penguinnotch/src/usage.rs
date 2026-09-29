@@ -144,6 +144,41 @@ pub struct LimitWindow {
     /// for several things (Antigravity: a 5-hour and a weekly lane per model family). None = ungrouped
     #[serde(default)]
     pub group: Option<String>,
+    /// Exact cycle length in seconds when known. Optional (`serde(default)`) so older caches stay readable.
+    #[serde(default)]
+    pub duration: Option<f64>,
+}
+
+/// A cycle length in seconds, only when it is finite and strictly greater than zero.
+pub(crate) fn finite_positive_secs(value: Option<f64>) -> Option<f64> {
+    value.filter(|s| s.is_finite() && *s > 0.0)
+}
+
+/// Minutes from a native response, converted to seconds when the product is a finite positive length.
+pub(crate) fn minutes_to_secs(minutes: Option<f64>) -> Option<f64> {
+    finite_positive_secs(minutes.map(|m| m * 60.0))
+}
+
+/// Native start/end stamps (epoch ms) as a cycle length. Not inferred from time until reset.
+pub(crate) fn span_secs(start_ms: Option<u64>, end_ms: Option<u64>) -> Option<f64> {
+    match (start_ms, end_ms) {
+        (Some(start), Some(end)) if end > start => {
+            finite_positive_secs(Some((end - start) as f64 / 1000.0))
+        }
+        _ => None,
+    }
+}
+
+/// Claude's known fixed windows, matching `UsageResponse.duration(forKind:)`.
+/// Windows' seven_day fallback keeps that field's id, which is still a 7-day window.
+fn claude_duration(kind: &str) -> Option<f64> {
+    if kind == "session" || kind == "five_hour" {
+        return finite_positive_secs(Some(5.0 * 3600.0));
+    }
+    if kind.starts_with("weekly_") || kind == "seven_day" {
+        return finite_positive_secs(Some(7.0 * 86400.0));
+    }
+    None
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -427,7 +462,9 @@ fn parse_response(v: &serde_json::Value) -> Vec<LimitWindow> {
                 id: kind.to_string(),
                 label: label_for(kind),
                 used: (pct / 100.0).clamp(0.0, 1.0),
-                resets_at: resets, ..Default::default()
+                resets_at: resets,
+                duration: claude_duration(kind),
+                ..Default::default()
             });
         }
     }
@@ -455,7 +492,14 @@ fn parse_response(v: &serde_json::Value) -> Vec<LimitWindow> {
         if dup {
             continue;
         }
-        out.push(LimitWindow { id: id.into(), label, used, resets_at, ..Default::default() });
+        out.push(LimitWindow {
+            id: id.into(),
+            label,
+            used,
+            resets_at,
+            duration: claude_duration(id),
+            ..Default::default()
+        });
     }
     // session always comes first (upstream display order)
     out.sort_by_key(|w| if w.id == "session" { 0 } else { 1 });
@@ -892,5 +936,70 @@ mod tests {
         assert!(c.expired(EXP));
         assert!(!c.expired(EXP - 1));
         assert!(!Credential { token: "t".into(), expires_at: None, ..Default::default() }.expired(EXP));
+    }
+
+    #[test]
+    fn finite_positive_secs_rejects_invalid_lengths() {
+        assert_eq!(finite_positive_secs(Some(18_000.0)), Some(18_000.0));
+        assert_eq!(finite_positive_secs(Some(0.0)), None);
+        assert_eq!(finite_positive_secs(Some(-1.0)), None);
+        assert_eq!(finite_positive_secs(Some(f64::INFINITY)), None);
+        assert_eq!(finite_positive_secs(Some(f64::NAN)), None);
+        assert_eq!(finite_positive_secs(None), None);
+        assert_eq!(minutes_to_secs(Some(300.0)), Some(18_000.0));
+        assert_eq!(minutes_to_secs(Some(0.0)), None);
+        assert_eq!(span_secs(Some(1_000), Some(2_000)), Some(1.0));
+        assert_eq!(span_secs(Some(2_000), Some(1_000)), None);
+    }
+
+    #[test]
+    fn claude_session_and_weekly_keep_authoritative_durations() {
+        let v = serde_json::json!({
+            "limits": [
+                {"kind":"session","percent":52,"resets_at":"2026-08-28T09:50:00.316290+00:00"},
+                {"kind":"weekly_all","percent":17,"resets_at":"2026-09-02T17:00:00.316321+00:00"}
+            ]
+        });
+        let ws = parse_response(&v);
+        assert_eq!(ws.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["session", "weekly_all"]);
+        assert_eq!(ws.iter().map(|w| w.duration).collect::<Vec<_>>(), [Some(18_000.0), Some(604_800.0)]);
+    }
+
+    #[test]
+    fn claude_named_fallback_windows_keep_fixed_durations() {
+        let v = serde_json::json!({
+            "five_hour": {"utilization": 10, "resets_at": "2026-08-28T09:50:00Z"},
+            "seven_day": {"utilization": 20, "resets_at": "2026-09-02T17:00:00Z"}
+        });
+        let ws = parse_response(&v);
+        assert_eq!(ws.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["session", "seven_day"]);
+        assert_eq!(ws.iter().map(|w| w.duration).collect::<Vec<_>>(), [Some(18_000.0), Some(604_800.0)]);
+    }
+
+    #[test]
+    fn unknown_claude_kind_has_no_duration() {
+        let v = serde_json::json!({
+            "limits": [{"kind":"amber_ladder","percent":10,"resets_at":"2026-08-28T09:50:00Z"}]
+        });
+        assert_eq!(parse_response(&v)[0].duration, None);
+    }
+
+    #[test]
+    fn old_serialized_windows_decode_without_duration() {
+        let raw = r#"{"id":"session","label":"Current session","used":0.5,"resets_at":1700000000000}"#;
+        let w: LimitWindow = serde_json::from_str(raw).unwrap();
+        assert_eq!(w.id, "session");
+        assert_eq!(w.used, 0.5);
+        assert_eq!(w.resets_at, Some(1_700_000_000_000));
+        assert_eq!(w.duration, None);
+        assert_eq!(w.count, None);
+    }
+
+    #[test]
+    fn old_usage_cache_decodes_without_duration() {
+        let raw = r#"{"status":"ok","windows":[{"id":"session","label":"Current session","used":0.52}],"fetched_at":1,"note":""}"#;
+        let snap: UsageSnapshot = serde_json::from_str(raw).unwrap();
+        assert_eq!(snap.windows[0].duration, None);
+        assert_eq!(snap.windows[0].used, 0.52);
     }
 }

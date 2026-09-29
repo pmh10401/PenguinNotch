@@ -15,9 +15,13 @@ function mockIPC(){
     if(cmd==='report_dpr') return devicePixelRatio*testSize;
     const replies={get_theme_resolved:'dark',get_notch_edge:'right',get_notch_insets:[0,0,0,0],get_move_handle:true,
       get_ui_flags:{notch_visible:true,notch_on_hover:false},get_notch_meter_style:'ring',get_hover_text_scale:1,
-      get_notch_slots:[],get_weekly_ring:'off',get_color_transition:'hard_step',get_opencode:{status:'absent'},get_state:{sessions:[],agg:'idle',lang_resolved:'en'},
+      get_notch_slots:[],get_weekly_ring:'off',get_color_transition:'hard_step',
+      get_usage_display:{shows_notch_readings:true,weekly_ring_dashed:false,weekly_reading:false,weekly_headline:false,reset_time_format:'automatic',show_usage_pace:false,claude_daily_pace_ring:false,show_codex_extra_limits:true},
+      get_usage_limits:{watch_limit:0.5,critical_limit:0.7},
+      get_opencode:{status:'absent'},get_state:{sessions:[],agg:'idle',lang_resolved:'en'},
       get_usage:{status:'ok',windows:[],fetched_at:0},get_codex:{status:'absent'},get_cursor:{status:'absent'},get_grok:{status:'absent'},get_glm:{status:'absent'},get_antigravity:{status:'absent'},
-      get_activity:[],get_glyphs:{},get_stock_settings:{enabled:false,symbols:[]},get_stock_credential_status:{toss:false,finnhub:false},load_stock_history:{version:1,trends:[],forecasts:[]}};
+      get_activity:[],get_glyphs:{},get_stock_settings:{enabled:false,symbols:[]},get_stock_credential_status:{toss:false,finnhub:false},load_stock_history:{version:1,trends:[],forecasts:[]},
+      get_update_state:{}};
     if(cmd==='stock_request') throw Error('Unexpected external request');
     return replies[cmd]??null;
   }},event:{listen:async(name,fn)=>{events.set(name,[...(events.get(name)||[]),fn]);return()=>{};},emit:async()=>{}}};
@@ -125,6 +129,144 @@ if(process.argv.includes('--serve')){
     if(evidence){fs.mkdirSync(evidence,{recursive:true});fs.writeFileSync(path.join(evidence,'hover-bridge.json'),JSON.stringify(bridgeResults,null,2));}
     assert.ok(bridgeResults.every(r=>r.padding&&r.bridge&&r.card),'slow cell -> padding -> bridge -> card keeps the same card open on all four edges');
     console.log('PASS slow real pointer traversal through padding/bridge/card on all four edges');
+    const readingSnap=()=>page.evaluate(()=>{
+      const cell=cells.firstElementChild, pct=cell&&cell.querySelector('.pct');
+      const vertical=edgeIsVertical();
+      return {pill:pill.getBoundingClientRect().toJSON(),cell:cell.getBoundingClientRect().toJSON(),
+        pct:pct?getComputedStyle(pct).display:'none',
+        content:vertical?cells.scrollHeight:cells.scrollWidth,
+        extent:vertical?cells.clientHeight:cells.clientWidth,
+        overflow:(vertical?cells.scrollHeight-cells.clientHeight:cells.scrollWidth-cells.clientWidth)>1,
+        card:card.classList.contains('show'),hover:hoverId};
+    });
+    for(const edge of ['left','right','top','bottom']) for(const style of ['ring','bar']){
+      await configure(edge,1,style,30);
+      const p=await page.locator('.cell .ringwrap').nth(1).boundingBox();
+      await hover({x:p.x+p.width/2,y:p.y+p.height/2});
+      await page.waitForFunction(()=>card.classList.contains('show'));
+      const before=await readingSnap();
+      assert.equal(before.overflow,true,`${edge}/${style}/30 must overflow`);
+      const hoverBefore=before.hover;
+      await page.evaluate(()=>applyUsageDisplay({shows_notch_readings:false}));
+      const after=await readingSnap();
+      assert.equal(after.pct,'none',`${edge}/${style}/30: hiding readings removes reserved label space`);
+      assert.ok(after.cell.height<before.cell.height-4,`${edge}/${style}/30: per-cell extent shrinks ${JSON.stringify({before:before.cell,after:after.cell})}`);
+      const vertical=edge==='left'||edge==='right';
+      if(vertical){
+        assert.ok(after.content<before.content,`${edge}/${style}/30: scroll content shortens`);
+        assert.ok(Math.abs(after.pill.height-before.pill.height)<1,`${edge}/${style}/30: capped stack viewport is kept ${JSON.stringify({before:before.pill,after:after.pill})}`);
+        assert.equal(after.overflow,true,`${edge}/${style}/30: the list still overflows`);
+      }else{
+        assert.ok(after.pill.height<before.pill.height-4,`${edge}/${style}/30: depth shrinks when labels leave`);
+      }
+      assert.equal(after.card,true,`${edge}/${style}/30: hiding readings keeps hover content`);
+      assert.equal(after.hover,hoverBefore,`${edge}/${style}/30: hover target is unchanged`);
+      await page.evaluate(()=>applyUsageDisplay({shows_notch_readings:true}));
+
+      await configure(edge,1,style,2);
+      const shortBefore=await readingSnap();
+      assert.equal(shortBefore.overflow,false,`${edge}/${style}/2 fits without scrolling`);
+      await page.evaluate(()=>applyUsageDisplay({shows_notch_readings:false}));
+      const shortAfter=await readingSnap();
+      assert.equal(shortAfter.pct,'none',`${edge}/${style}/2: labels leave the layout`);
+      assert.ok(shortAfter.cell.height<shortBefore.cell.height-4,`${edge}/${style}/2: per-cell extent shrinks`);
+      if(vertical){
+        assert.ok(shortAfter.pill.height<shortBefore.pill.height-4,`${edge}/${style}/2: un-capped pill shortens ${JSON.stringify({before:shortBefore.pill,after:shortAfter.pill})}`);
+      }else{
+        assert.ok(shortAfter.pill.height<shortBefore.pill.height-4,`${edge}/${style}/2: depth shrinks`);
+      }
+      await page.evaluate(()=>applyUsageDisplay({shows_notch_readings:true}));
+    }
+    console.log('PASS hiding readings reduces per-cell extent; long lists keep a capped viewport; short lists shrink');
+    await page.evaluate(()=>{
+      stockStore.settings=PenguinNotchStocks.normalizeSettings({enabled:false,symbols:[]});
+      usage={status:'ok',windows:[
+        {id:'session',used:0.3,duration:18000,resets_at:Date.now()+36e5},
+        {id:'weekly_all',used:0.6,duration:604800,resets_at:Date.now()+36e5}
+      ],fetched_at:Date.now()};
+      notchSlots=[{provider:'claude'}];
+      weeklyRing='outside';
+      usageDisplay=Object.assign(defaultUsageDisplay(),{weekly_ring_dashed:true});
+      applyMeterStyle('ring');
+      applyEdge('right');
+      renderRing();
+    });
+    assert.equal(await page.evaluate(()=>meterStyle),'ring');
+    assert.equal(await page.evaluate(()=>notchEdge),'right');
+    const dashed=await page.evaluate(()=>{
+      const mark=document.querySelector('svg.ring .weekly-dash, svg.ring path.weekly-dash, svg.ring circle.weekly-dash');
+      const markup=document.querySelector('svg.ring')?document.querySelector('svg.ring').innerHTML:'';
+      const dashCount=(markup.match(/stroke-dasharray=/g)||[]).length;
+      const used=mark&&mark.getAttribute('stroke-dasharray');
+      const dup=/\sstroke-dasharray="[^"]*"\s[^>]*stroke-dasharray=/.test(markup);
+      const length=mark&&mark.tagName==='path'?mark.getTotalLength():null;
+      const C=2*Math.PI*31;
+      return {used,dup,dashCount,tag:mark&&mark.tagName,length,circle:C,computed:mark?getComputedStyle(mark).strokeDasharray:null};
+    });
+    assert.equal(dashed.dup,false,'used arc must not carry two stroke-dasharray attributes');
+    assert.match(String(dashed.used||dashed.computed),/4/);
+    if(dashed.tag==='path') assert.ok(dashed.length>0 && dashed.length<dashed.circle-1,'dashed amount is not a full circle');
+    await page.evaluate(()=>{usageDisplay.weekly_ring_dashed=false;weeklyRing='inside';renderRing();});
+    const solid=await page.evaluate(()=>!!document.querySelector('svg.ring .weekly-dash'));
+    assert.equal(solid,false,'turning the dash off removes the dashed used arc');
+    await page.evaluate(()=>{usageDisplay.weekly_ring_dashed=true;renderRing();});
+    const inside=await page.evaluate(()=>{
+      const mark=document.querySelector('svg.ring .weekly-dash');
+      return mark&&(mark.getAttribute('r')||(mark.getAttribute('d')||'').includes('A 16 '));
+    });
+    assert.ok(inside,'inside placement still dashes the used arc');
+    console.log('PASS dashed weekly ring has a single dasharray and a partial used arc');
+    const pairMeasure=()=>page.evaluate(()=>{
+      const pillBox=pill.getBoundingClientRect(), pct=document.querySelector('.cell[data-p="claude"] .pct');
+      const ring=document.querySelector('.cell[data-p="claude"] .ringwrap');
+      if(!pct||!ring) return null;
+      const p=pct.getBoundingClientRect(), r=ring.getBoundingClientRect();
+      const range=document.createRange(); range.selectNodeContents(pct);
+      const ink=range.getBoundingClientRect();
+      return {text:pct.textContent,pair:pct.classList.contains('pair'),font:parseFloat(getComputedStyle(pct).fontSize),
+        height:p.height,pill:pillBox,pct:p,ring:r,view:[innerWidth,innerHeight],edge:notchEdge,style:meterStyle,
+        scroll:pct.scrollWidth,client:pct.clientWidth,ink};
+    });
+    for(const edge of ['left','right','top','bottom']) for(const style of ['ring','bar']) for(const size of [.75,1,1.5]) for(const pair of [[1,1],[1,0.5]]){
+      await configure(edge,size,style,0);
+      await page.evaluate(({used,week})=>{
+        stockStore.settings=PenguinNotchStocks.normalizeSettings({enabled:false,symbols:[]});
+        usage={status:'ok',windows:[
+          {id:'session',used,duration:18000,resets_at:Date.now()+36e5},
+          {id:'weekly_all',used:week,duration:604800,resets_at:Date.now()+36e5}
+        ],fetched_at:Date.now()};
+        notchSlots=[{provider:'claude'}];
+        weeklyRing='outside';
+        usageDisplay=Object.assign(defaultUsageDisplay(),{weekly_reading:true});
+        renderRing();
+      },{used:pair[0],week:pair[1]});
+      const g=await pairMeasure();
+      assert.ok(g,`${edge}/${style}/${size} ${pair.join('/')} rendered`);
+      assert.equal(g.pair,true,`${edge}/${style}/${size} uses the pair class`);
+      assert.ok(g.font<14.5,`${edge}/${style}/${size} pair type is smaller than the single reading`);
+      assert.equal(g.text,`${Math.round(pair[0]*100)}%/${Math.round(pair[1]*100)}%`);
+      assert.ok(g.scroll<=g.client+0.6,`${edge}/${style}/${size} full pair text fits its box ${JSON.stringify(g)}`);
+      assert.ok(g.ink.width<=g.pct.width+0.6&&g.ink.left>=g.pct.left-0.6&&g.ink.right<=g.pct.right+0.6,`${edge}/${style}/${size} glyph range stays in the label`);
+      assert.ok(g.pct.left>=g.pill.left-0.6&&g.pct.right<=g.pill.right+0.6,`${edge}/${style}/${size} pair stays in the pill ${JSON.stringify(g)}`);
+      assert.ok(g.pct.left>=-0.6&&g.pct.right<=g.view[0]+0.6&&g.pct.top>=-0.6&&g.pct.bottom<=g.view[1]+0.6,`${edge}/${style}/${size} pair stays in the window`);
+      assert.ok(g.pct.top>=g.ring.bottom-1||g.pct.bottom<=g.ring.top+1||(g.pct.left>=g.ring.right-1||g.pct.right<=g.ring.left+1),`${edge}/${style}/${size} pair does not cover the ring`);
+    }
+    await configure('right',1,'ring',0);
+    await page.evaluate(()=>{
+      stockStore.settings=PenguinNotchStocks.normalizeSettings({enabled:false,symbols:[]});
+      usage={status:'ok',windows:[{id:'session',used:1,duration:18000,resets_at:Date.now()+36e5}],fetched_at:Date.now()};
+      notchSlots=[{provider:'claude'}]; weeklyRing='off';
+      usageDisplay=defaultUsageDisplay(); renderRing();
+    });
+    const single=await pairMeasure();
+    assert.equal(single.pair,false);
+    assert.equal(single.text,'100%');
+    assert.ok(single.font>=14.5,'a single reading keeps the larger type');
+    console.log('PASS paired readings stay inside the pill on all edges');
+    await page.evaluate(()=>{
+      usage={status:'ok',windows:[],fetched_at:0}; notchSlots=[]; weeklyRing='off';
+      usageDisplay=defaultUsageDisplay(); renderRing();
+    });
     let cases=0;
     for(const edge of ['left','right','top','bottom']) for(const style of ['ring','bar']) for(const size of [.75,.8,1,1.137,1.25,1.5]) {
       await configure(edge,size,style);

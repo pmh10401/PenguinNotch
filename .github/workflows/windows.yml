@@ -46,6 +46,35 @@ jobs:
       - name: Test system widgets and disk volumes
         run: node scripts/test-widgets.cjs
 
+      - name: Test usage display parity
+        run: node --test scripts/test-usage-display.cjs
+
+      # Render the actual pages on the Windows runner. IPC fixtures remain public
+      # and offline; this covers Web UI behavior, not physical monitor hardware.
+      - name: Test rendered settings and notch
+        shell: pwsh
+        run: |
+          $qa = Join-Path $env:RUNNER_TEMP 'penguinnotch-browser-qa'
+          npm install --prefix $qa --no-save --ignore-scripts playwright@1.62.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:NODE_PATH = Join-Path $qa 'node_modules'
+          node (Join-Path $env:NODE_PATH 'playwright/cli.js') install chromium
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:SETTINGS_EVIDENCE = Join-Path $env:RUNNER_TEMP 'penguinnotch-settings-evidence'
+          node scripts/test-settings-browser.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/test-notch-scroll-browser.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/test-updater-ui.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Windows-settings-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/penguinnotch-settings-evidence
+          if-no-files-found: ignore
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy

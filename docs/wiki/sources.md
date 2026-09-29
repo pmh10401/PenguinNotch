@@ -94,3 +94,23 @@ node windows/scripts/test-notch-scroll-browser.cjs
 - 최종 로컬 전체 검사: **2,187개, 건너뜀 8개, 실패 0**, 종료 코드 0. 로그 `/tmp/penguin-upstream-1.21.2-full.log`. macOS 26 GitHub CI 통과 여부는 이 로컬 macOS 27 결과와 구분합니다.
 - 후속 원격 검증: [3fe7ab56c1c6ca02bfe7b3ae207d97a1bd701dce](https://github.com/pmh10401/PenguinNotch/commit/3fe7ab56c1c6ca02bfe7b3ae207d97a1bd701dce)의 [macOS 26 CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36505085638)가 **2,187개, 건너뜀 13개, 실패 0**으로 통과했습니다. 앞서 실패한 놓기·스크롤 후 클릭/드래그·작은 목록 재정렬·Ollama 셀 클릭 네 검사가 모두 통과했고 SwiftPM 의존성 검사도 성공했습니다. [Windows CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36505085653)는 **188개 통과, 4개 제외, 실패 0**, [Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36505085668)는 설치·doctor·제거·업데이트 피드 생성에 성공했습니다. 최종 소스의 원격 성공은 앞선 실패 기록을 대체 삭제하지 않고 여기에 추가합니다.
 - 같은 코드의 [macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36505085624)도 DMG 생성·아티팩트 업로드·기존 `preview` 게시에 성공했습니다. 네 가지 GitHub 작업이 모두 성공했습니다. 정식 `v1.21.2` 릴리즈나 사용자 Mac 설치는 수행하지 않았습니다.
+
+## S12
+
+- 확인: 2026-09-29 KST. 기준 `e221fe5db30a24693240b407c9e9ef8acfe697ce` 이후 1.22.0 소스(macOS build 61, Windows r53). Grok 4.6 high가 격리된 작업 트리에서 구현하고 Codex가 통합·검증했습니다. 실제 계정·자격 증명·연구 원본은 사용하지 않았습니다.
+- 구현: [Windows 설정](../../windows/penguinnotch/ui/settings.html), [노치](../../windows/penguinnotch/ui/notch.html), [사용량](../../windows/penguinnotch/src/usage.rs), [업데이터](../../windows/penguinnotch/src/updater.rs), [날씨 수집](../../windows/penguinnotch/src/system_usage.rs), [위젯 표시](../../windows/penguinnotch/ui/widgets.js). 두 언어 README와 [공통 동작·차이](project.md#1220-공통-조작과-남은-차이)를 함께 갱신했습니다.
+- macOS 전체: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test-ci`, **2,187개, 건너뜀 11개, 실패 0**, 종료 코드 0. 로그 `/tmp/penguin-1.22.0-mac-tests.log`.
+- Windows 코드의 로컬 검사: `cargo test --locked --offline --workspace --features tauri/macos-private-api -- --quiet`에서 **224개 통과, 4개 제외, 실패 0**. `cargo check --locked --offline --workspace --all-targets --target x86_64-pc-windows-gnu` 통과. 각각 `/tmp/penguin-1.22-native-final.log`, `/tmp/penguin-1.22-gnu-final.log`. Windows 운영체제에서 실행한 결과는 아닙니다.
+- Node **33개 통과**, `check-ui-scripts.mjs` 3개 HTML 문법 검사 통과. 사용량 기간·페이스·한도, 날씨 현지 날짜/DST/도시 교체, 기존 주식·인증·한국어 동작을 확인했습니다. 로그 `/tmp/penguin-1.22-node-final.log`.
+- Playwright Chromium: 설정 **24개 배치**, 노치 **48개 배치**, 쌍 수치 **48개 조합**, 업데이트 카드 **네 방향 × 원/막대·호버 1.5배**, 미리보기·나중에·다시 표시·확인 중 입력·설치 연속 클릭·진행률·포커스 검사가 통과했습니다. 각각 `test-settings-browser.cjs`, `test-notch-scroll-browser.cjs`, `test-updater-ui.cjs`. 네이티브 IPC는 공개 모의 자료이며 외부 API를 호출하지 않습니다. 실제 Windows WebView2·물리적 다중 모니터·실제 계정 검증을 대신하지 않습니다.
+- 로컬 화면 로그: `/tmp/penguin-1.22-settings-final.log`, `/tmp/penguin-1.22-notch-final2.log`, `/tmp/penguin-1.22-updater-final2.log`. 저장된 설정·노치 화면도 직접 확인했습니다.
+- 원격 빌드·정식 설치 파일·업데이트 서명·최종 자산 해시 결과는 완료 후 이 항목에 추가합니다.
+
+저장소 루트에서 추가된 UI 검사를 재현합니다. Playwright는 앱 의존성이 아니며 CI의 임시 검사 폴더에 고정 버전으로 설치합니다.
+
+```sh
+node --test windows/scripts/test-usage-display.cjs
+node windows/scripts/test-settings-browser.cjs
+node windows/scripts/test-notch-scroll-browser.cjs
+node windows/scripts/test-updater-ui.cjs
+```

@@ -302,6 +302,7 @@ pub fn windows_from_bridge(v: &serde_json::Value) -> Vec<LimitWindow> {
             out.push(LimitWindow {
                 label: lane_name(&id).or(gname).or(bname).unwrap_or("Usage").to_string(),
                 group: gname.map(String::from),
+                duration: bucket_duration(&id, bname, b.get("window").and_then(|x| x.as_str())),
                 id,
                 used: (1.0 - rem).clamp(0.0, 1.0),
                 resets_at: parse_iso(b.get("resetTime")),
@@ -324,6 +325,27 @@ pub(crate) fn lane_name(id: &str) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Authoritative 5h / 7d lengths from `AntigravityQuotaParser.duration(for:)`, keyed by the
+/// same lane tokens `lane_name` already recognises. Unknown and count windows stay None.
+pub fn lane_duration(id: &str) -> Option<f64> {
+    match lane_name(id) {
+        Some("Weekly Limit") => Some(7.0 * 86400.0),
+        Some("5-hour Limit") => Some(5.0 * 3600.0),
+        _ => None,
+    }
+}
+
+fn bucket_duration(id: &str, display_name: Option<&str>, window: Option<&str>) -> Option<f64> {
+    let parts = [window, Some(id), display_name];
+    if parts.iter().flatten().any(|p| lane_name(p) == Some("Weekly Limit")) {
+        return Some(7.0 * 86400.0);
+    }
+    if parts.iter().flatten().any(|p| lane_name(p) == Some("5-hour Limit")) {
+        return Some(5.0 * 3600.0);
+    }
+    None
 }
 
 /// The Mac card's order: groups as the source lists them, and in each the 5-hour lane before the
@@ -499,6 +521,11 @@ fn direct_quota(token: &str) -> Option<Vec<LimitWindow>> {
                 .to_string();
             Some(LimitWindow {
                 id: b.get("name").and_then(|x| x.as_str()).unwrap_or(&label).to_string(),
+                duration: bucket_duration(
+                    b.get("name").and_then(|x| x.as_str()).unwrap_or(&label),
+                    Some(label.as_str()),
+                    b.get("window").and_then(|x| x.as_str()),
+                ),
                 label,
                 used: (used / limit).clamp(0.0, 1.0),
                 resets_at: parse_iso(b.get("resetTime")),
@@ -919,5 +946,24 @@ mod tests {
                 "Claude and GPT models › Weekly Limit (3p-weekly)",
             ]
         );
+        let durations: Vec<Option<f64>> = super::windows_from_bridge(&reply).into_iter().map(|w| w.duration).collect();
+        assert_eq!(durations, [Some(5.0 * 3600.0), Some(7.0 * 86400.0), Some(5.0 * 3600.0), Some(7.0 * 86400.0)]);
+    }
+
+    #[test]
+    fn unknown_and_count_windows_have_no_duration() {
+        let reply = serde_json::json!({ "response": { "groups": [
+            { "displayName": "Other", "buckets": [
+                { "bucketId": "requests", "remainingFraction": 0.5 } ] } ] } });
+        let ws = super::windows_from_bridge(&reply);
+        assert_eq!(ws[0].duration, None);
+        let count = crate::usage::LimitWindow {
+            id: "requests".into(),
+            count: Some(79),
+            derived: true,
+            ..Default::default()
+        };
+        assert_eq!(count.duration, None);
+        assert_eq!(count.count, Some(79));
     }
 }

@@ -42,7 +42,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// 100% so changing hover text size never resizes or zooms the notch.
 pub const NOTCH_W: f64 = 480.0;
 /// Hand-bumped build tag, written to run.log at startup so a log can always be matched to the exe that wrote it.
-pub const BUILD: &str = "r52";
+pub const BUILD: &str = "r53";
 /// The upright notch also holds system meters, calendar, weather and to-do cells.
 pub const NOTCH_UPRIGHT_H: f64 = 980.0;
 /// The flat notch needs this much width for its rings and height for its card.
@@ -1247,18 +1247,22 @@ fn get_weekly_ring(app: AppHandle) -> String {
 
 /// Unknown values are refused rather than stored. The notch draws its own rings, so it is told.
 #[tauri::command]
-fn set_weekly_ring(app: AppHandle, placement: String) -> String {
+fn set_weekly_ring(app: AppHandle, placement: String) -> Result<String, String> {
     let value = {
         let st = app.state::<AppState>();
         let mut c = st.cfg.lock().unwrap();
         if ["off", "inside", "outside"].contains(&placement.as_str()) {
+            let previous = c.clone();
             c.weekly_ring = placement;
-            config::save(&c);
+            if let Err(err) = config::try_save(&c) {
+                *c = previous;
+                return Err(err);
+            }
         }
         c.weekly_ring.clone()
     };
     let _ = app.emit("weekly_ring", &value);
-    value
+    Ok(value)
 }
 
 /// How the usage rings change colour as the allowance is used.
@@ -1271,16 +1275,74 @@ fn get_color_transition(app: AppHandle) -> String {
 
 /// Unknown values keep the existing hard steps. The notch redraws when it receives this event.
 #[tauri::command]
-fn set_color_transition(app: AppHandle, style: String) -> String {
+fn set_color_transition(app: AppHandle, style: String) -> Result<String, String> {
     let value = {
         let st = app.state::<AppState>();
         let mut c = st.cfg.lock().unwrap();
+        let previous = c.clone();
         c.color_transition = config::color_transition_or_step(&style);
-        config::save(&c);
+        if let Err(err) = config::try_save(&c) {
+            *c = previous;
+            return Err(err);
+        }
         c.color_transition.clone()
     };
     let _ = app.emit("color_transition", &value);
+    Ok(value)
+}
+
+#[tauri::command]
+fn get_usage_display(app: AppHandle) -> config::UsageDisplayPrefs {
+    let st = app.state::<AppState>();
+    let value = st.cfg.lock().unwrap().usage_display.clone();
     value
+}
+
+/// Native validation, then a fallible save: a disk failure restores the previous config and
+/// rejects so the page cannot report a persist that did not happen.
+#[tauri::command]
+fn set_usage_display(app: AppHandle, prefs: config::UsageDisplayPrefs) -> Result<config::UsageDisplayPrefs, String> {
+    let value = {
+        let st = app.state::<AppState>();
+        let mut c = st.cfg.lock().unwrap();
+        let previous = c.clone();
+        c.usage_display = prefs.sanitized();
+        match config::try_save(&c) {
+            Ok(()) => c.usage_display.clone(),
+            Err(err) => {
+                *c = previous;
+                return Err(err);
+            }
+        }
+    };
+    let _ = app.emit("usage_display", &value);
+    Ok(value)
+}
+
+#[tauri::command]
+fn get_usage_limits(app: AppHandle) -> config::UsageLimitPrefs {
+    let st = app.state::<AppState>();
+    let value = st.cfg.lock().unwrap().usage_limits.clone();
+    value
+}
+
+#[tauri::command]
+fn set_usage_limits(app: AppHandle, prefs: config::UsageLimitPrefs) -> Result<config::UsageLimitPrefs, String> {
+    let value = {
+        let st = app.state::<AppState>();
+        let mut c = st.cfg.lock().unwrap();
+        let previous = c.clone();
+        c.usage_limits = prefs.sanitized();
+        match config::try_save(&c) {
+            Ok(()) => c.usage_limits.clone(),
+            Err(err) => {
+                *c = previous;
+                return Err(err);
+            }
+        }
+    };
+    let _ = app.emit("usage_limits", &value);
+    Ok(value)
 }
 
 // ---------------- tray icon readings ----------------
@@ -2001,6 +2063,11 @@ fn main() {
             updater::get_update_state,
             updater::check_for_update,
             updater::install_update,
+            updater::dismiss_update,
+            updater::reoffer_update,
+            updater::preview_update,
+            updater::get_automatic_updates,
+            updater::set_automatic_updates,
             get_codex,
             get_cursor,
             get_grok,
@@ -2032,6 +2099,10 @@ fn main() {
             set_weekly_ring,
             get_color_transition,
             set_color_transition,
+            get_usage_display,
+            set_usage_display,
+            get_usage_limits,
+            set_usage_limits,
             get_theme,
             set_theme,
             get_theme_resolved,

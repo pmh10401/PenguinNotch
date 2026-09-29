@@ -264,7 +264,7 @@ fn begin_weather(cfg: &Config, rt: &mut Runtime) -> Option<(u64, WeatherLocation
     if !cfg.shows_weather {
         return None;
     }
-    let key = format!("{}:{}:{}", location.id, location.latitude, location.longitude);
+    let key = widgets::weather_identity(&location);
     let retry_after = if rt.live.weather_failed { 60 } else { 15 * 60 };
     let due = rt.weather_key != key
         || rt.weather_at.map(|then| then.elapsed() >= Duration::from_secs(retry_after)).unwrap_or(true);
@@ -277,21 +277,47 @@ fn begin_weather(cfg: &Config, rt: &mut Runtime) -> Option<(u64, WeatherLocation
     Some((rt.weather_generation, location))
 }
 
+fn select_weather_city(rt: &mut Runtime, city: Option<&WeatherLocation>) {
+    rt.weather_at = None;
+    rt.weather_key.clear();
+    rt.weather_generation = rt.weather_generation.wrapping_add(1);
+    match city {
+        None => {
+            rt.live.weather = None;
+            rt.live.weather_failed = false;
+        }
+        Some(city) => {
+            let key = widgets::weather_identity(city);
+            if rt.live.weather.as_ref().is_some_and(|view| view.identity == key) {
+                if let Some(view) = rt.live.weather.as_mut() {
+                    view.stale = true;
+                }
+            } else {
+                rt.live.weather = None;
+                rt.live.weather_failed = false;
+            }
+        }
+    }
+}
+
 fn finish_weather(rt: &mut Runtime, generation: u64, location: &WeatherLocation, view: Option<WeatherView>) {
     if rt.weather_generation != generation {
         return;
     }
+    let key = widgets::weather_identity(location);
     match view {
         Some(mut view) => {
             view.name = location.name.clone();
+            view.identity = key;
             rt.live.weather_failed = false;
             rt.live.weather = Some(view);
         }
         None => {
             rt.live.weather_failed = true;
-            if let Some(view) = rt.live.weather.as_mut() {
-                view.stale = true;
-                view.name = location.name.clone();
+            match rt.live.weather.as_mut() {
+                Some(view) if view.identity == key => view.stale = true,
+                Some(_) => rt.live.weather = None,
+                None => {}
             }
         }
     }
@@ -299,7 +325,7 @@ fn finish_weather(rt: &mut Runtime, generation: u64, location: &WeatherLocation,
 
 fn fetch_weather(location: &WeatherLocation) -> Option<WeatherView> {
     let url = format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,uv_index_max&forecast_days=2&timezone=auto&timeformat=unixtime&temperature_unit=celsius&wind_speed_unit=ms",
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,sunrise,sunset,uv_index_max&hourly=precipitation_probability&forecast_days=2&timezone=auto&timeformat=unixtime&temperature_unit=celsius&wind_speed_unit=ms",
         location.latitude, location.longitude
     );
     let body = ureq::get(&url).timeout(Duration::from_secs(20)).call().ok()?.into_string().ok()?;
@@ -390,6 +416,15 @@ fn weather_json(live: &Live) -> Option<serde_json::Value> {
             "feelsLike": view.feels_like,
             "uv": view.uv,
             "stale": view.stale || live.weather_failed,
+            "forecastDay": view.forecast_day,
+            "sunrise": view.sunrise,
+            "sunset": view.sunset,
+            "timezone": view.timezone,
+            "measuredAt": view.measured_at,
+            "hourlyRain": view.hourly_rain.iter().map(|hour| json!({
+                "end": hour.end,
+                "probability": hour.probability,
+            })).collect::<Vec<_>>(),
         })
     })
 }
@@ -526,26 +561,17 @@ pub async fn search_weather_cities(name: String) -> Result<Vec<WeatherLocation>,
 
 #[tauri::command]
 pub fn set_weather_city(app: AppHandle, city: Option<WeatherLocation>) {
-    let cleared = {
+    let selected = {
         let st = app.state::<crate::AppState>();
         let mut cfg = st.cfg.lock().unwrap();
         cfg.weather_location = city.filter(|city| city.is_valid());
         cfg.shows_weather = cfg.weather_location.is_some() || cfg.shows_weather;
-        let cleared = cfg.weather_location.is_none();
         config::save(&cfg);
-        cleared
+        cfg.weather_location.clone()
     };
     {
         let mut rt = runtime().lock().unwrap();
-        rt.weather_at = None;
-        rt.weather_key.clear();
-        rt.weather_generation = rt.weather_generation.wrapping_add(1);
-        if cleared {
-            rt.live.weather = None;
-            rt.live.weather_failed = false;
-        } else if let Some(view) = rt.live.weather.as_mut() {
-            view.stale = true;
-        }
+        select_weather_city(&mut rt, selected.as_ref());
     }
     emit(&app);
 }
@@ -1221,10 +1247,143 @@ mod disk_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::widgets::{RainHour, WeatherView};
 
     #[test]
     fn a_city_search_rejects_a_one_letter_name() {
         assert!(search_cities("a").unwrap().is_empty());
         assert!(search_cities("  ").unwrap().is_empty());
+    }
+
+    fn city(id: i64, name: &str, latitude: f64, longitude: f64) -> WeatherLocation {
+        WeatherLocation {
+            id,
+            name: name.into(),
+            latitude,
+            longitude,
+            admin1: None,
+            country: None,
+        }
+    }
+
+    fn reading(name: &str, identity: &str, temperature: f64) -> WeatherView {
+        WeatherView {
+            name: name.into(),
+            temperature,
+            code: 0,
+            is_day: true,
+            humidity: None,
+            wind: None,
+            low: None,
+            high: None,
+            rain: None,
+            feels_like: None,
+            uv: None,
+            measured_at: 1_790_035_200.0,
+            timezone: "Asia/Seoul".into(),
+            stale: false,
+            forecast_day: Some(1_790_002_800.0),
+            sunrise: None,
+            sunset: None,
+            hourly_rain: vec![RainHour { end: 1_790_038_800.0, probability: 40.0 }],
+            identity: identity.into(),
+        }
+    }
+
+    fn runtime_for_test() -> Runtime {
+        Runtime {
+            baseline: Default::default(),
+            history: Default::default(),
+            live: Live::default(),
+            monitoring: false,
+            #[cfg(windows)]
+            performance: PerformanceCounters::default(),
+            weather_at: None,
+            weather_key: String::new(),
+            weather_generation: 0,
+        }
+    }
+
+    #[test]
+    fn a_failed_switch_does_not_keep_the_previous_city_reading() {
+        let seoul = city(1835848, "Seoul", 37.566, 126.978);
+        let tokyo = city(1850147, "Tokyo", 35.689, 139.692);
+        let mut rt = runtime_for_test();
+        rt.live.weather = Some(reading("Seoul", &widgets::weather_identity(&seoul), 23.4));
+        rt.weather_generation = 4;
+        select_weather_city(&mut rt, Some(&tokyo));
+        assert!(rt.live.weather.is_none());
+        assert!(!rt.live.weather_failed);
+        assert_eq!(rt.weather_generation, 5);
+        finish_weather(&mut rt, 5, &tokyo, None);
+        assert!(rt.live.weather.is_none(), "old temperature must not be renamed to the new city");
+        assert!(rt.live.weather_failed);
+        let payload = weather_json(&rt.live);
+        assert!(payload.is_none());
+    }
+
+    #[test]
+    fn a_late_response_for_the_previous_city_is_ignored() {
+        let seoul = city(1835848, "Seoul", 37.566, 126.978);
+        let tokyo = city(1850147, "Tokyo", 35.689, 139.692);
+        let mut rt = runtime_for_test();
+        rt.weather_generation = 1;
+        let mut late = reading("Seoul", "", 23.4);
+        late.name.clear();
+        select_weather_city(&mut rt, Some(&tokyo));
+        finish_weather(&mut rt, 1, &seoul, Some(late));
+        assert!(rt.live.weather.is_none());
+        assert_eq!(rt.weather_generation, 2);
+        let mut current = reading("Tokyo", "", 18.0);
+        current.name.clear();
+        finish_weather(&mut rt, 2, &tokyo, Some(current));
+        let view = rt.live.weather.as_ref().unwrap();
+        assert_eq!(view.name, "Tokyo");
+        assert_eq!(view.temperature, 18.0);
+        assert_eq!(view.identity, widgets::weather_identity(&tokyo));
+    }
+
+    #[test]
+    fn a_same_city_failed_refresh_keeps_the_stale_name() {
+        let seoul = city(1835848, "Seoul", 37.566, 126.978);
+        let mut rt = runtime_for_test();
+        rt.live.weather = Some(reading("Seoul", &widgets::weather_identity(&seoul), 23.4));
+        rt.weather_generation = 3;
+        select_weather_city(&mut rt, Some(&seoul));
+        let kept = rt.live.weather.as_ref().unwrap();
+        assert_eq!(kept.name, "Seoul");
+        assert!(kept.stale);
+        assert_eq!(kept.temperature, 23.4);
+        finish_weather(&mut rt, 4, &seoul, None);
+        let stale = rt.live.weather.as_ref().unwrap();
+        assert_eq!(stale.name, "Seoul");
+        assert_eq!(stale.temperature, 23.4);
+        assert!(stale.stale);
+        assert!(rt.live.weather_failed);
+        let json = weather_json(&rt.live).unwrap();
+        assert_eq!(json["name"], "Seoul");
+        assert_eq!(json["temperature"], 23.4);
+        assert_eq!(json["stale"], true);
+        assert_eq!(json["timezone"], "Asia/Seoul");
+        assert_eq!(json["forecastDay"], 1_790_002_800.0);
+        assert_eq!(json["hourlyRain"][0]["probability"], 40.0);
+    }
+
+    #[test]
+    fn weather_sampling_stays_on_the_fifteen_minute_cadence_until_the_city_changes() {
+        let seoul = city(1835848, "Seoul", 37.566, 126.978);
+        let tokyo = city(1850147, "Tokyo", 35.689, 139.692);
+        let mut cfg = Config::default();
+        cfg.shows_weather = true;
+        cfg.weather_location = Some(seoul.clone());
+        let mut rt = runtime_for_test();
+        assert!(begin_weather(&cfg, &mut rt).is_some());
+        let generation = rt.weather_generation;
+        assert!(begin_weather(&cfg, &mut rt).is_none());
+        assert_eq!(rt.weather_generation, generation);
+        cfg.weather_location = Some(tokyo.clone());
+        let next = begin_weather(&cfg, &mut rt).unwrap();
+        assert_eq!(next.1.name, "Tokyo");
+        assert_ne!(next.0, generation);
     }
 }

@@ -28,7 +28,9 @@
       'Overcast':'Overcast', 'Fog':'Fog', 'Drizzle':'Drizzle', 'Rain':'Rain', 'Snow':'Snow',
       'Thunderstorm':'Thunderstorm', 'Unknown conditions':'Unknown conditions', 'Feels like':'Feels like',
       'Daily low / high':'Daily low / high', 'Chance of rain today':'Chance of rain today',
-      'Humidity / Wind':'Humidity / Wind', 'UV peak today':'UV peak today', 'Refresh':'Refresh'
+      'Humidity / Wind':'Humidity / Wind', 'Precip. peak (next 6h)':'Precip. peak (next 6h)',
+      'Peak hour ending':'Peak hour ending', 'Sunrise / Sunset':'Sunrise / Sunset',
+      'UV peak today':'UV peak today', 'Updated (city time)':'Updated (city time)', 'Refresh':'Refresh'
     },
     ko: {
       'Sampling…':'측정 중…', 'All cores':'모든 코어', 'Physical memory':'실제 메모리',
@@ -57,7 +59,9 @@
       'Overcast':'흐림', 'Fog':'안개', 'Drizzle':'이슬비', 'Rain':'비', 'Snow':'눈',
       'Thunderstorm':'뇌우', 'Unknown conditions':'알 수 없는 날씨', 'Feels like':'체감',
       'Daily low / high':'하루 최저 / 최고', 'Chance of rain today':'오늘 강수 확률',
-      'Humidity / Wind':'습도 / 바람', 'UV peak today':'오늘 자외선 최고', 'Refresh':'새로고침'
+      'Humidity / Wind':'습도 / 바람', 'Precip. peak (next 6h)':'강수 정점 (6시간)',
+      'Peak hour ending':'정점 시각 (종료)', 'Sunrise / Sunset':'일출 / 일몰',
+      'UV peak today':'오늘 자외선 최고', 'Updated (city time)':'업데이트 (도시 시각)', 'Refresh':'새로고침'
     }
   };
   TEXT.ja = TEXT.ja || {
@@ -288,6 +292,71 @@
     if ([95, 96, 99].indexOf(code) >= 0) return 'Thunderstorm';
     return 'Unknown conditions';
   }
+  function clockMs(payload) {
+    return Number.isFinite(payload && payload.now) ? payload.now : Date.now();
+  }
+  function cityTimeZone(timeZone) {
+    if (typeof timeZone !== 'string' || !timeZone) return null;
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone });
+      return timeZone;
+    } catch (err) {
+      return null;
+    }
+  }
+  function cityLocalDate(unixSeconds, timeZone) {
+    if (!Number.isFinite(unixSeconds) || unixSeconds <= 0 || unixSeconds >= 4102444800) return null;
+    const zone = cityTimeZone(timeZone);
+    if (!zone) return null;
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit'
+      }).formatToParts(new Date(unixSeconds * 1000));
+      const value = type => {
+        const part = parts.find(item => item.type === type);
+        return part && part.value;
+      };
+      const year = value('year'), month = value('month'), day = value('day');
+      return year && month && day ? year + '-' + month + '-' + day : null;
+    } catch (err) {
+      return null;
+    }
+  }
+  function cityLocalSameDay(unixSeconds, timeZone, nowMs) {
+    const day = cityLocalDate(unixSeconds, timeZone);
+    const today = cityLocalDate(nowMs / 1000, timeZone);
+    return day != null && day === today;
+  }
+  function cityClock(unixSeconds, timeZone, lang) {
+    if (!Number.isFinite(unixSeconds) || unixSeconds <= 0 || unixSeconds >= 4102444800) return null;
+    const zone = cityTimeZone(timeZone);
+    if (!zone) return null;
+    const at = new Date(unixSeconds * 1000);
+    try {
+      return new Intl.DateTimeFormat(lang || 'en', {
+        timeZone: zone, hour: 'numeric', minute: '2-digit'
+      }).format(at);
+    } catch (err) {
+      try {
+        return new Intl.DateTimeFormat('en', {
+          timeZone: zone, hour: 'numeric', minute: '2-digit'
+        }).format(at);
+      } catch (fallback) {
+        return null;
+      }
+    }
+  }
+  function upcomingRainPeak(hours, nowSec) {
+    if (!Array.isArray(hours) || !Number.isFinite(nowSec)) return null;
+    const window = hours.filter(hour => hour && Number.isFinite(hour.end) && Number.isFinite(hour.probability)
+      && hour.probability >= 0 && hour.probability <= 100
+      && hour.end > nowSec && hour.end <= nowSec + 6 * 3600);
+    if (window.length !== 6) return null;
+    for (let index = 1; index < window.length; index++) {
+      if (window[index].end - window[index - 1].end !== 3600) return null;
+    }
+    return window.reduce((best, hour) => hour.probability > best.probability ? hour : best);
+  }
   function weatherRows(payload, lang) {
     if (!payload.weather) {
       const message = payload.weatherCity ? 'Weather is unavailable. It will retry automatically.' : 'Choose a weather city in Settings.';
@@ -295,12 +364,31 @@
       return [row(t(lang, 'Weather'), t(lang, 'Loading weather…'))];
     }
     const weather = payload.weather;
+    const nowMs = clockMs(payload);
+    const tz = weather.timezone;
+    const today = cityLocalSameDay(weather.forecastDay, tz, nowMs);
+    const unavailable = t(lang, 'Unavailable');
     const rows = [row(t(lang, condition(weather.code)), weather.temperature.toFixed(1) + '°C')];
     if (weather.feelsLike != null) rows.push(row(t(lang, 'Feels like'), weather.feelsLike.toFixed(1) + '°C'));
-    if (weather.low != null && weather.high != null) rows.push(row(t(lang, 'Daily low / high'), Math.round(weather.low) + '° / ' + Math.round(weather.high) + '°C'));
-    if (weather.rain != null) rows.push(row(t(lang, 'Chance of rain today'), Math.round(weather.rain) + '%'));
-    if (weather.humidity != null && weather.wind != null) rows.push(row(t(lang, 'Humidity / Wind'), Math.round(weather.humidity) + '% · ' + weather.wind.toFixed(1) + ' m/s'));
-    if (weather.uv != null) rows.push(row(t(lang, 'UV peak today'), weather.uv.toFixed(1)));
+    if (today && weather.low != null && weather.high != null) {
+      rows.push(row(t(lang, 'Daily low / high'), Math.round(weather.low) + '° / ' + Math.round(weather.high) + '°C'));
+    }
+    if (today && weather.rain != null) rows.push(row(t(lang, 'Chance of rain today'), Math.round(weather.rain) + '%'));
+    if (weather.humidity != null && weather.wind != null) {
+      rows.push(row(t(lang, 'Humidity / Wind'), Math.round(weather.humidity) + '% · ' + weather.wind.toFixed(1) + ' m/s'));
+    }
+    const peak = upcomingRainPeak(weather.hourlyRain, nowMs / 1000);
+    rows.push(row(t(lang, 'Precip. peak (next 6h)'), peak ? Math.round(peak.probability) + '%' : unavailable));
+    if (peak && peak.probability >= 50) {
+      rows.push(row(t(lang, 'Peak hour ending'), cityClock(peak.end, tz, lang) || unavailable));
+    }
+    const sunrise = today && weather.sunrise < weather.sunset
+      && cityLocalSameDay(weather.sunrise, tz, nowMs) && cityLocalSameDay(weather.sunset, tz, nowMs)
+      ? cityClock(weather.sunrise, tz, lang) : null;
+    const sunset = sunrise ? cityClock(weather.sunset, tz, lang) : null;
+    rows.push(row(t(lang, 'Sunrise / Sunset'), sunrise && sunset ? sunrise + ' / ' + sunset : unavailable));
+    if (today && weather.uv != null) rows.push(row(t(lang, 'UV peak today'), weather.uv.toFixed(1)));
+    rows.push(row(t(lang, 'Updated (city time)'), cityClock(weather.measuredAt, tz, lang) || unavailable));
     return rows;
   }
   function arrange(list, order) {
@@ -329,6 +417,8 @@
   }
   root.PenguinNotchWidgets = {
     t: t, formatRate: formatRate, formatBytes: formatBytes, extraCells: extraCells, arrange: arrange,
-    dayDistance: dayDistance, calendarMonth: calendarMonth, condition: condition
+    dayDistance: dayDistance, calendarMonth: calendarMonth, condition: condition,
+    weatherRows: weatherRows, upcomingRainPeak: upcomingRainPeak,
+    cityLocalDate: cityLocalDate, cityClock: cityClock
   };
 })(typeof window !== 'undefined' ? window : globalThis);

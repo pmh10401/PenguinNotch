@@ -205,13 +205,17 @@ first time with *Windows protected your PC*: choose **More info**, then **Run an
 
 ### Updates
 
-PenguinNotch looks for a newer release about twenty seconds after it starts, and again whenever
-**Check for updates** is pressed in Settings → General. The feed is `latest.json` on the newest
+With **Automatic updates** enabled, PenguinNotch checks about twenty seconds after launch
+and then daily. **Check for updates** in Settings → General works independently of that
+switch. The feed is `latest.json` on the newest
 release, written by the Windows Package workflow beside the installer it describes, so publishing
 a release is the whole of shipping an update.
 
-Nothing about this nags. A check that fails — no network, an unreachable feed — leaves the app
-as it was and says so only next to the version. There is no dialogue and no badge.
+The notch offers **Update** and **Later**, matching macOS. Only Update downloads and runs
+the installer. Later hides that version's offer for this app session; Settings can reopen it.
+**Preview update** displays the card without downloading or installing anything. Failed
+checks and failed installations have separate messages, and a failed install retains the
+available version so it can be retried.
 
 The download is a minisign-signed archive, and the signature is checked against the public key in
 `tauri.conf.json` before anything is run. This is what stands in for code signing here: the
@@ -252,7 +256,11 @@ The sidebar follows macOS: **AI subscriptions → Stocks → Computer monitoring
 Daily widgets → Appearance → General**. AI accounts and the weekly ring stay together;
 hardware meters have their own page; calendar, weather city and to-do visibility/colors
 are under Daily widgets. Appearance controls notch placement, size, theme, folded
-pill contrast and usage-ring colour transition. General holds
+pill contrast. **AI subscriptions → Usage display** also contains reading visibility,
+the dashed secondary ring, paired readings, weekly headline, reset-time format, usage pace,
+Claude daily pace and Codex extra limits. **Usage limits** contains watch/critical thresholds
+and colour transition, with the same defaults and calculations as macOS. A missing provider
+window duration is not inferred from its label. General holds
 language, the tray icon, startup and updates. Existing settings and the last selected
 page survive the change. Moving items within a section leaves other categories in place.
 Features not implemented on Windows do not get empty settings pages.
@@ -299,9 +307,10 @@ independently of notch size.
 
 ### Where the notch sits
 
-The notch pins to one edge of one screen. The arc above the pill carries it: hold it, and the four
+The notch pins to one edge of one screen. The six-dot grip carries it: hold it, and the four
 places it can go are outlined on the screen; release on one and the notch lands there, centred.
-**Appearance → Show move handle** hides that arc. **Appearance → Edge** picks left, right, top or bottom:
+**Appearance → Show move handle** hides the grip and preserves an existing hidden choice.
+Alt-drag remains available. **Appearance → Edge** picks left, right, top or bottom:
 it stands upright on the left and right edges with the hover card opening sideways, and lies flat
 on the top and bottom ones with the card opening below or above. **Appearance → Screen**
 can follow the main display or remember a particular monitor.
@@ -322,7 +331,7 @@ which, PenguinNotch reads a thin strip of the screen beside the pill twice a sec
 and keeps only its average brightness, which is never stored or sent. With the switch off, the notch
 open, or Show set to Always show, nothing is read.
 
-**Colour transition** keeps solid bands by default (green below 50%, yellow from
+**AI subscriptions → Usage limits → Colour transition** keeps solid bands by default (green below 50%, yellow from
 50%, red from 70%). **Colour ramp** blends continuously through yellow at 50%.
 The folded pill has a contrasting outline in both Light and Dark themes. A native
 topmost watchdog restores the notch after other windows disturb its z-order,

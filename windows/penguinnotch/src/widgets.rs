@@ -245,6 +245,16 @@ impl WeatherLocation {
     }
 }
 
+pub fn weather_identity(location: &WeatherLocation) -> String {
+    format!("{}:{}:{}", location.id, location.latitude, location.longitude)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RainHour {
+    pub end: f64,
+    pub probability: f64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WeatherView {
     pub name: String,
@@ -261,7 +271,14 @@ pub struct WeatherView {
     pub measured_at: f64,
     pub timezone: String,
     pub stale: bool,
+    pub forecast_day: Option<f64>,
+    pub sunrise: Option<f64>,
+    pub sunset: Option<f64>,
+    pub hourly_rain: Vec<RainHour>,
+    pub identity: String,
 }
+
+const WEATHER_UNIX: std::ops::RangeInclusive<f64> = 1.0..=4_102_444_799.0;
 
 pub fn decode_weather(body: &str, now: f64, failed: bool) -> Option<WeatherView> {
     let root: serde_json::Value = serde_json::from_str(body).ok()?;
@@ -302,7 +319,42 @@ pub fn decode_weather(body: &str, now: f64, failed: bool) -> Option<WeatherView>
         measured_at: time,
         timezone,
         stale: failed || now - time > 30.0 * 60.0,
+        forecast_day: bounded(first("time"), WEATHER_UNIX),
+        sunrise: bounded(first("sunrise"), WEATHER_UNIX),
+        sunset: bounded(first("sunset"), WEATHER_UNIX),
+        hourly_rain: decode_hourly_rain(root.get("hourly"), bounded),
+        identity: String::new(),
     })
+}
+
+fn decode_hourly_rain(
+    hourly: Option<&serde_json::Value>,
+    bounded: impl Fn(Option<f64>, std::ops::RangeInclusive<f64>) -> Option<f64>,
+) -> Vec<RainHour> {
+    let Some(hourly) = hourly else { return Vec::new() };
+    let Some(times) = hourly.get("time").and_then(|value| value.as_array()) else { return Vec::new() };
+    let Some(probabilities) = hourly.get("precipitation_probability").and_then(|value| value.as_array()) else {
+        return Vec::new();
+    };
+    if times.len() != probabilities.len() || times.len() > 384 {
+        return Vec::new();
+    }
+    let stamps: Vec<Option<f64>> = times.iter().map(|value| value.as_f64()).collect();
+    if !stamps.windows(2).all(|pair| match (pair[0], pair[1]) {
+        (Some(previous), Some(next)) if previous < next => true,
+        _ => false,
+    }) {
+        return Vec::new();
+    }
+    stamps
+        .into_iter()
+        .zip(probabilities.iter())
+        .filter_map(|(time, probability)| {
+            let time = bounded(time, WEATHER_UNIX)?;
+            let probability = bounded(probability.as_f64(), 0.0..=100.0)?;
+            Some(RainHour { end: time, probability })
+        })
+        .collect()
 }
 
 /// Ids the user is dragging replace the slots of ids that are on screen.
@@ -476,10 +528,109 @@ mod tests {
         assert_eq!(view.temperature, 23.4);
         assert_eq!(view.wind, Some(2.3));
         assert_eq!(view.low, Some(18.0));
+        assert_eq!(view.forecast_day, Some(1_790_002_800.0));
         assert!(!view.stale);
         assert!(decode_weather(body, 1790035200.0 + 1801.0, false).unwrap().stale);
         let hot = body.replace("23.4", "234");
         assert!(decode_weather(&hot, 1790035200.0, false).is_none());
+    }
+
+    fn weather_fixture() -> serde_json::Value {
+        serde_json::json!({
+            "timezone": "Asia/Seoul",
+            "current": {
+                "time": 1_790_035_200.0,
+                "temperature_2m": 23.4,
+                "apparent_temperature": 26.1,
+                "weather_code": 61,
+                "is_day": 1,
+                "relative_humidity_2m": 65,
+                "wind_speed_10m": 2.3
+            },
+            "daily": {
+                "time": [1_790_002_800.0],
+                "temperature_2m_min": [18],
+                "temperature_2m_max": [26],
+                "precipitation_probability_max": [75],
+                "sunrise": [1_790_025_600.0],
+                "sunset": [1_790_069_400.0],
+                "uv_index_max": [7.2]
+            },
+            "hourly": {
+                "time": [1_790_038_800.0, 1_790_042_400.0, 1_790_046_000.0, 1_790_049_600.0, 1_790_053_200.0, 1_790_056_800.0],
+                "precipitation_probability": [10, 30, 80, 20, 10, 0]
+            }
+        })
+    }
+
+    #[test]
+    fn weather_keeps_forecast_day_and_valid_sun_rain() {
+        let view = decode_weather(&weather_fixture().to_string(), 1_790_035_200.0, false).unwrap();
+        assert_eq!(view.forecast_day, Some(1_790_002_800.0));
+        assert_eq!(view.sunrise, Some(1_790_025_600.0));
+        assert_eq!(view.sunset, Some(1_790_069_400.0));
+        assert_eq!(view.uv, Some(7.2));
+        assert_eq!(view.feels_like, Some(26.1));
+        assert_eq!(
+            view.hourly_rain.iter().map(|hour| (hour.end, hour.probability)).collect::<Vec<_>>(),
+            vec![
+                (1_790_038_800.0, 10.0),
+                (1_790_042_400.0, 30.0),
+                (1_790_046_000.0, 80.0),
+                (1_790_049_600.0, 20.0),
+                (1_790_053_200.0, 10.0),
+                (1_790_056_800.0, 0.0),
+            ]
+        );
+        assert_eq!(
+            weather_identity(&WeatherLocation {
+                id: 1835848,
+                name: "Seoul".into(),
+                latitude: 37.566,
+                longitude: 126.978,
+                admin1: None,
+                country: None
+            }),
+            "1835848:37.566:126.978"
+        );
+    }
+
+    #[test]
+    fn weather_drops_missing_and_malformed_forecast_arrays() {
+        let mut json = weather_fixture();
+        json["daily"]["time"] = serde_json::json!([null]);
+        json["daily"]["sunrise"] = serde_json::json!([-1]);
+        json["daily"]["sunset"] = serde_json::json!([9_999_999_999.0]);
+        json["daily"]["precipitation_probability_max"] = serde_json::json!([175]);
+        json["hourly"] = serde_json::json!({
+            "time": [1_790_038_800.0, 1_790_042_400.0, 1_790_046_000.0, 1_790_049_600.0, 1_790_053_200.0, 1_790_056_800.0],
+            "precipitation_probability": [10, 30, null, 20, 10, 0]
+        });
+        let view = decode_weather(&json.to_string(), 1_790_035_200.0, false).unwrap();
+        assert_eq!(view.forecast_day, None);
+        assert_eq!(view.sunrise, None);
+        assert_eq!(view.sunset, None);
+        assert_eq!(view.rain, None);
+        assert_eq!(view.hourly_rain.len(), 5);
+        assert_eq!(
+            view.hourly_rain.iter().map(|hour| hour.probability).collect::<Vec<_>>(),
+            vec![10.0, 30.0, 20.0, 10.0, 0.0]
+        );
+
+        json["hourly"] = serde_json::json!({
+            "time": [1_790_038_800.0, 1_790_038_800.0],
+            "precipitation_probability": [10, 20]
+        });
+        assert!(decode_weather(&json.to_string(), 1_790_035_200.0, false).unwrap().hourly_rain.is_empty());
+        json["hourly"] = serde_json::json!({
+            "time": [1_790_038_800.0],
+            "precipitation_probability": [10, 20]
+        });
+        assert!(decode_weather(&json.to_string(), 1_790_035_200.0, false).unwrap().hourly_rain.is_empty());
+        json["daily"] = serde_json::json!("broken");
+        let view = decode_weather(&json.to_string(), 1_790_035_200.0, false).unwrap();
+        assert_eq!(view.low, None);
+        assert_eq!(view.forecast_day, None);
     }
 
     #[test]

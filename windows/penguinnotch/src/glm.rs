@@ -313,6 +313,16 @@ fn rank(id: &str) -> u8 {
     }
 }
 
+/// Matches `GLMUsage.window(for:)`: unit 3 is hours, unit 6 is weeks. Other units stay unknown.
+fn glm_duration(unit: Option<i64>, number: Option<i64>) -> Option<f64> {
+    let number = number? as f64;
+    match unit? {
+        3 => crate::usage::finite_positive_secs(Some(number * 3600.0)),
+        6 => crate::usage::finite_positive_secs(Some(number * 7.0 * 86400.0)),
+        _ => None,
+    }
+}
+
 fn windows_from(v: &serde_json::Value) -> Vec<LimitWindow> {
     let Some(limits) = v.pointer("/data/limits").and_then(|x| x.as_array()) else {
         return Vec::new();
@@ -333,6 +343,7 @@ fn windows_from(v: &serde_json::Value) -> Vec<LimitWindow> {
             label: label_for(&id, unit, number),
             used: (pct / 100.0).clamp(0.0, 1.0),
             resets_at,
+            duration: glm_duration(unit, number),
             id,
             ..Default::default()
         });
@@ -475,5 +486,41 @@ pub fn probe() -> String {
         Some(c) => format!("GLM: key via {} → {} console", c.source, c.base),
         None if present() => "GLM: sources present but no usable key (ZCode enc:v1: tokens are skipped)".into(),
         None => "GLM: no key source (ZCode, OpenCode or glm.json)".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn windows(json: &str) -> Vec<LimitWindow> {
+        windows_from(&serde_json::from_str(json).unwrap())
+    }
+
+    #[test]
+    fn live_shape_keeps_hour_and_week_durations() {
+        let ws = windows(
+            r#"{ "code": 200, "success": true,
+              "data": { "level": "pro",
+                "limits": [
+                  { "type": "TOKENS_LIMIT", "unit": 3, "number": 5, "percentage": 12.5,
+                    "nextResetTime": 1788682200000 },
+                  { "type": "TOKENS_LIMIT", "unit": 6, "number": 1, "percentage": 8.1,
+                    "nextResetTime": 1789190400000 },
+                  { "type": "TIME_LIMIT", "percentage": 4.0 } ] } }"#,
+        );
+        assert_eq!(ws.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["session", "weekly", "mcp"]);
+        assert_eq!(ws.iter().map(|w| w.duration).collect::<Vec<_>>(), [Some(18_000.0), Some(604_800.0), None]);
+    }
+
+    #[test]
+    fn unknown_or_invalid_glm_units_have_no_duration() {
+        let ws = windows(
+            r#"{ "data": { "limits": [
+              { "type": "TOKENS_LIMIT", "unit": 3, "number": 0, "percentage": 1 },
+              { "type": "TOKENS_LIMIT", "unit": 9, "number": 2, "percentage": 1 },
+              { "type": "TIME_LIMIT", "percentage": 4.0 } ] } }"#,
+        );
+        assert!(ws.iter().all(|w| w.duration.is_none()));
     }
 }

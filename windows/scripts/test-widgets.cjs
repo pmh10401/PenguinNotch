@@ -159,6 +159,7 @@ for (const edge of ['left', 'right', 'top', 'bottom']) for (const zoom of [0.75,
     let reported;
     const context = {card, pill, tail, hoverId:'fixture', hoverTextScale:scale, notchEdge:edge,
       innerWidth:width, innerHeight:height, insets:[12,9,24,7], folded:false,
+      updateCard:null, updateTail:null,
       document:{documentElement:{style:{zoom:String(zoom)}}}, window:{devicePixelRatio:1.5},
       edgeIsVertical:()=>vertical, placeHandles:()=>false, callq:(cmd,args)=>{assert.equal(cmd,'set_hot');reported=args;return Promise.resolve();}};
     vm.runInNewContext(geometry + hot + '; placeCard();', context);
@@ -183,6 +184,7 @@ console.log('PASS: hover scale validation, all eight sizes, four edges, viewport
   let now=0,sequence=0,reports=0;
   const timers=new Map(),listeners=new Map();
   const context=vm.createContext({onHover:false,folded:false,pointerIn:false,carrying:false,dragging:false,stockDragging:false,menuOpen:false,foldTimer:null,previewTimer:null,hideTimer:null,
+    updateCardHeld:()=>false,
     document:{body:{classList:{toggle(){}}}},hideCard(){},setHovered(){},reportHot(){reports++;},
     setTimeout(fn,delay){const id=++sequence;timers.set(id,{fn,at:now+delay});return id;},clearTimeout:id=>timers.delete(id),
     listen(name,fn){listeners.set(name,fn);return Promise.resolve();}});
@@ -237,3 +239,102 @@ console.log('PASS: reveal duration/renewal, Keep open, hover and drag/menu foldi
   }
 }
 console.log('PASS: capped viewport DPI, wheel units/axes/boundaries, stationary hover, drag/fold guards and no-overflow stability');
+
+{
+  const ny = 'America/New_York';
+  const forecastDay = Date.UTC(2026, 2, 7, 5, 0, 0) / 1000;
+  const sunrise = Date.UTC(2026, 2, 7, 11, 20, 0) / 1000;
+  const sunset = Date.UTC(2026, 2, 7, 23, 0, 0) / 1000;
+  const measuredAt = Date.UTC(2026, 2, 7, 17, 0, 0) / 1000;
+  const nowToday = Date.UTC(2026, 2, 7, 17, 0, 0);
+  const beforeDst = Date.UTC(2026, 2, 8, 6, 30, 0) / 1000;
+  const afterDst = Date.UTC(2026, 2, 8, 7, 30, 0) / 1000;
+  const afterDstMidnight = Date.UTC(2026, 2, 9, 4, 30, 0);
+  assert.equal(W.cityLocalDate(forecastDay, ny), '2026-03-07');
+  assert.equal(W.cityLocalDate(beforeDst, ny), '2026-03-08');
+  assert.equal(W.cityLocalDate(afterDst, ny), '2026-03-08');
+  assert.equal(W.cityLocalDate(afterDstMidnight / 1000, ny), '2026-03-09');
+  const naiveOffsetDate = new Date((afterDstMidnight / 1000 - 5 * 3600) * 1000).toISOString().slice(0, 10);
+  assert.equal(naiveOffsetDate, '2026-03-08');
+  assert.equal(W.cityClock(measuredAt, 'Not/A_Zone', 'en'), null);
+  assert.equal(W.cityClock(measuredAt, '', 'en'), null);
+  assert.equal(W.cityLocalDate(forecastDay, null), null);
+  const hourlyRain = [1, 2, 3, 4, 5, 6].map(hour => ({
+    end: measuredAt + hour * 3600, probability: hour === 3 ? 80 : 10 * hour
+  }));
+  const weather = {
+    name: 'New York', temperature: 12.4, code: 61, feelsLike: 11.2,
+    low: 5, high: 15, rain: 80, humidity: 70, wind: 2.3, uv: 4.5,
+    sunrise, sunset, forecastDay, timezone: ny, measuredAt, hourlyRain, stale: false
+  };
+  const labels = rows => rows.map(row => [row.label, row.detail]);
+  const today = W.weatherRows({ weatherOn: true, weather, now: nowToday }, 'en');
+  assert.deepEqual(labels(today).filter(([label]) => [
+    'Daily low / high', 'Chance of rain today', 'Precip. peak (next 6h)', 'Peak hour ending',
+    'Sunrise / Sunset', 'UV peak today', 'Updated (city time)'
+  ].indexOf(label) >= 0), [
+    ['Daily low / high', '5° / 15°C'],
+    ['Chance of rain today', '80%'],
+    ['Precip. peak (next 6h)', '80%'],
+    ['Peak hour ending', W.cityClock(measuredAt + 3 * 3600, ny, 'en')],
+    ['Sunrise / Sunset', W.cityClock(sunrise, ny, 'en') + ' / ' + W.cityClock(sunset, ny, 'en')],
+    ['UV peak today', '4.5'],
+    ['Updated (city time)', W.cityClock(measuredAt, ny, 'en')]
+  ]);
+  const korean = W.weatherRows({ weatherOn: true, weather, now: nowToday }, 'ko');
+  assert.equal(korean.find(row => row.detail === '80%').label, '오늘 강수 확률');
+  assert.equal(korean.find(row => row.label === '일출 / 일몰').detail, W.cityClock(sunrise, ny, 'ko') + ' / ' + W.cityClock(sunset, ny, 'ko'));
+  const afterMidnight = W.weatherRows({ weatherOn: true, weather, now: afterDstMidnight }, 'en');
+  assert.equal(afterMidnight.some(row => row.label === 'Chance of rain today' || row.label === 'UV peak today' || row.label === 'Daily low / high'), false);
+  assert.equal(afterMidnight.find(row => row.label === 'Sunrise / Sunset').detail, 'Unavailable');
+  assert.equal(afterMidnight.find(row => row.label === 'Precip. peak (next 6h)').detail, 'Unavailable');
+  assert.equal(afterMidnight.find(row => row.label === 'Updated (city time)').detail, W.cityClock(measuredAt, ny, 'en'));
+  const seoulMidnight = 1790002800;
+  assert.equal(new Date(seoulMidnight * 1000).toISOString(), '2026-09-21T15:00:00.000Z');
+  assert.equal(W.cityLocalDate(seoulMidnight, 'Asia/Seoul'), '2026-09-22');
+  assert.equal(W.cityLocalDate(seoulMidnight + 86400, 'Asia/Seoul'), '2026-09-23');
+  const badZone = W.weatherRows({ weatherOn: true, weather: { ...weather, timezone: 'Not/A_Zone' }, now: nowToday }, 'en');
+  assert.equal(badZone.find(row => row.label === 'Updated (city time)').detail, 'Unavailable');
+  assert.equal(badZone.find(row => row.label === 'Sunrise / Sunset').detail, 'Unavailable');
+  assert.equal(badZone.some(row => row.label === 'Chance of rain today'), false);
+  const seoulWeather = { ...weather, timezone: 'Asia/Seoul', forecastDay: seoulMidnight, measuredAt: seoulMidnight + 12 * 3600, sunrise: seoulMidnight + 6 * 3600, sunset: seoulMidnight + 18 * 3600, hourlyRain: [] };
+  const seoulToday = W.extraCells({ weatherOn: true, weather: seoulWeather, now: (seoulMidnight + 3600) * 1000 }, 'en')
+    .find(cell => cell.id === 'widget-weather').meter.rows;
+  assert.ok(seoulToday.some(row => row.label === 'Chance of rain today'));
+  const seoulNext = W.extraCells({ weatherOn: true, weather: seoulWeather, now: (seoulMidnight + 86400) * 1000 }, 'en')
+    .find(cell => cell.id === 'widget-weather').meter.rows;
+  assert.equal(seoulNext.some(row => row.label === 'Chance of rain today'), false);
+  assert.equal(seoulNext.find(row => row.label === 'Sunrise / Sunset').detail, 'Unavailable');
+  const missing = W.weatherRows({
+    weatherOn: true,
+    weather: { temperature: 1, code: 0, timezone: 'GMT', measuredAt: 1000, forecastDay: 1000, hourlyRain: 'nope', sunrise: null, sunset: undefined },
+    now: 1000 * 1000
+  }, 'en');
+  assert.equal(missing.find(row => row.label === 'Precip. peak (next 6h)').detail, 'Unavailable');
+  assert.equal(missing.find(row => row.label === 'Sunrise / Sunset').detail, 'Unavailable');
+  assert.ok(missing.find(row => row.label === 'Updated (city time)').detail);
+  const partialCurrentHour = [
+    { end: 2000, probability: 10 }, { end: 5600, probability: 20 }, { end: 9200, probability: 30 },
+    { end: 12800, probability: 40 }, { end: 16400, probability: 50 }, { end: 20000, probability: 60 }
+  ];
+  assert.deepEqual(W.upcomingRainPeak(partialCurrentHour, 1000), { end: 20000, probability: 60 });
+  const gappedHours = [
+    { end: 2000, probability: 10 }, { end: 5600, probability: 20 }, { end: 9200, probability: 30 },
+    { end: 16400, probability: 40 }, { end: 20000, probability: 50 }, { end: 22600, probability: 60 }
+  ];
+  assert.equal(W.upcomingRainPeak(gappedHours, 1000), null);
+  const duplicateHours = [
+    { end: 4600, probability: 10 }, { end: 8200, probability: 20 }, { end: 8200, probability: 90 },
+    { end: 11800, probability: 40 }, { end: 15400, probability: 50 }, { end: 19000, probability: 60 }
+  ];
+  assert.equal(W.upcomingRainPeak(duplicateHours, 1000), null);
+  const hole = [1, 2, 3, 4, 5, 6].map(hour => ({ end: 1000 + hour * 3600, probability: hour === 3 ? null : 10 }));
+  assert.equal(W.upcomingRainPeak(hole, 1000), null);
+  const validHours = [1, 2, 3, 4, 5, 6].map(hour => ({ end: 1000 + hour * 3600, probability: hour === 4 ? 55 : 10 }));
+  assert.deepEqual(W.upcomingRainPeak(validHours, 1000), { end: 1000 + 4 * 3600, probability: 55 });
+  const over = [1, 2, 3, 4, 5, 6].map(hour => ({ end: 1000 + hour * 3600, probability: hour === 4 ? 150 : 10 }));
+  assert.equal(W.upcomingRainPeak(over, 1000), null);
+  const negative = [1, 2, 3, 4, 5, 6].map(hour => ({ end: 1000 + hour * 3600, probability: hour === 2 ? -1 : 10 }));
+  assert.equal(W.upcomingRainPeak(negative, 1000), null);
+}
+console.log('PASS: weather city-local midnight including DST, hover extras, missing/malformed arrays');

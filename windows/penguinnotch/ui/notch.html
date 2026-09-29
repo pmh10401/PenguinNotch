@@ -97,7 +97,10 @@
   .glyph img.appicon{width:calc(30px * var(--k));height:calc(30px * var(--k));border-radius:calc(8px * var(--k));object-fit:cover}
   .c-head .mark{display:inline-block;width:16px;height:16px;color:var(--ink-2);margin-right:2px}
   .c-head .mark svg{width:16px;height:16px;fill:currentColor}
-  .pct{font-size:15px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+  .pct{font-size:15px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;line-height:18px;min-height:18px;white-space:nowrap;text-align:center}
+  .pct.pair{font-size:10.5px}
+  body.hide-readings .pct{display:none}
+  body.hide-readings .cell{gap:0}
   .dim{opacity:.55}
   /* A stale reading dims the reading only. The track, the week and the glyph are all saying the same
      old thing, but whether an agent is running right now is current either way, so the activity arc
@@ -124,6 +127,30 @@
     display:none;
   }
   #card.show{display:block}
+  #update-card{
+    position:absolute;left:0;top:0;width:246px;display:none;
+    background:var(--card);border-radius:16px;padding:16px;color:var(--ink);
+    overflow-wrap:anywhere;min-width:0;max-height:calc(100% - 16px);
+  }
+  #update-card.show{display:block}
+  #update-card .u-title{font-size:14px;font-weight:700;margin-bottom:6px}
+  #update-card .u-note{font-size:12px;color:var(--ink-3);line-height:1.4;margin-bottom:12px}
+  #update-card .u-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  #update-card .u-actions button{font:inherit;font-size:12px;color:var(--ink);background:var(--btn);border:1px solid var(--btn-line);border-radius:999px;padding:6px 12px;cursor:pointer}
+  #update-card .u-actions button:hover,#update-card .u-actions button:focus-visible{background:var(--btn-hover);border-color:var(--btn-line-hover)}
+  #update-card .u-actions button:disabled{opacity:.5;cursor:wait}
+  #update-card .u-close{margin-left:auto;border-radius:50%;width:28px;height:28px;padding:0}
+  #update-card .u-bar{height:6px;border-radius:3px;background:var(--bar);margin:10px 0 4px;overflow:hidden}
+  #update-card .u-fill{height:100%;border-radius:3px;background:var(--ample);width:0}
+  #update-tail{
+    position:absolute;right:69px;width:32px;height:36px;background:var(--card);display:none;
+    clip-path:path('M0 0C0 9 18.56 13.68 32 18C18.56 22.32 0 27 0 36Z');
+  }
+  #update-card.show + #update-tail{display:block}
+  body[data-edge="left"] #update-tail{right:auto;left:69px;clip-path:path('M32 0C32 9 13.44 13.68 0 18C13.44 22.32 32 27 32 36Z')}
+  body[data-edge="top"] #update-tail,body[data-edge="bottom"] #update-tail{right:auto;width:36px;height:32px}
+  body[data-edge="top"] #update-tail{clip-path:path('M0 32C9 32 13.68 13.44 18 0C22.32 13.44 27 32 36 32Z')}
+  body[data-edge="bottom"] #update-tail{clip-path:path('M0 0C9 0 13.68 18.56 18 32C22.32 18.56 27 0 36 0Z')}
   /* The tail, its point on the hovered ring: the Mac's curved wedge (TooltipTail), whose shoulders
      leave the card tangent to its edge so the two read as one shape. An element of its own rather
      than ::after, so the card's overflow cannot clip it and it can be reported as hot. It spans the
@@ -252,26 +279,32 @@
      directions mirrored along the stack at the near end */
   body[data-edge="left"] #orb,body[data-edge="top"] #orb{--arc:180deg}
   body[data-edge="bottom"] #orb{--arc:90deg}
-  #move{--arc:0deg}
+  /* Six-dot grip, Mac NotchLayout.gripDot/pitch scaled 44/117, two lines of three out from the bezel. */
+  #move{--dot:7.15px;--pitch:11.66px;--arc:0deg}
+  #move .grip{position:absolute;left:50%;top:50%;display:grid;gap:calc(var(--pitch) - var(--dot));
+    grid-template-columns:repeat(3,var(--dot));grid-template-rows:repeat(2,var(--dot));
+    transform:translate(-50%,-50%);pointer-events:none}
+  #move .grip i{width:var(--dot);height:var(--dot);border-radius:50%;background:var(--ink-2);display:block;
+    transition:transform .2s cubic-bezier(.34,1.3,.64,1)}
+  #move.hover .grip i{transform:scale(1.3)}
+  #move.armed .grip i{transform:scale(.7)}
   body[data-edge="left"] #move{--arc:90deg}
   body[data-edge="top"] #move{--arc:270deg}
-  @media (prefers-reduced-motion: reduce){.handle > *{transition:none}}
+  body[data-edge="left"] #move .grip,body[data-edge="right"] #move .grip{
+    grid-template-columns:repeat(3,var(--dot));grid-template-rows:repeat(2,var(--dot))}
+  body[data-edge="top"] #move .grip,body[data-edge="bottom"] #move .grip{
+    grid-template-columns:repeat(2,var(--dot));grid-template-rows:repeat(3,var(--dot))}
+  @media (prefers-reduced-motion: reduce){.handle > *,#move .grip i{transition:none}}
 </style>
 </head>
 <body>
 <div id="root">
   <div id="card"></div>
   <div id="tail"></div>
-  <div id="move" class="handle">
-    <svg class="h-rest" viewBox="-36 -36 72 72" aria-hidden="true">
-      <circle class="h-ring" r="28.5" fill="none" stroke-width="8.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
-      <circle class="h-fill" r="28.5" fill="none" stroke-width="6.8" stroke-linecap="round" stroke-dasharray="44.77 179.07"/>
-    </svg>
-    <div class="h-disc"></div>
-    <!-- A hand, as on the Mac: the gesture is a carry, not a nudge, which is what arrows would say -->
-    <svg class="h-glyph" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 13V5.6a1.5 1.5 0 0 1 3 0V11h.6V3.5a1.5 1.5 0 0 1 3 0V11h.6V5a1.5 1.5 0 0 1 3 0v8.4c0 4.2-2 7.1-5.6 7.1-2.4 0-3.8-1-5.1-2.7l-3.8-5a1.5 1.5 0 0 1 2.2-2z"/>
-    </svg>
+  <div id="update-card" role="dialog" aria-labelledby="update-title" hidden></div>
+  <div id="update-tail"></div>
+  <div id="move" class="handle" role="button" aria-label="Move notch">
+    <div class="grip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
   </div>
   <div id="orb" class="handle">
     <svg class="h-rest" viewBox="-36 -36 72 72" aria-hidden="true">
@@ -318,25 +351,33 @@ function applyTheme(name){
 invoke('get_theme_resolved').then(applyTheme).catch(()=>{});
 listen('theme_resolved',e=>applyTheme(e.payload)).catch(()=>{});
 let colorTransition='hard_step';
-const stepTone=f=> f>=0.7?CRIT : f>=0.5?WATCH : AMPLE;
-// A continuous sRGB ramp across the whole range: the Windows watch cut has always been 50%, so
-// this is a named equivalence rather than a magic number. Windows has no watch-limit slider.
-const WATCH_AT=0.5;
+let watchLimit=0.50, criticalLimit=0.70;
+const stepTone=(f,watch,crit)=> f>=crit?CRIT : f>=watch?WATCH : AMPLE;
 function hex3(c){ const n=parseInt(c.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
 function lerpHex(a,b,t){
   const A=hex3(a), B=hex3(b);
   const ch=i=>Math.round(A[i]+(B[i]-A[i])*t);
   return `rgb(${ch(0)},${ch(1)},${ch(2)})`;
 }
-const rampTone=f=>{
+const rampTone=(f,watch)=>{
   f=Math.max(0,Math.min(1,f));
-  if(f<WATCH_AT) return lerpHex(AMPLE,WATCH,f/WATCH_AT);
-  return lerpHex(WATCH,CRIT,(f-WATCH_AT)/(1-WATCH_AT));
+  if(!(watch>0 && watch<1)) return f<1?AMPLE:CRIT;
+  if(f<watch) return lerpHex(AMPLE,WATCH,f/watch);
+  return lerpHex(WATCH,CRIT,(f-watch)/(1-watch));
 };
-const tone=f=> colorTransition==='ramp'?rampTone(f):stepTone(f);
+const tone=f=> colorTransition==='ramp'?rampTone(f,watchLimit):stepTone(f,watchLimit,criticalLimit);
+const meterTone=f=> stepTone(f,0.5,0.7);
 function applyColorTransition(value){
   if(typeof value!=='string') return;
   colorTransition=value==='ramp'?'ramp':'hard_step';
+  renderRing();
+  if(card.classList.contains('show')) renderCard();
+}
+function applyUsageLimits(v){
+  if(!v || typeof v!=='object') return;
+  const c=Number.isFinite(v.critical_limit)?Math.min(Math.max(v.critical_limit,0.02),1):criticalLimit;
+  const w=Number.isFinite(v.watch_limit)?Math.min(Math.max(v.watch_limit,0.01),c-0.01):Math.min(watchLimit,c-0.01);
+  watchLimit=w; criticalLimit=c;
   renderRing();
   if(card.classList.contains('show')) renderCard();
 }
@@ -378,7 +419,9 @@ function normalizeHoverTextScale(value){ return Number.isFinite(value)?Math.roun
 function applyHoverTextScale(value){
   hoverTextScale=normalizeHoverTextScale(value);
   card.style.zoom=String(hoverTextScale);
+  if(updateCard) updateCard.style.zoom=String(hoverTextScale);
   if(card.classList.contains('show')) placeCard();
+  if(updateCard&&updateCard.classList.contains('show')) placeUpdateCard();
 }
 // Show on hover — the logic is beside the move handle below; declared here, since reportHot reads `folded` from the first frame
 let onHover=false, folded=false, pointerIn=false, menuOpen=false, foldTimer=null, previewTimer=null;
@@ -405,6 +448,7 @@ function applyEdge(e){
   reportDpr();
   // The pill changes shape, so both the hot rectangles and the card's anchor have to be measured again
   if(card&&card.classList.contains('show')) placeCard();
+  if(typeof placeUpdateCard==='function'&&updateCard&&updateCard.classList.contains('show')) placeUpdateCard();
   reportHot();
 }
 let systemPayload=null;
@@ -454,6 +498,19 @@ const TEXT={
     'Sign in to Antigravity to see usage.':'사용량을 확인하려면 Antigravity에 로그인하십시오.',
     'needs your input':'응답을 기다리는 중',
     'Working in':'작업 위치:',
+    'Daily pace':'일일 사용 속도',
+    'Later':'나중에',
+    'Update':'업데이트',
+    'Close':'닫기',
+    'Downloading…':'다운로드 중…',
+    'Installing…':'설치 중…',
+    'A new version of PenguinNotch is ready to install.':'새 PenguinNotch 버전을 설치할 수 있습니다.',
+    'This is a preview. Nothing is downloaded or installed.':'미리 보기입니다. 다운로드하거나 설치하지 않습니다.',
+    'Could not install the update':'업데이트를 설치할 수 없습니다',
+    'Could not check for updates':'업데이트를 확인할 수 없습니다',
+    'Checking…':'확인 중…',
+    '% deficit':'% 초과',
+    '% reserved':'% 여유',
     'Sign in':'로그인',
     'Signing in...':'로그인 중…',
     'Refresh':'새로 고침',
@@ -708,6 +765,8 @@ const PATTERNS={
     [/Weekly \(model-scoped\)/g,'주간 (모델별)'],
     [/Weekly limit/g,'주간 제한'],
     [/Monthly limit/g,'월간 제한'],
+    [/% deficit$/,'% 초과'],
+    [/% reserved$/,'% 여유'],
     [/\bWeekly\b/g,'주간'],
     [/\bMonthly\b/g,'월간'],
     [/ · via /g,' · 경유: '],
@@ -926,35 +985,49 @@ const PATTERNS={
 // Chinese puts it after the time — so each language writes its own short functions.
 const UI={
   ko:{locale:'ko-KR',title:n=>n+' 사용량',resetting:'재설정 중…',resetsIn:m=>`${m}분 후 재설정`,
+      resetsInDays:(d,h)=>`${d}일 ${h}시간 후 재설정`,resetsInHm:(h,m)=>`${h}시간 ${m}분 후 재설정`,
       resetsAt:t=>`${t}에 재설정`,resetsOn:(d,t)=>`${d} ${t}에 재설정`,resetsDate:d=>`${d}에 재설정`,
       ago:m=>m<60?`${m}분 전`:`${Math.round(m/60)}시간 전`,
-      usedLeft:(used,left)=>`${used}% 사용 · ${left}% 남음`,andMore:n=>`외 ${n}개`,updated:a=>`${a}에 마지막 업데이트됨`},
+      usedLeft:(used,left)=>`${used}% 사용 · ${left}% 남음`,andMore:n=>`외 ${n}개`,updated:a=>`${a}에 마지막 업데이트됨`,
+      pace:s=>textCopy(s),moveNotch:'노치 이동'},
   'pt-BR':{locale:'pt-BR',title:n=>'Uso do '+n,resetting:'Renovando…',resetsIn:m=>`Renova em ${m} min`,
+      resetsInDays:(d,h)=>`Renova em ${d} ${d===1?'Dia':'Dias'} ${h}h`,resetsInHm:(h,m)=>`Renova em ${h}h ${m}m`,
       resetsAt:t=>`Renova às ${t}`,resetsOn:(d,t)=>`Renova ${d} às ${t}`,resetsDate:d=>`Renova ${d}`,
+      moveNotch:'Mover o notch',
       ago:m=>m<60?`há ${m} min`:`há ${Math.round(m/60)} h`,
       usedLeft:(used,left)=>`${used}% usado · ${left}% restante`,andMore:n=>`e mais ${n}`},
   en:{locale:'en-US',title:n=>n+' Usage',resetting:'Resetting…',resetsIn:m=>`Resets in ${m} min`,
+      resetsInDays:(d,h)=>`Resets in ${d} ${d===1?'Day':'Days'} ${h}h`,resetsInHm:(h,m)=>`Resets in ${h}h ${m}m`,
       resetsAt:t=>`Resets at ${t}`,resetsOn:(d,t)=>`Resets ${d} ${t}`,resetsDate:d=>`Resets ${d}`,
+      moveNotch:'Move notch',
       ago:m=>m<60?`${m}m ago`:`${Math.round(m/60)}h ago`,
       usedLeft:(used,left)=>`${used}% Used · ${left}% left`,andMore:n=>`and ${n} more`,updated:a=>`Updated ${a}`},
   uk:{locale:'uk-UA',title:n=>'Використання '+n,resetting:'Скидання…',resetsIn:m=>`Скидання через ${m} хв`,
+      resetsInDays:(d,h)=>`Скидання через ${d} дн ${h} год`,resetsInHm:(h,m)=>`Скидання через ${h} год ${m} хв`,
       resetsAt:t=>`Скидання о ${t}`,resetsOn:(d,t)=>`Скидання: ${d} ${t}`,resetsDate:d=>`Скидання: ${d}`,
+      moveNotch:'Перемістити виріз',
       ago:m=>m<60?`${m} хв тому`:`${Math.round(m/60)} год тому`,
       usedLeft:(used,left)=>`Використано ${used}% · лишилось ${left}%`,andMore:n=>`і ще ${n}`,updated:a=>`Оновлено ${a}`},
   ru:{locale:'ru-RU',title:n=>'Использование '+n,resetting:'Сброс…',resetsIn:m=>`Сброс через ${m} мин`,
+      resetsInDays:(d,h)=>`Сброс через ${d} дн ${h} ч`,resetsInHm:(h,m)=>`Сброс через ${h} ч ${m} мин`,
       resetsAt:t=>`Сброс в ${t}`,resetsOn:(d,t)=>`Сброс: ${d} ${t}`,resetsDate:d=>`Сброс: ${d}`,
+      moveNotch:'Переместить выемку',
       ago:m=>m<60?`${m} мин назад`:`${Math.round(m/60)} ч назад`,
       usedLeft:(used,left)=>`Использовано ${used}% · осталось ${left}%`,andMore:n=>`и ещё ${n}`,updated:a=>`Обновлено ${a}`},
   zh:{locale:'zh-CN',title:n=>n+' 用量',resetting:'正在重置…',resetsIn:m=>`${m} 分钟后重置`,
+      resetsInDays:(d,h)=>`${d} 天 ${h} 小时后重置`,resetsInHm:(h,m)=>`${h} 小时 ${m} 分钟后重置`,
       resetsAt:t=>`${t} 重置`,resetsOn:(d,t)=>`${d} ${t} 重置`,resetsDate:d=>`${d} 重置`,
+      moveNotch:'移动刘海',
       ago:m=>m<60?`${m} 分钟前`:`${Math.round(m/60)} 小时前`,
       usedLeft:(used,left)=>`已用 ${used}% · 剩余 ${left}%`,andMore:n=>`另有 ${n} 个`,updated:a=>`更新于 ${a}`},
   'zh-Hant':{locale:'zh-TW',title:n=>n+' 用量',resetting:'正在重置…',resetsIn:m=>`${m} 分鐘後重置`,
+      resetsInDays:(d,h)=>`${d} 天 ${h} 小時後重置`,resetsInHm:(h,m)=>`${h} 小時 ${m} 分鐘後重置`,
       resetsAt:t=>`${t} 重置`,resetsOn:(d,t)=>`${d} ${t} 重置`,resetsDate:d=>`${d} 重置`,
+      moveNotch:'移動瀏海',
       ago:m=>m<60?`${m} 分鐘前`:`${Math.round(m/60)} 小時前`,
       usedLeft:(used,left)=>`已用 ${used}% · 剩餘 ${left}%`,andMore:n=>`另有 ${n} 個`,updated:a=>`更新於 ${a}`},
 };
-function ui(){return UI[uiLang]||UI.en;}
+function ui(){ const t=UI[uiLang]||UI.en; return t.resetsInDays?t:Object.assign({},UI.en,t); }
 function textCopy(value){
   if(!value) return '';
   const table=TEXT[uiLang];
@@ -968,6 +1041,8 @@ function setUiLanguage(lang){
   const next=TEXT[lang]?lang:'en';
   if(uiLang===next) return;
   uiLang=next;
+  const move=document.getElementById('move');
+  if(move) move.setAttribute('aria-label', ui().moveNotch||'Move notch');
   renderRing();
   if(card&&card.classList.contains('show')) renderCard();
 }
@@ -1085,22 +1160,149 @@ function weeklyOf(snap,id){
   return tightestOf(lanes.filter(w=>laneIs(w,'weekly')));
 }
 // END TESTABLE WEEKLY SELECTOR
+function defaultUsageDisplay(){
+  return {shows_notch_readings:true, weekly_ring_dashed:false, weekly_reading:false, weekly_headline:false,
+    reset_time_format:'automatic', show_usage_pace:false, claude_daily_pace_ring:false, show_codex_extra_limits:true};
+}
+let usageDisplay=defaultUsageDisplay();
+function applyUsageDisplay(v){
+  usageDisplay=Object.assign(defaultUsageDisplay(), v&&typeof v==='object'?v:null);
+  if(usageDisplay.reset_time_format!=='remaining') usageDisplay.reset_time_format='automatic';
+  document.body.classList.toggle('hide-readings', !usageDisplay.shows_notch_readings);
+  renderRing();
+  if(card.classList.contains('show')) renderCard();
+  reportHot();
+}
+// BEGIN TESTABLE HELPERS
+function windowDuration(w){
+  const d=w&&w.duration;
+  return Number.isFinite(d)&&d>0?d:null;
+}
+function isClaudeId(id){ return id==='claude'||String(id).startsWith('claude@')||String(id).startsWith('claude-'); }
+function extraCodexWindow(w){
+  const id=String(w&&w.id||'');
+  return id==='spark'||id==='spark-secondary'||id==='code-review'||id==='code-review-secondary'
+    ||id.startsWith('spark')||id.startsWith('code-review');
+}
+// END TESTABLE HELPERS
+// BEGIN TESTABLE WEEKLY HEADLINE
+function applyWeeklyHeadline(headline, weekly, enabled){
+  if(!enabled || !weekly) return {headline, weekly};
+  if(headline && weekly.id===headline.id) return {headline, weekly};
+  const weekLen=windowDuration(weekly);
+  if(weekLen==null || weekLen<6*86400 || weekLen>8*86400) return {headline, weekly};
+  const headLen=headline&&windowDuration(headline);
+  if(headLen!=null && headLen>=weekLen) return {headline, weekly};
+  return {headline:weekly, weekly:headline||null};
+}
+// END TESTABLE WEEKLY HEADLINE
+// BEGIN TESTABLE DAILY PACE
+const DAILY_PACE_ID='daily_pace', DAILY_PACE_DAY=86400, DAILY_PACE_DAYS=7, DAILY_PACE_WEEK=DAILY_PACE_DAYS*DAILY_PACE_DAY;
+function dailyPaceReading(weekly, now){
+  const used=weekly&&weekly.used, resets=weekly&&weekly.resets_at;
+  if(!(weekly&&weekly.id==='weekly_all') || !Number.isFinite(used) || used<0 || !Number.isFinite(resets)) return null;
+  const start=resets-DAILY_PACE_WEEK*1000;
+  const elapsed=Math.min(Math.max(now-start,0), DAILY_PACE_WEEK*1000);
+  const dayIndex=Math.min(DAILY_PACE_DAYS-1, Math.floor(elapsed/(DAILY_PACE_DAY*1000)));
+  const allowed=(dayIndex+1)/DAILY_PACE_DAYS;
+  const dayEnds=dayIndex===DAILY_PACE_DAYS-1 ? resets : start+(dayIndex+1)*DAILY_PACE_DAY*1000;
+  return {usedFraction:used/allowed, allowedFraction:allowed, dayIndex, dayEndsAt:dayEnds};
+}
+function dailyPaceWindow(weekly, now){
+  const reading=dailyPaceReading(weekly, now);
+  if(!reading) return null;
+  return {id:DAILY_PACE_ID, label:'Daily pace', used:reading.usedFraction, resets_at:reading.dayEndsAt};
+}
+function applyDailyPace(snap, id, enabled, now){
+  if(!enabled || !isClaudeId(id) || !snap || !Array.isArray(snap.windows)) return null;
+  if(snap.windows.some(w=>w.id===DAILY_PACE_ID)) return null;
+  const weekly=snap.windows.find(w=>w.id==='weekly_all');
+  const daily=dailyPaceWindow(weekly, now);
+  if(!daily) return null;
+  const session=snap.windows.find(w=>w.id==='session')||null;
+  return {windows:[daily].concat(snap.windows), headline:daily, weekly:session};
+}
+// END TESTABLE DAILY PACE
+// BEGIN TESTABLE USAGE PACE
+function usagePace(window, now){
+  const used=window&&window.used, duration=windowDuration(window), resets=window&&window.resets_at;
+  if(!Number.isFinite(used) || used<0 || duration==null || !Number.isFinite(resets)) return null;
+  const remainingTime=(resets-now)/1000;
+  if(!Number.isFinite(remainingTime) || remainingTime<=0) return null;
+  const remainingFraction=Math.min(remainingTime/duration, 1);
+  const elapsedFraction=1-remainingFraction;
+  const spentFraction=Math.min(used, 1);
+  const percentagePoints=(spentFraction-elapsedFraction)*100;
+  return {percentagePoints, isDeficit:percentagePoints>0};
+}
+function usagePaceSummary(pace){
+  if(!pace) return '';
+  const magnitude=Math.abs(pace.percentagePoints);
+  const rounded=Math.round(magnitude*10)/10;
+  const value=rounded===0 && magnitude>0 ? '<0.1' : String(rounded.toFixed(1)).replace(/\.0$/, '');
+  return pace.isDeficit ? value+'% deficit' : value+'% reserved';
+}
+// END TESTABLE USAGE PACE
+// BEGIN TESTABLE DISPLAY
+function displayedUsage(snap, id, now){
+  const at=now==null?Date.now():now;
+  const vendorHeadline=headlineOf(snap,id);
+  const vendorWeekly=weeklyOf(snap,id);
+  const led=applyWeeklyHeadline(vendorHeadline, vendorWeekly, usageDisplay.weekly_headline);
+  const paced=applyDailyPace(snap, id, usageDisplay.claude_daily_pace_ring, at);
+  if(paced) return paced;
+  return {windows:snap.windows, headline:led.headline, weekly:led.weekly};
+}
+function cardWindows(snap, id){
+  const drawn=displayedUsage(snap,id);
+  return (drawn.windows||snap.windows).filter(w=>{
+    if(id!=='codex') return true;
+    if(usageDisplay.show_codex_extra_limits) return true;
+    return !extraCodexWindow(w);
+  });
+}
+function readingPercent(used){
+  return typeof pctText==='function'?pctText(used):String(Math.round(used*100));
+}
+function readingLabel(h, wk, weeklyOn, weeklyReadingOn){
+  if(!h) return '—';
+  if(h.count!=null) return '~'+h.count;
+  const main=(h.derived?'~':'')+readingPercent(h.used)+'%';
+  const pair=weeklyOn && weeklyReadingOn && wk && wk.id!==h.id && wk.count==null;
+  return pair?main+'/'+readingPercent(wk.used)+'%':main;
+}
+// END TESTABLE DISPLAY
 // 15 minutes, the Mac's `UsageStore.staleAfter`. At 5 a reading went grey between two polls of a
 // provider that is answering perfectly well, which made "stale" mean "recently fetched" rather than
 // "old enough not to trust". A provider that knows its own reading is stale still says so in status.
 function staleOf(snap){ if(snap.status==='stale') return true; return snap.fetched_at>0 && (Date.now()-snap.fetched_at)>15*60*1000; }
 let stateSnap={sessions:[],agg:'idle'};
 
-function svgArc(r,frac,color,width,extra=''){
+function svgArc(r,frac,color,width,extra='',dashed=false){
   // Nothing at all at zero: a zero-length dash still paints a dot once the caps are round, where the
   // Mac's `trim(from: 0, to: 0)` draws nothing. A reading small enough that its two caps meet does
   // draw as a dot, on both platforms — `ProviderRing.sweep` has no floor. Upstream #260 argues that
   // is wrong, for the local model's arc; if it lands, the same floor belongs here.
   if(!(frac>0)) return '';
+  const used=Math.min(frac,1);
   const C=2*Math.PI*r;
-  return `<circle cx="28" cy="28" r="${r}" fill="none" stroke="${color}" stroke-width="${width}"
-    stroke-dasharray="${(C*frac).toFixed(2)} ${C.toFixed(2)}" stroke-linecap="round"
-    transform="rotate(-90 28 28)" ${extra}/>`;
+  if(!dashed){
+    return `<circle cx="28" cy="28" r="${r}" fill="none" stroke="${color}" stroke-width="${width}"
+      stroke-dasharray="${(C*used).toFixed(2)} ${C.toFixed(2)}" stroke-linecap="round"
+      transform="rotate(-90 28 28)" ${extra}/>`;
+  }
+  // A second stroke-dasharray on the fraction circle is ignored by the SVG parser, so the used
+  // amount is its own path and the 4 2 dash is the only dasharray.
+  if(used>=1){
+    return `<circle class="weekly-dash" cx="28" cy="28" r="${r}" fill="none" stroke="${color}" stroke-width="${width}"
+      stroke-dasharray="4 2" stroke-linecap="butt" ${extra}/>`;
+  }
+  const a0=-Math.PI/2, a1=a0+used*2*Math.PI;
+  const x0=(28+r*Math.cos(a0)).toFixed(3), y0=(28+r*Math.sin(a0)).toFixed(3);
+  const x1=(28+r*Math.cos(a1)).toFixed(3), y1=(28+r*Math.sin(a1)).toFixed(3);
+  const large=used>0.5?1:0;
+  return `<path class="weekly-dash" d="M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}" fill="none" stroke="${color}" stroke-width="${width}"
+    stroke-dasharray="4 2" stroke-linecap="butt" ${extra}/>`;
 }
 
 function stockSweep(frac,color,counterclockwise){
@@ -1142,7 +1344,7 @@ function renderRing(){
     else delete cell.dataset.stockDrag;
     if(p.meter){
       const used=p.meter.fraction==null?null:(p.meter.invert?1-p.meter.fraction:p.meter.fraction);
-      const col=p.meter.color||(p.meter.steady?AMPLE:(used==null?'#8e8e93':tone(used)));
+      const col=p.meter.color||(p.meter.steady?AMPLE:(used==null?'#8e8e93':meterTone(used)));
       const fraction=p.meter.fraction==null?0:Math.min(Math.max(p.meter.fraction,0),1);
       svg.innerHTML=track;
       reading.innerHTML=bar?svgBar(fraction,col):p.stock?stockSweep(fraction,col,p.meter.counterclockwise):svgArc(25,fraction,col,5);
@@ -1154,19 +1356,21 @@ function renderRing(){
       continue;
     }
     pct.style.color='';
-    const h=headlineOf(p.snap,p.base);
+    const drawn=displayedUsage(p.snap,p.base);
+    const h=drawn.headline, wk=drawn.weekly;
     let inner=track;
     wrap.classList.toggle('pressed',!!refreshing[p.id]);
     reading.innerHTML=h && h.count==null?(bar?svgBar(h.used,tone(h.used)):svgArc(25,Math.min(h.used,1),tone(h.used),5)):'';
     if(weeklyRing!=='off'){ // the week, thinner and at its own radius, in its own colour: a session at 12% beside a week at 91% is the case this exists for
-      const wk=weeklyOf(p.snap,p.base);
       // Inside, it shares the gap with the working indicator, so it stands down while that is showing
       const taken=weeklyRing==='inside'&&workState(p.base)!=='idle';
       if(wk&&(!h||wk.id!==h.id)&&!taken){
         const r=weeklyRing==='inside'?16:31;
+        const dashed=!bar&&!!usageDisplay.weekly_ring_dashed;
+        const trackDash=dashed?'stroke-dasharray="4 2" stroke-linecap="butt"':'';
         inner+=bar?svgBar(1,TRACK,weeklyRing==='inside'?42:57,2.4)+svgBar(wk.used,tone(wk.used),weeklyRing==='inside'?42:57,2.4)
-          :`<circle cx="28" cy="28" r="${r}" fill="none" stroke="${TRACK}" stroke-width="2.4" opacity="0.7"/>`
-            +svgArc(r,Math.min(wk.used,1),tone(wk.used),2.4,'opacity="0.85"');
+          :`<circle cx="28" cy="28" r="${r}" fill="none" stroke="${TRACK}" stroke-width="2.4" opacity="0.7" ${trackDash}/>`
+            +svgArc(r,wk.used,tone(wk.used),2.4,'opacity="0.85"',dashed);
       }
     }
     svg.innerHTML=inner;
@@ -1178,9 +1382,9 @@ function renderRing(){
       else activity.innerHTML='';
     }
     if(p.snap.status==='needsAuth'||p.snap.status==='none') pct.textContent='—';
-    else if(h && h.count!=null) pct.textContent='~'+h.count;
-    else if(h) pct.textContent=(h.derived?'~':'')+pctText(h.used)+'%';
+    else if(h) pct.textContent=readingLabel(h, wk, weeklyRing!=='off', usageDisplay.weekly_reading);
     else pct.textContent=p.snap.windows.length?'—':'…'; // its declared window is missing: a dash, not a wait
+    pct.classList.toggle('pair', !!(h && pct.textContent.includes('/')));
     glyph.classList.toggle('dim', !!(h && h.used>=1));
     wrap.classList.toggle('stale', staleOf(p.snap));
   }
@@ -1192,6 +1396,13 @@ function resetCopy(ms){
   if(!ms) return '';
   const diff=ms-Date.now();
   if(diff<=0) return ui().resetting;
+  if(usageDisplay.reset_time_format==='remaining'){
+    const min=Math.max(1, Math.round(diff/60000));
+    const hours=Math.floor(min/60), days=Math.floor(hours/24);
+    if(days>0) return ui().resetsInDays(days, hours%24);
+    if(hours>0) return ui().resetsInHm(hours, min%60);
+    return ui().resetsIn(min);
+  }
   const min=Math.round(diff/60000); // rounded before the test, so 59m40s never reads "Resets in 60 min"
   if(min<60) return ui().resetsIn(Math.max(1,min));
   const d=new Date(ms), locale=ui().locale;
@@ -1268,9 +1479,10 @@ function renderCard(){
   }else if(!snap.windows.length){
     html+=`<div class="c-note">${esc(textCopy(snap.note||'Waiting for first reading…'))}</div>`;
   }else{
+    const rows=cardWindows(snap,p.base);
     // Windows that share a group (Antigravity's model families) sit in one box under its name, as on the Mac
     let group=null;
-    for(const w of snap.windows){
+    for(const w of rows){
       if((w.group||null)!==group){
         if(group) html+=`</div>`;
         group=w.group||null;
@@ -1281,10 +1493,12 @@ function renderCard(){
           <div class="w-used">${w.count>0?`~${w.count} ${textCopy(w.count===1?'request today':'requests today')}`:textCopy('no requests today')}</div></div>`;
         continue;
       }
+      const pace=usageDisplay.show_usage_pace?usagePace(w,Date.now()):null;
+      const paceText=pace?textCopy(usagePaceSummary(pace)):'';
       html+=`<div class="win">
         <div class="w-row"><span class="w-label">${esc(textCopy(w.label))}</span><span class="w-reset">${resetCopy(w.resets_at)}</span></div>
         <div class="w-track"><div class="w-fill" style="width:${(Math.min(w.used,1)*100).toFixed(0)}%;background:${tone(w.used)}"></div></div>
-        <div class="w-used">${esc(usedCopy(w))}</div>
+        <div class="w-used">${esc(usedCopy(w))}${paceText?` · <span class="w-pace" style="color:${pace.isDeficit?'#FF9F0A':'inherit'}">${esc(paceText)}</span>`:''}</div>
       </div>`;
     }
     if(group) html+=`</div>`;
@@ -1371,7 +1585,7 @@ function renderMeterCard(c,p){
       html+=`<div class="win"><div class="w-row"><span class="w-label">${esc(w.label)}</span></div>`;
       if(w.fraction!=null){
         const used=meter.invert?1-w.fraction:w.fraction;
-        const col=meter.color||(meter.steady?AMPLE:tone(used));
+        const col=meter.color||(meter.steady?AMPLE:meterTone(used));
         html+=`<div class="w-track"><div class="w-fill" style="width:${(Math.min(Math.max(w.fraction,0),1)*100).toFixed(0)}%;background:${col}"></div></div>`;
       }
       if(w.detail) html+=`<div class="w-used">${esc(w.detail)}</div>`;
@@ -1473,6 +1687,7 @@ function reportHot(){
   if(folded){ callq('set_hot',{rects:[wakeRect()],expanded:false,probe:probeRect()}).catch(()=>{}); return; }
   const open=card.classList.contains('show');
   const rects=open?[rectOf(pill),rectOf(tail),rectOf(card)]:[rectOf(pill)];
+  if(updateCard&&updateCard.classList.contains('show')){ rects.push(rectOf(updateCard)); if(updateTail) rects.push(rectOf(updateTail)); }
   if(placeHandles()){ rects.push(rectOf(orb)); if(showMove) rects.push(rectOf(moveHandle)); }
   callq('set_hot',{rects,expanded:open}).catch(()=>{});
 }
@@ -1560,6 +1775,7 @@ function cellAt(x,y){
 function pointerInHot(x,y){
   const p=pill.getBoundingClientRect();
   if(inRect(x,y,p,4))return true;
+  if(updateCard&&updateCard.classList.contains('show')&&inRect(x,y,updateCard.getBoundingClientRect(),4)) return true;
   if(!card.classList.contains('show'))return false;
   const c=card.getBoundingClientRect();
   if(inRect(x,y,c,4))return true;
@@ -1569,6 +1785,7 @@ function pointerInHot(x,y){
 let hideLogged=0, lastPointer=null;
 function updateHover(x,y){
   if(folded||dragging||stockDragging||carrying) return;
+  if(updateCardHeld()){ if(card.classList.contains('show')) hideCard(); return; }
   setHovered(onHandle(x,y));
   if(hovered){ if(card.classList.contains('show')){ clearTimeout(hideTimer); hideCard(); } return; }
   const id=cellAt(x,y);
@@ -1586,6 +1803,7 @@ function syncScrollHover(){
   if(card.classList.contains('show')&&(!anchor||!visibleCell(anchor))) hideCard();
   if(lastPointer) updateHover(...lastPointer);
   if(card.classList.contains('show')) placeCard();
+  if(updateCard&&updateCard.classList.contains('show')) placeUpdateCard();
 }
 cells.addEventListener('scroll',syncScrollHover);
 pill.addEventListener('wheel',e=>{
@@ -1745,8 +1963,9 @@ function pressIn(el){
 function pillShapes(){
   const cells=Math.max(1,pill.querySelectorAll('.cell').length);
   const ring=(pill.querySelector('.ringwrap')||{}).offsetHeight||44;
-  const label=(pill.querySelector('.pct')||{}).offsetHeight||20;
-  const ends=36, between=14, underRing=6;
+  const pct=pill.querySelector('.pct');
+  const label=usageDisplay.shows_notch_readings?((pct&&pct.offsetHeight)||20):0;
+  const ends=36, between=14, underRing=usageDisplay.shows_notch_readings?6:0;
   return { depth:70, length:ends+cells*(ring+underRing+label)+(cells-1)*between };
 }
 moveHandle.addEventListener('mousedown',e=>{
@@ -1765,7 +1984,7 @@ listen('move_end',()=>{ carrying=false; moveHandle.classList.remove('armed'); se
    never folds mid-carry, mid-drag or under the right-click menu, all of which take the pointer off the
    notch on purpose — folding under them is what #239's reviewers caught, so it is ruled out here. */
 const FOLD_GRACE=450; // NotchWindowController.foldGrace
-function foldAllowed(){ return onHover&&!previewTimer&&!pointerIn&&!carrying&&!dragging&&!stockDragging&&!menuOpen; }
+function foldAllowed(){ return onHover&&!previewTimer&&!pointerIn&&!carrying&&!dragging&&!stockDragging&&!menuOpen&&!updateCardHeld(); }
 function setFolded(f){
   if(f===folded) return;
   folded=f;
@@ -1824,12 +2043,154 @@ listen('notch_slots',e=>{
   if(card.classList.contains('show')){renderCard();armWatchdog();}
 }).catch(()=>{});
 invoke('get_antigravity_prefs').then(p=>{if(p){agPrefs=p;renderRing();}}).catch(()=>{});
+const updateCard=document.getElementById('update-card'), updateTail=document.getElementById('update-tail');
+let updateOffer=null, updatePreviewTimer=null, updateInstallBusy=false;
+function updateCardHeld(){ return !!(updateOffer&&updateOffer.available&&!updateOffer.deferred); }
+function updateProgressShare(st){
+  const d=Number(st&&st.downloaded), t=Number(st&&st.total);
+  if(!Number.isFinite(d)||d<0) return null;
+  if(!Number.isFinite(t)||t<=0) return null;
+  const share=d/t;
+  return Number.isFinite(share)?Math.min(Math.max(share,0),1):null;
+}
+function placeUpdateCard(){
+  if(!updateCard.classList.contains('show')) return;
+  const pr=pill.getBoundingClientRect();
+  const z=parseFloat(document.documentElement.style.zoom)||1, k=z*hoverTextScale;
+  let left=(8+insets[3])*z, right=innerWidth-(8+insets[1])*z;
+  let top=(8+insets[0])*z, bottom=innerHeight-(8+insets[2])*z;
+  if(notchEdge==='left') left=Math.max(left,pr.right+30*z);
+  else if(notchEdge==='right') right=Math.min(right,pr.left-30*z);
+  else if(notchEdge==='top') top=Math.max(top,pr.bottom+30*z);
+  else bottom=Math.min(bottom,pr.top-30*z);
+  updateCard.style.maxWidth=Math.max(0,(right-left)/k)+'px';
+  updateCard.style.maxHeight=Math.max(0,(bottom-top)/k)+'px';
+  const bounds=updateCard.getBoundingClientRect(), cw=bounds.width, ch=bounds.height;
+  if(edgeIsVertical()){
+    top=Math.max(top,Math.min(pr.top+pr.height/2-ch/2,bottom-ch));
+    if(notchEdge==='right') left=right-cw;
+    const ty=Math.max(top+16*k,Math.min(top+ch-16*k,pr.top+pr.height/2));
+    updateTail.style.top=(ty-18*z)/z+'px';
+    updateTail.style.left=(notchEdge==='left'?pr.right-z:pr.left-31*z)/z+'px';
+  }else{
+    left=Math.max(left,Math.min(pr.left+pr.width/2-cw/2,right-cw));
+    if(notchEdge==='bottom') top=bottom-ch;
+    updateTail.style.left=(pr.left+pr.width/2-18*z)/z+'px';
+    updateTail.style.top=(notchEdge==='top'?pr.bottom-z:pr.top-31*z)/z+'px';
+  }
+  updateCard.style.left=left/k+'px';
+  updateCard.style.top=top/k+'px';
+  reportHot();
+}
+function hideUpdateCard(){
+  updateCard.classList.remove('show');
+  updateCard.hidden=true;
+  updateCard.innerHTML='';
+  updateInstallBusy=false;
+  if(updatePreviewTimer){clearInterval(updatePreviewTimer);updatePreviewTimer=null;}
+  reportHot();
+}
+function renderUpdateCard(){
+  if(!updateCardHeld()){ hideUpdateCard(); return; }
+  const st=updateOffer;
+  const version=st.available;
+  const installing=!!st.installing;
+  const checking=!!st.checking;
+  const busy=installing||checking;
+  const preview=!!st.preview;
+  const share=updateProgressShare(st);
+  const focusedId=document.activeElement&&updateCard.contains(document.activeElement)?document.activeElement.id:'';
+  const titleText=installing
+    ? (uiLang==='ko' ? 'PenguinNotch '+version+' 설치 중' : 'Installing PenguinNotch '+version)
+    : (uiLang==='ko' ? 'PenguinNotch '+version+' 업데이트 가능' : 'PenguinNotch '+version+' is available');
+  let note;
+  if(checking && !installing) note=textCopy('Checking…');
+  else if(st.message) note=textCopy(st.message);
+  else if(preview && !installing) note=textCopy('This is a preview. Nothing is downloaded or installed.');
+  else if(installing){
+    if(share==null) note=textCopy('Downloading…');
+    else note=(uiLang==='ko'?'다운로드 중… ':'Downloading… ')+Math.round(share*100)+'%';
+  }
+  else note=textCopy('A new version of PenguinNotch is ready to install.');
+  let html=`<div class="u-title" id="update-title">${esc(titleText)}</div><div class="u-note">${esc(note)}</div>`;
+  if(installing){
+    const width=share==null?0:Math.round(share*100);
+    html+=`<div class="u-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Number.isFinite(width)?width:0}"><div class="u-fill" style="width:${Number.isFinite(width)?width:0}%"></div></div>`;
+  }else{
+    html+=`<div class="u-actions">
+      <button type="button" id="upd-install"${busy?' disabled':''}>${esc(textCopy('Update'))}</button>
+      <button type="button" id="upd-later"${busy?' disabled':''}>${esc(textCopy('Later'))}</button>
+      <button type="button" class="u-close" id="upd-close" aria-label="${esc(textCopy('Close'))}"${busy?' disabled':''}>×</button>
+    </div>`;
+  }
+  updateCard.innerHTML=html;
+  updateCard.hidden=false;
+  updateCard.classList.add('show');
+  const later=()=>{ if(updateOffer&&(updateOffer.installing||updateOffer.checking)) return; invoke('dismiss_update').catch(()=>{}); };
+  const install=updateCard.querySelector('#upd-install');
+  const laterBtn=updateCard.querySelector('#upd-later');
+  const closeBtn=updateCard.querySelector('#upd-close');
+  if(install) install.onclick=e=>{ e.stopPropagation(); runUpdateChoice(); };
+  if(laterBtn) laterBtn.onclick=e=>{ e.stopPropagation(); later(); };
+  if(closeBtn) closeBtn.onclick=e=>{ e.stopPropagation(); later(); };
+  const keep=focusedId&&updateCard.querySelector('#'+focusedId);
+  if(keep && !keep.disabled) keep.focus();
+  hideCard();
+  placeUpdateCard();
+}
+function runUpdateChoice(){
+  if(!updateOffer||updateOffer.installing||updateOffer.checking) return;
+  if(updateOffer.preview){
+    if(updatePreviewTimer) return;
+    let downloaded=0;
+    const total=100;
+    updateOffer=Object.assign({},updateOffer,{installing:true,downloaded:0,total:total,message:null});
+    renderUpdateCard();
+    updatePreviewTimer=setInterval(()=>{
+      downloaded=Math.min(total,downloaded+20);
+      if(updateOffer) updateOffer=Object.assign({},updateOffer,{downloaded:downloaded,total:total,installing:true});
+      renderUpdateCard();
+      if(downloaded>=total){
+        clearInterval(updatePreviewTimer); updatePreviewTimer=null;
+        invoke('dismiss_update').catch(()=>{ hideUpdateCard(); });
+      }
+    },80);
+    return;
+  }
+  if(updateInstallBusy) return;
+  updateInstallBusy=true;
+  invoke('install_update').catch(e=>{
+    updateInstallBusy=false;
+    notice('install_update failed: '+(e&&e.message||e));
+  });
+}
+function applyUpdateState(st){
+  const prev=updateOffer;
+  updateOffer=st&&typeof st==='object'?st:{};
+  if(updateOffer.installing || updateOffer.checking || updateOffer.message) updateInstallBusy=false;
+  const held=updateCardHeld();
+  const was=!!(prev&&prev.available&&!prev.deferred);
+  if(held && (!was || prev.available!==updateOffer.available || prev.deferred)) showNotchNow();
+  renderUpdateCard();
+  if(!held && was) scheduleFold();
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape' || !updateCardHeld() || (updateOffer&&(updateOffer.installing||updateOffer.checking))) return;
+  e.preventDefault();
+  invoke('dismiss_update').catch(()=>{});
+});
+listen('update_state',e=>applyUpdateState(e.payload)).catch(()=>{});
+invoke('get_update_state').then(applyUpdateState).catch(()=>applyUpdateState({}));
 invoke('get_weekly_ring').then(v=>{if(typeof v==='string'){weeklyRing=v;renderRing();}}).catch(()=>{});
 listen('hover_text_scale',e=>applyHoverTextScale(e.payload)).catch(()=>{});
 invoke('get_hover_text_scale').then(applyHoverTextScale).catch(()=>{});
 listen('weekly_ring',e=>{if(typeof e.payload==='string'){weeklyRing=e.payload;renderRing();}}).catch(()=>{});
 invoke('get_color_transition').then(applyColorTransition).catch(()=>{});
 listen('color_transition',e=>applyColorTransition(e.payload)).catch(()=>{});
+invoke('get_usage_display').then(applyUsageDisplay).catch(()=>{});
+listen('usage_display',e=>applyUsageDisplay(e.payload)).catch(()=>{});
+invoke('get_usage_limits').then(applyUsageLimits).catch(()=>{});
+listen('usage_limits',e=>applyUsageLimits(e.payload)).catch(()=>{});
 listen('antigravity_prefs',e=>{if(e.payload){agPrefs=e.payload;renderRing();}}).catch(()=>{});
 listen('glyphs',e=>{glyphs=e.payload||glyphs;renderRing();if(card.classList.contains('show'))renderCard();}).catch(()=>{});
 listen('activity',e=>{activity=e.payload||activity;renderRing();if(card.classList.contains('show'))renderCard();}).catch(()=>{});

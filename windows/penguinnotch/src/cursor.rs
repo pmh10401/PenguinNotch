@@ -158,16 +158,17 @@ fn parse_iso(v: Option<&serde_json::Value>) -> Option<u64> {
 /// usage-summary → (windows, note). When there are no windows the note says why (Unlimited / free plan without an allowance)
 pub fn parse_summary(v: &serde_json::Value) -> (Vec<LimitWindow>, String) {
     let resets_at = parse_iso(v.get("billingCycleEnd"));
+    let duration = crate::usage::span_secs(parse_iso(v.get("billingCycleStart")), resets_at);
     let usage = v.get("individualUsage").cloned().unwrap_or(serde_json::Value::Null);
     let plan = usage.get("plan").cloned().unwrap_or(serde_json::Value::Null);
     let mut out = Vec::new();
     // Headline = the dashboard number; 0 is a reading too
     if let Some(total) = pct(plan.get("totalPercentUsed")) {
-        out.push(LimitWindow { id: "included".into(), label: "Included usage".into(), used: total, resets_at, ..Default::default() });
+        out.push(LimitWindow { id: "included".into(), label: "Included usage".into(), used: total, resets_at, duration, ..Default::default() });
     }
     if let Some(api) = pct(plan.get("apiPercentUsed")) {
         if api > 0.0 {
-            out.push(LimitWindow { id: "api".into(), label: "API usage".into(), used: api, resets_at, ..Default::default() });
+            out.push(LimitWindow { id: "api".into(), label: "API usage".into(), used: api, resets_at, duration, ..Default::default() });
         }
     }
     if let Some(od) = usage.get("onDemand") {
@@ -180,7 +181,9 @@ pub fn parse_summary(v: &serde_json::Value) -> (Vec<LimitWindow>, String) {
                     id: "on_demand".into(),
                     label: "On demand".into(),
                     used: (u / limit).clamp(0.0, 1.0),
-                    resets_at, ..Default::default()
+                    resets_at,
+                    duration,
+                    ..Default::default()
                 });
             }
         }
@@ -304,4 +307,34 @@ pub fn start(app: AppHandle) {
             sleep_interruptible(POLL_SECS);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn billing_cycle_start_and_end_become_duration_seconds() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"billingCycleStart":"2026-08-24T03:32:15.933Z",
+                "billingCycleEnd":"2026-09-24T03:32:15.933Z",
+                "individualUsage":{"plan":{"totalPercentUsed":9.5,"apiPercentUsed":19}}}"#,
+        )
+        .unwrap();
+        let (ws, note) = parse_summary(&v);
+        assert!(note.is_empty());
+        assert_eq!(ws.iter().map(|w| w.duration).collect::<Vec<_>>(), [Some(31.0 * 86_400.0), Some(31.0 * 86_400.0)]);
+    }
+
+    #[test]
+    fn missing_billing_start_leaves_duration_unknown() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"billingCycleEnd":"2026-09-24T03:32:15.933Z",
+                "individualUsage":{"plan":{"totalPercentUsed":9.5}}}"#,
+        )
+        .unwrap();
+        let (ws, _) = parse_summary(&v);
+        assert_eq!(ws[0].duration, None);
+        assert!(ws[0].resets_at.is_some());
+    }
 }

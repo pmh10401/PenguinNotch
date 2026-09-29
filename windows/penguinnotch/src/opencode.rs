@@ -284,6 +284,24 @@ fn parse_reset(stamp: &str) -> Option<u64> {
     chrono::DateTime::parse_from_rfc3339(stamp.trim()).ok().map(|d| d.timestamp_millis().max(0) as u64)
 }
 
+/// Matches `OpenCodeUsage.duration(for:endingAt:)`: rolling 5h, weekly 7d, monthly the
+/// Gregorian month ending at the reset. Unknown ids stay None.
+fn opencode_duration(id: &str, resets_at: Option<u64>) -> Option<f64> {
+    match id {
+        "rolling" => crate::usage::finite_positive_secs(Some(5.0 * 3600.0)),
+        "weekly" => crate::usage::finite_positive_secs(Some(7.0 * 86400.0)),
+        "monthly" => monthly_secs(resets_at),
+        _ => None,
+    }
+}
+
+fn monthly_secs(reset_ms: Option<u64>) -> Option<f64> {
+    let reset_ms = reset_ms.filter(|ms| *ms > 0)?;
+    let reset = chrono::DateTime::from_timestamp_millis(reset_ms as i64)?;
+    let start = reset.checked_sub_months(chrono::Months::new(1))?;
+    crate::usage::finite_positive_secs(Some(reset.signed_duration_since(start).num_seconds() as f64))
+}
+
 fn windows_from(v: &serde_json::Value) -> Vec<LimitWindow> {
     let Some(usage) = v.get("usage") else { return Vec::new() };
     [("rolling", "5-hour Limit"), ("weekly", "Weekly limit"), ("monthly", "Monthly limit")]
@@ -291,11 +309,13 @@ fn windows_from(v: &serde_json::Value) -> Vec<LimitWindow> {
         .filter_map(|(id, label)| {
             let entry = usage.get(*id)?;
             let pct = entry.get("percent").and_then(|x| x.as_f64())?;
+            let resets_at = entry.get("resetsAt").and_then(|x| x.as_str()).and_then(parse_reset);
             Some(LimitWindow {
                 id: (*id).into(),
                 label: (*label).into(),
                 used: (pct / 100.0).clamp(0.0, 1.0),
-                resets_at: entry.get("resetsAt").and_then(|x| x.as_str()).and_then(parse_reset),
+                resets_at,
+                duration: opencode_duration(id, resets_at),
                 ..Default::default()
             })
         })
@@ -457,6 +477,19 @@ mod tests {
         assert_eq!(ws[1].used, 0.0, "0 % is a reading, not a gap");
         assert_eq!(ws[0].resets_at, Some(1788697866611));
         assert_eq!(ws[1].resets_at, Some(1788739200000));
+        assert_eq!(ws[0].duration, Some(18_000.0));
+        assert_eq!(ws[1].duration, Some(604_800.0));
+        assert_eq!(ws[2].duration, Some(30.0 * 86_400.0));
+    }
+
+    #[test]
+    fn rolling_and_weekly_keep_fixed_durations_when_reset_is_missing() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"usage":{"rolling":{"status":"ok","percent":12.5},"weekly":{"status":"ok","percent":3},"monthly":{"status":"ok","percent":40}}}"#,
+        )
+        .unwrap();
+        let ws = windows_from(&v);
+        assert_eq!(ws.iter().map(|w| w.duration).collect::<Vec<_>>(), [Some(18_000.0), Some(604_800.0), None]);
     }
 
     #[test]

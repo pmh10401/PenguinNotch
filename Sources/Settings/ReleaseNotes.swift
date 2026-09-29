@@ -31,6 +31,10 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.22.0", headline: L10n.t("Consistent notch controls across platforms"),
+                        changes: [.init(title: L10n.t("Windows usage display and limits now follow the macOS settings.")),
+                                  .init(title: L10n.t("Six dots to carry the notch")),
+                                  .init(title: L10n.t("Updates ask first, in the notch"))]),
             ReleaseNote(version: "1.21.2", headline: L10n.t("Verify notch gestures across macOS versions"),
                         changes: [.init(title: L10n.t("Click, scroll and reorder checks now use the same input coordinates on local Macs and CI."))]),
             ReleaseNote(version: "1.21.1", headline: L10n.t("Complete a fast notch drag on release"),

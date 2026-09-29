@@ -135,9 +135,11 @@ fn parse_quota(text: &str) -> Result<Vec<LimitWindow>, String> {
             .find_map(|s| label.strip_suffix(s))
             .map(String::from);
         let lane = crate::antigravity::lane_name(&label).filter(|_| group.is_some());
+        let duration = crate::antigravity::lane_duration(&label);
         out.push(LimitWindow {
             label: lane.map_or(short_label, String::from),
             group,
+            duration,
             id: label,
             used: ((100.0 - remaining) / 100.0).clamp(0.0, 1.0),
             resets_at: Some(reset as u64),
@@ -531,24 +533,35 @@ mod tests {
         assert_eq!(windows[0].group.as_deref(), Some("Gemini Models"));
         assert!((windows[0].used - 0.22).abs() < 1e-5);
         assert!(windows[0].resets_at.is_some());
+        assert_eq!(windows[0].duration, Some(18_000.0));
 
         assert_eq!(windows[1].id, "Gemini Models Weekly Limit");
         assert_eq!(windows[1].label, "Weekly Limit");
         assert_eq!(windows[1].group.as_deref(), Some("Gemini Models"));
         assert!((windows[1].used - 0.06).abs() < 1e-5);
         assert!(windows[1].resets_at.is_some());
+        assert_eq!(windows[1].duration, Some(604_800.0));
 
         assert_eq!(windows[2].id, "Claude and GPT models Five Hour Limit");
         assert_eq!(windows[2].label, "5-hour Limit");
         assert_eq!(windows[2].group.as_deref(), Some("Claude and GPT models"));
         assert_eq!(windows[2].used, 0.0);
         assert!(windows[2].resets_at.is_some());
+        assert_eq!(windows[2].duration, Some(18_000.0));
 
         assert_eq!(windows[3].id, "Claude and GPT models Weekly Limit");
         assert_eq!(windows[3].label, "Weekly Limit");
         assert_eq!(windows[3].group.as_deref(), Some("Claude and GPT models"));
         assert_eq!(windows[3].used, 0.0);
         assert!(windows[3].resets_at.is_some());
+        assert_eq!(windows[3].duration, Some(604_800.0));
+
+        let unknown = parse_quota(
+            "Quota:\nGemini Models Daily Limit Remaining 50% 2026-09-12T01:47:23Z",
+        )
+        .expect("label parser accepts an unknown cadence");
+        assert_eq!(unknown.len(), 1);
+        assert_eq!(unknown[0].duration, None);
 
         for bad in [
             "",

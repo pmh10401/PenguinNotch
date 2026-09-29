@@ -186,6 +186,12 @@ pub fn parse_credits(v: &serde_json::Value) -> (Vec<LimitWindow>, String) {
     let current = config.get("currentPeriod");
     let current_end = iso_ms(current.and_then(|p| p.get("end")));
     let resets_at = current_end.or_else(|| iso_ms(config.get("billingPeriodEnd")));
+    let start_ms = if current_end.is_some() {
+        iso_ms(current.and_then(|p| p.get("start")))
+    } else {
+        iso_ms(config.get("billingPeriodStart"))
+    };
+    let duration = crate::usage::span_secs(start_ms, resets_at);
 
     let mut out: Vec<LimitWindow> = Vec::new();
     let products = config.get("productUsage").and_then(|x| x.as_array());
@@ -195,6 +201,7 @@ pub fn parse_credits(v: &serde_json::Value) -> (Vec<LimitWindow>, String) {
             label: "Weekly limit".into(),
             used,
             resets_at,
+            duration,
             ..Default::default()
         });
     }
@@ -206,7 +213,7 @@ pub fn parse_credits(v: &serde_json::Value) -> (Vec<LimitWindow>, String) {
             // The ring reads the window whose id is "credits"; using the wire name for the first
             // one left a valid bar on the card and a dash on the cell.
             let id = if out.is_empty() { "credits".to_string() } else { wire.unwrap_or(&label).to_string() };
-            out.push(LimitWindow { id, label, used, resets_at, ..Default::default() });
+            out.push(LimitWindow { id, label, used, resets_at, duration, ..Default::default() });
         }
     }
 
@@ -420,6 +427,8 @@ mod tests {
         assert_eq!(w[0].label, "Weekly limit");
         assert!((w[0].used - 0.08).abs() < 1e-9);
         assert!(w[0].resets_at.is_some());
+        assert_eq!(w[0].duration, Some(7.0 * 86_400.0));
+        assert_eq!(w[1].duration, Some(7.0 * 86_400.0));
     }
 
     #[test]
@@ -433,6 +442,19 @@ mod tests {
         assert_eq!(w.len(), 1);
         assert_eq!(w[0].id, "credits");
         assert_eq!(w[0].used, 0.0);
+        assert_eq!(w[0].duration, None, "the unused weekly fallback does not invent a length");
+    }
+
+    #[test]
+    fn missing_period_start_leaves_duration_unknown() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{ "config": { "currentPeriod": { "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                                                  "end": "2026-09-12T08:00:00Z" },
+                             "creditUsagePercent": 47.0 } }"#,
+        )
+        .unwrap();
+        let (w, _) = parse_credits(&v);
+        assert_eq!(w[0].duration, None);
     }
 
     #[test]

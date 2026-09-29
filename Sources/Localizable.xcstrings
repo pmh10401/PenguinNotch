@@ -1,6 +1,20 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Consistent notch controls across platforms": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Consistent notch controls across platforms" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "macOS와 Windows의 노치 조작·표시 통일" } }
+      }
+    },
+    "Windows usage display and limits now follow the macOS settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Windows usage display and limits now follow the macOS settings." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Windows 사용량 표시와 한도 설정을 macOS와 동일하게 맞췄습니다." } }
+      }
+    },
     "Verify notch gestures across macOS versions": {
       "extractionState": "manual",
       "localizations": {

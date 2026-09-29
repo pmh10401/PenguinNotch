@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 /// The Mac's notch sizes, as multiples of the designed size: Small, Medium, Large.
 pub const SIZES: [f64; 3] = [0.8, 1.0, 1.25];
@@ -109,6 +110,12 @@ pub struct Config {
     /// How a usage ring changes colour: "hard_step" or "ramp".
     #[serde(default = "default_color_transition")]
     pub color_transition: String,
+    /// Persistent usage-display choices. Nested so one get/set round-trip covers the AI page.
+    #[serde(default, deserialize_with = "deserialize_usage_display")]
+    pub usage_display: UsageDisplayPrefs,
+    /// Watch and critical thresholds for AI usage colour. Hardware and stocks keep their own palettes.
+    #[serde(default, deserialize_with = "deserialize_usage_limits")]
+    pub usage_limits: UsageLimitPrefs,
     /// Which appearance the pages draw in: "system", "light" or "dark".
     #[serde(
         default = "default_theme",
@@ -152,7 +159,8 @@ pub struct Config {
     /// leave the app running with no way to reach it.
     #[serde(default = "yes")]
     pub tray_visible: bool,
-    /// false = no arc above the notch to carry it by. Nothing is lost: Appearance → Edge moves it too.
+    /// false = no six-dot grip to carry the notch by. macOS dropped this switch; Windows keeps the
+    /// saved key so an existing off choice is not silently undone. Appearance → Edge still moves it.
     #[serde(default = "yes")]
     pub show_move_handle: bool,
     /// CPU, memory, disk, network, battery and power. Off stops sampling.
@@ -183,6 +191,9 @@ pub struct Config {
     /// (backdrop.rs). Opt-in for that reason; off, the pill takes Theme's colour.
     #[serde(default)]
     pub adaptive_pill: bool,
+    /// Look for a newer release after launch. Off stops the background check; a manual check still works.
+    #[serde(default = "yes")]
+    pub automatic_updates: bool,
 }
 
 fn default_notch_y() -> f64 {
@@ -310,6 +321,130 @@ pub fn color_transition_or_step(value: &str) -> String {
         _ => default_color_transition(),
     }
 }
+
+/// Mac `ResetTimeFormat`: automatic and remaining only. Anything else is automatic.
+pub fn reset_time_format_or_automatic(value: &str) -> String {
+    if value == "remaining" {
+        value.to_string()
+    } else {
+        default_reset_time_format()
+    }
+}
+
+fn default_reset_time_format() -> String {
+    "automatic".into()
+}
+
+/// Notch reading and hover-display choices, matching macOS Preferences defaults.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UsageDisplayPrefs {
+    /// Percentage under each ring. On by default, as the notch has always drawn it.
+    #[serde(default = "yes")]
+    pub shows_notch_readings: bool,
+    /// Dash the secondary weekly allowance ring. Off until chosen.
+    #[serde(default)]
+    pub weekly_ring_dashed: bool,
+    /// Pair the weekly ring's percentage in the reading, as "30%/70%". Off by default.
+    #[serde(default)]
+    pub weekly_reading: bool,
+    /// Lead with the weekly window where a shorter one sits beside it. Off by default.
+    #[serde(default)]
+    pub weekly_headline: bool,
+    /// "automatic" | "remaining" — see `reset_time_format_or_automatic`.
+    #[serde(default = "default_reset_time_format")]
+    pub reset_time_format: String,
+    /// Hover-card pace line. Off by default (`UserDefaults.bool` is false when absent).
+    #[serde(default)]
+    pub show_usage_pace: bool,
+    /// Claude's big ring as today's share of the week. Off by default.
+    #[serde(default)]
+    pub claude_daily_pace_ring: bool,
+    /// Spark and code-review Codex windows in the hover card. On for a first launch.
+    #[serde(default = "yes")]
+    pub show_codex_extra_limits: bool,
+}
+
+impl Default for UsageDisplayPrefs {
+    fn default() -> Self {
+        Self {
+            shows_notch_readings: true,
+            weekly_ring_dashed: false,
+            weekly_reading: false,
+            weekly_headline: false,
+            reset_time_format: default_reset_time_format(),
+            show_usage_pace: false,
+            claude_daily_pace_ring: false,
+            show_codex_extra_limits: true,
+        }
+    }
+}
+
+impl UsageDisplayPrefs {
+    pub fn sanitized(mut self) -> Self {
+        self.reset_time_format = reset_time_format_or_automatic(&self.reset_time_format);
+        self
+    }
+}
+
+fn deserialize_usage_display<'de, D: serde::Deserializer<'de>>(de: D) -> Result<UsageDisplayPrefs, D::Error> {
+    Ok(Option::<serde_json::Value>::deserialize(de)
+        .ok()
+        .flatten()
+        .and_then(|value| serde_json::from_value::<UsageDisplayPrefs>(value).ok())
+        .map(UsageDisplayPrefs::sanitized)
+        .unwrap_or_default())
+}
+
+fn default_watch_limit() -> f64 {
+    0.50
+}
+fn default_critical_limit() -> f64 {
+    0.70
+}
+
+/// Watch must stay below critical: 1%…99% and 2%…100%, matching Preferences clamping.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UsageLimitPrefs {
+    #[serde(default = "default_watch_limit")]
+    pub watch_limit: f64,
+    #[serde(default = "default_critical_limit")]
+    pub critical_limit: f64,
+}
+
+impl Default for UsageLimitPrefs {
+    fn default() -> Self {
+        Self {
+            watch_limit: default_watch_limit(),
+            critical_limit: default_critical_limit(),
+        }
+    }
+}
+
+impl UsageLimitPrefs {
+    pub fn sanitized(self) -> Self {
+        let critical = if self.critical_limit.is_finite() {
+            self.critical_limit.clamp(0.02, 1.0)
+        } else {
+            default_critical_limit()
+        };
+        let watch = if self.watch_limit.is_finite() {
+            self.watch_limit.clamp(0.01, critical - 0.01)
+        } else {
+            default_watch_limit().min(critical - 0.01)
+        };
+        Self { watch_limit: watch, critical_limit: critical }
+    }
+}
+
+fn deserialize_usage_limits<'de, D: serde::Deserializer<'de>>(de: D) -> Result<UsageLimitPrefs, D::Error> {
+    Ok(Option::<serde_json::Value>::deserialize(de)
+        .ok()
+        .flatten()
+        .and_then(|value| serde_json::from_value::<UsageLimitPrefs>(value).ok())
+        .map(UsageLimitPrefs::sanitized)
+        .unwrap_or_default())
+}
+
 fn yes() -> bool {
     true
 }
@@ -347,6 +482,8 @@ impl Default for Config {
             hover_text_scale: default_scale(),
             weekly_ring: default_weekly_ring(),
             color_transition: default_color_transition(),
+            usage_display: UsageDisplayPrefs::default(),
+            usage_limits: UsageLimitPrefs::default(),
             theme: default_theme(),
             notch_providers: Vec::new(), // empty = show them all
             notch_slots: Vec::new(),     // filled in by load(), from notch_providers
@@ -370,6 +507,7 @@ impl Default for Config {
             weather_location: None,
             stock_settings: crate::stocks::StockSettings::default(),
             adaptive_pill: false,
+            automatic_updates: true,
         }
     }
 }
@@ -424,6 +562,8 @@ pub fn load() -> Config {
     cfg.hover_text_scale = hover_text_scale(cfg.hover_text_scale);
     cfg.weekly_ring = weekly_ring_or_off(&cfg.weekly_ring);
     cfg.color_transition = color_transition_or_step(&cfg.color_transition);
+    cfg.usage_display = cfg.usage_display.clone().sanitized();
+    cfg.usage_limits = cfg.usage_limits.clone().sanitized();
     cfg.theme = theme_or_system(&cfg.theme);
     cfg
 }
@@ -459,21 +599,61 @@ fn migrate_opencode_notch(cfg: &mut Config, raw: &Option<String>) {
 }
 
 pub fn save(cfg: &Config) {
-    let path = config_path();
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+    let _ = try_save(cfg);
+}
+
+/// The shared writer. Callers that report persistence must use this result rather than assuming
+/// an in-memory assignment reached disk.
+pub fn try_save(cfg: &Config) -> Result<(), String> {
+    try_save_to(&config_path(), cfg)
+}
+
+/// Same-directory temp file, full write, `sync_all`, then rename over the destination.
+/// A failed write never truncates an existing file. Tests inject a path so they do not touch
+/// the live config.
+pub fn try_save_to(path: &Path, cfg: &Config) -> Result<(), String> {
+    let txt = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
+    atomic_write(path, txt.as_bytes())
+}
+
+fn atomic_write(path: &Path, data: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    if let Ok(txt) = serde_json::to_string_pretty(cfg) {
-        let _ = std::fs::write(path, txt);
+    static SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("config.json");
+    let temp = path.with_file_name(format!(
+        ".{}.{}.{}.tmp",
+        name,
+        std::process::id(),
+        SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let mut file = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)
+    {
+        Ok(file) => file,
+        Err(err) => return Err(err.to_string()),
+    };
+    let finish = (|| {
+        file.write_all(data).map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
+        drop(file);
+        std::fs::rename(&temp, path).map_err(|e| e.to_string())
+    })();
+    if finish.is_err() {
+        let _ = std::fs::remove_file(&temp);
     }
+    finish
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{custom_notch_scale, TraySlot};
+    use super::{custom_notch_scale, TraySlot, UsageDisplayPrefs, UsageLimitPrefs};
     use super::{
-        carry_shared_position, color_transition_or_step, keep_open_on_upgrade, snap_scale, theme_or_system,
-        weekly_ring_or_off, Config,
+        carry_shared_position, color_transition_or_step, keep_open_on_upgrade,
+        reset_time_format_or_automatic, snap_scale, theme_or_system, weekly_ring_or_off, Config,
     };
 
     /// Show on hover is the Mac's default, so a fresh install gets it — but an update must not start
@@ -728,5 +908,137 @@ mod tests {
             saved.get("theme").and_then(|value| value.as_str()),
             Some("light")
         );
+    }
+
+    #[test]
+    fn usage_display_defaults_match_macos_and_survive_an_old_config() {
+        let d = UsageDisplayPrefs::default();
+        assert!(d.shows_notch_readings);
+        assert!(!d.weekly_ring_dashed);
+        assert!(!d.weekly_reading);
+        assert!(!d.weekly_headline);
+        assert_eq!(d.reset_time_format, "automatic");
+        assert!(!d.show_usage_pace);
+        assert!(!d.claude_daily_pace_ring);
+        assert!(d.show_codex_extra_limits);
+        let old: Config = serde_json::from_str(r#"{"lang":"ko","notch_edge":"bottom"}"#).unwrap();
+        assert_eq!(old.usage_display, d);
+        assert_eq!(old.usage_limits, UsageLimitPrefs::default());
+        assert!(old.automatic_updates);
+        assert_eq!(old.lang, "ko");
+        assert_eq!(old.notch_edge, "bottom");
+    }
+
+    #[test]
+    fn usage_display_round_trips_and_malformed_values_keep_the_rest() {
+        let mut saved = Config::default();
+        saved.usage_display.show_usage_pace = true;
+        saved.usage_display.weekly_headline = true;
+        saved.usage_display.reset_time_format = "remaining".into();
+        saved.usage_display.shows_notch_readings = false;
+        saved.usage_display.show_codex_extra_limits = false;
+        let json = serde_json::to_value(&saved).unwrap();
+        let restored: Config = serde_json::from_value(json).unwrap();
+        assert_eq!(restored.usage_display, saved.usage_display);
+
+        for raw in ["null", "true", "[]", "{}", r#""NaN""#] {
+            let cfg: Config = serde_json::from_str(&format!(
+                r#"{{"usage_display":{raw},"lang":"ko","notch_visible":false}}"#
+            ))
+            .unwrap();
+            assert_eq!(cfg.usage_display, UsageDisplayPrefs::default(), "{raw}");
+            assert_eq!(cfg.lang, "ko");
+            assert!(!cfg.notch_visible);
+        }
+        let mixed: Config = serde_json::from_str(
+            r#"{"usage_display":{"reset_time_format":"nope","weekly_headline":true},"lang":"ja"}"#,
+        )
+        .unwrap();
+        assert_eq!(mixed.usage_display.reset_time_format, "automatic");
+        assert!(mixed.usage_display.weekly_headline);
+        assert!(mixed.usage_display.shows_notch_readings);
+        assert_eq!(mixed.lang, "ja");
+    }
+
+    #[test]
+    fn reset_time_format_is_automatic_or_remaining() {
+        assert_eq!(reset_time_format_or_automatic("remaining"), "remaining");
+        assert_eq!(reset_time_format_or_automatic("automatic"), "automatic");
+        assert_eq!(reset_time_format_or_automatic(""), "automatic");
+        assert_eq!(reset_time_format_or_automatic("Remaining"), "automatic");
+        assert_eq!(reset_time_format_or_automatic("absolute"), "automatic");
+    }
+
+    #[test]
+    fn try_save_replaces_only_after_a_complete_temp_write() {
+        let dir = std::env::temp_dir().join(format!(
+            "penguinnotch-config-atomic-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        let first = Config { lang: "ko".into(), ..Default::default() };
+        super::try_save_to(&path, &first).unwrap();
+        assert!(std::fs::read_to_string(&path).unwrap().contains("\"lang\": \"ko\""));
+        let second = Config { lang: "ja".into(), notch_visible: false, ..Default::default() };
+        super::try_save_to(&path, &second).unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("\"lang\": \"ja\""));
+        assert!(body.contains("\"notch_visible\": false"));
+        assert!(!body.contains("\"lang\": \"ko\""));
+
+        let blocker = dir.join("blocked");
+        std::fs::write(&blocker, b"keep-me").unwrap();
+        let nested = blocker.join("config.json");
+        assert!(super::try_save_to(&nested, &first).is_err());
+        assert_eq!(std::fs::read(&blocker).unwrap(), b"keep-me");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+
+        let stranger = dir.join(".config.json.not-ours.tmp");
+        std::fs::write(&stranger, b"do-not-delete").unwrap();
+        let third = Config { lang: "en".into(), ..Default::default() };
+        super::try_save_to(&path, &third).unwrap();
+        assert_eq!(std::fs::read(&stranger).unwrap(), b"do-not-delete");
+        assert!(std::fs::read_to_string(&path).unwrap().contains("\"lang\": \"en\""));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn usage_limits_clamp_watch_below_critical_and_keep_unrelated_config() {
+        assert_eq!(UsageLimitPrefs::default().watch_limit, 0.50);
+        assert_eq!(UsageLimitPrefs::default().critical_limit, 0.70);
+        let crossed = UsageLimitPrefs { watch_limit: 0.90, critical_limit: 0.40 }.sanitized();
+        assert_eq!(crossed.critical_limit, 0.40);
+        assert!((crossed.watch_limit - 0.39).abs() < 1e-12);
+        let high = UsageLimitPrefs { watch_limit: 2.0, critical_limit: 2.0 }.sanitized();
+        assert_eq!(high.critical_limit, 1.0);
+        assert!((high.watch_limit - 0.99).abs() < 1e-12);
+        let low = UsageLimitPrefs { watch_limit: 0.0, critical_limit: 0.0 }.sanitized();
+        assert_eq!(low.critical_limit, 0.02);
+        assert_eq!(low.watch_limit, 0.01);
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let s = UsageLimitPrefs { watch_limit: bad, critical_limit: bad }.sanitized();
+            assert_eq!(s, UsageLimitPrefs::default());
+        }
+        let cfg: Config = serde_json::from_str(
+            r#"{"usage_limits":{"watch_limit":0.8,"critical_limit":0.3},"lang":"ko"}"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.usage_limits.critical_limit, 0.30);
+        assert!((cfg.usage_limits.watch_limit - 0.29).abs() < 1e-12);
+        assert_eq!(cfg.lang, "ko");
+        for raw in ["null", "true", "[]", "0"] {
+            let cfg: Config = serde_json::from_str(&format!(
+                r#"{{"usage_limits":{raw},"notch_edge":"left"}}"#
+            ))
+            .unwrap();
+            assert_eq!(cfg.usage_limits, UsageLimitPrefs::default(), "{raw}");
+            assert_eq!(cfg.notch_edge, "left");
+        }
     }
 }

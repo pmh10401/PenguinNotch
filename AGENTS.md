@@ -11,6 +11,13 @@ Read [the wiki index](docs/wiki/index.md) and only the pages relevant to the tas
 - Answer wiki questions with source links. Save a substantive new conclusion when it belongs to the task; a routine lookup does not need a new page.
 - During a wiki check, verify links, index coverage, stale claims and contradictions against the cited sources. Check the pages touched by the task rather than rescanning everything on every turn.
 
+## macOS and Windows consistency
+
+- Treat shared user-facing behavior as a two-platform contract. Check both `Sources/` and `windows/penguinnotch/` when changing notch controls, settings, stocks, monitoring or widgets.
+- Keep shared setting names, grouping, defaults, units and calculation rules aligned. Preserve existing settings on upgrade. Document a real platform limitation instead of adding a nonfunctional control or claiming parity.
+- Verify changed controls in the rendered Windows pages, including English/Korean, rings/bars, four edges and scrolling when affected. Public fixtures must cover the same calculation and boundary cases as macOS; native CI and browser mocks are distinct evidence.
+- For a formal release, advance both platform versions, verify their native checks and installer workflows, and publish matching installers and signed update feeds. Record untested hardware or account paths explicitly.
+
 ## Boundaries
 
 - Only public project documentation, code and sanitized verification results belong in this Git-tracked wiki. Do not ingest credentials, account identifiers, holdings, balances, private logs, local model data or untracked research outputs.

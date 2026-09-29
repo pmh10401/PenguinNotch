@@ -265,6 +265,13 @@ Existing visibility, colors, order and weather city are kept. Moving items withi
 page preserves the other categories' slots. macOS-only services and alerts are not shown
 as empty Windows settings pages.
 
+In **1.22.0**, Windows also supports the macOS **Usage display** choices: show/hide
+notch readings, a dashed secondary ring, paired readings, weekly headline, reset-time
+format, usage pace, Claude daily pace and Codex extra limits. **Usage limits** holds
+the watch/critical thresholds and colour transition on both platforms. Weekly and
+pace calculations use the provider's reported window duration; missing durations
+are not guessed. Existing choices survive an update.
+
 Under **Appearance → Notch items and order → Manage visible items and order**, filter
 by category on macOS or choose **Group by category** to gather related cells. Filtering and moving
 rows preserves other categories’ positions; existing visibility, colors and order are kept.
@@ -319,6 +326,10 @@ for five seconds. **Meter style** switches all cells between circles and bars;
 value separately from the size preset and hover text size. **Recentre** preserves
 the display selection and other edges' positions. An unavailable display uses
 the main display temporarily and returns to the saved display when it reconnects.
+
+Drag the **six dots** beside the notch to move it on either platform. Option on
+macOS and Alt on Windows retain the modifier-drag shortcut. Windows keeps an
+existing **Show move handle** preference, including a previously hidden grip.
 
 At rest it is a small pill on the screen edge that unfolds when the pointer
 reaches it — configurable in Settings to always show, or to hide entirely.
@@ -668,22 +679,31 @@ The new icon and features were developed in this repository.
 
 On macOS, PenguinNotch uses [Sparkle](https://sparkle-project.org) to check
 [this repository's releases](https://github.com/pmh10401/PenguinNotch/releases) for updates.
-Sparkle checks daily
-and installs in the background without prompting; Settings says so and can
-switch it off. Every update is EdDSA-signed, so nothing installs that wasn't
+Sparkle checks daily and offers **Update** or **Later** in the notch. Installation
+starts only after choosing Update; automatic checks can be turned off in Settings.
+Every update is EdDSA-signed, so nothing installs that wasn't
 built and signed by this fork's maintainer. Versioned releases publish `appcast.xml`
 beside the disk image; the rolling preview does not provide an update feed.
 EdDSA update signing is separate from Apple code signing and notarization.
 
 On Windows, **Settings → General → Check for updates** reads `latest.json` from
-the latest release; an automatic check also runs shortly after launch. The updater
-verifies the installer signature before running it. See [Windows updates](windows/README.md#updates).
-The 1.20.4 release includes both installers, both update feeds and
+the latest release. Automatic checks run shortly after launch and then daily when
+enabled. The notch offers **Update** or **Later**; a deferred update remains available
+in Settings. **Preview update** shows the controls without downloading anything.
+The updater verifies the installer signature before running it. See [Windows updates](windows/README.md#updates).
+Versioned releases include both installers, both update feeds and
 [`SHA256SUMS.txt`](../../releases/latest/download/SHA256SUMS.txt) for checking file hashes.
 
-## Upstream integration (1.21.2 source)
+## Upstream integration and platform consistency (1.22.0)
 
-This development version merges [CodeNotch 1.19.0](https://github.com/vinzdg/codenotch/commit/0083369) while retaining PenguinNotch's stocks, monitoring, widgets, scrolling and update feeds. On macOS, drag the six dots beside Settings to carry the notch around screen edges; updates are offered in the notch with **Update** and **Later**. Kilo and Apify, weekly headline readings, notification destinations and continuous usage colors are included. Windows gains OpenCode Go, system proxy handling and surface/topmost fixes, while keeping the six settings sections. This source version is separate from the latest published installer.
+This version includes the [CodeNotch 1.19.0 integration](https://github.com/vinzdg/codenotch/commit/0083369) and preserves PenguinNotch's stocks, monitoring, widgets, scrolling and update feeds. Windows now shares the usage-display controls, six-dot grip and explicit update choices described above. Its weather card adds sunrise/sunset, the next six hours' precipitation peak and city-local measurement time; switching cities cannot reuse the previous city's temperature, and yesterday's forecast is not labelled as today's.
+
+Shared controls follow the same labels, defaults and calculation rules. Full feature
+parity is still incomplete: Kilo, Apify, custom endpoints, some notification controls
+and manual Codex stock analysis remain macOS-only. Windows stock quotes use minute
+REST polling; macOS also receives Toss WebSocket trades. Native sensors, credential
+stores and update engines differ. Rendered UI tests and native Windows CI are
+reported separately from physical Windows/WebView2 and multi-monitor testing.
 
 The 1.21.1 follow-up also completes a macOS item drag from the release position when no intermediate movement event arrives. Movements shorter than five points remain clicks.
 
