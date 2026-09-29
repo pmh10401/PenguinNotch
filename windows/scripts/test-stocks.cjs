@@ -238,7 +238,7 @@ async function main(){
       assert.equal(cmd,'stock_request');requests.push(clone(request));
       let data;
       if(request.kind==='prices')data={result:[{symbol:state.symbol,lastPrice:state.price,currency:state.currency,timestamp:typeof state.quoteAt==='number'?new Date(state.quoteAt).toISOString():state.quoteAt}]};
-      else if(request.kind==='calendar'){if(state.calendarError)throw Error('Calendar unavailable');data=state.calendar;}
+      else if(request.kind==='calendar'){if(state.calendarError)throw(state.calendarError===true?Error('Calendar unavailable'):state.calendarError);data=state.calendar;}
       else if(request.kind==='candles'){if(state.candleError)throw Error('Candles unavailable');data=dailyRaw(state.daily);}
       else if(request.kind==='names')data={result:[]};
       else throw Error('Unexpected quote request '+request.kind);
@@ -289,6 +289,10 @@ async function main(){
   const usCal=quoteFixture({price:101,daily:close100});await usCal.store.refreshQuotes();expectQuote(usCal.store,101,100);
   await refreshAt(usCal,{price:99,calendarError:true});assert.equal(expectQuote(usCal.store,99,100).context.tradingDay,'2026-09-28');
   await refreshAt(usCal,{price:99,calendarError:false});expectQuote(usCal.store,99,100);usCal.store.dispose();
+  for(const error of ['Invalid stock JSON response','Stock response is too large',Error('Invalid stock response')]) {
+    const invalid=quoteFixture({price:101,daily:close100});await invalid.store.refreshQuotes();expectQuote(invalid.store,101,100);
+    await refreshAt(invalid,{price:99,calendarError:error});assert.equal(expectQuote(invalid.store,99,null).context,null);invalid.store.dispose();
+  }
   const krCandle=quoteFixture({price:101,daily:krClose100,symbol:'005930',market:'kr',currency:'KRW'});await krCandle.store.refreshQuotes();expectQuote(krCandle.store,101,100);
   assert.ok(!krCandle.requests.some(req=>req.kind==='calendar'));
   await refreshAt(krCandle,{price:99,candleError:true});expectQuote(krCandle.store,99,100);

@@ -357,7 +357,7 @@ class Store {
           q.previousClose=null;q.basisDate=null;q.context=null;
           if(stock.market==='us'&&historyTime(q.quoteAt)) {
             try{const calendar=await this.request({kind:'calendar',market:'us',date:dayKey(q.quoteAt,'us')},60000);q.calendar=calendar.data;q.context=quoteContext(q.calendar,q.quoteAt);}
-            catch(_){if(prior?.calendar){q.calendar=prior.calendar;q.context=quoteContext(q.calendar,q.quoteAt);}}
+            catch(error){if(!['Invalid stock JSON response','Invalid stock response','Stock response is too large'].includes(String(error?.message??error))&&prior?.calendar){q.calendar=prior.calendar;q.context=quoteContext(q.calendar,q.quoteAt);}}
           }
           if(revision!==this.revision)return;
           const request={kind:'candles',symbol:stock.symbol,market:stock.market,interval:'1d',count:3,adjusted:true},prefix=JSON.stringify(request)+'|quote:';

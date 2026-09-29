@@ -58,11 +58,9 @@ final class StockQuoteTests: XCTestCase {
 
     func testCurrentPricesUseOneRequestForTwoHundredSymbols() async throws {
         let symbols = (0..<200).map { "T\($0)" }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let configuration = StockPricesEndpoint.configuration()
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        StockPricesEndpoint.reset()
 
         let quotes = try await TossInvestAPI.prices(token: "test-token", symbols: symbols, session: session)
 
@@ -75,12 +73,27 @@ final class StockQuoteTests: XCTestCase {
             .queryItems?.first(where: { $0.name == "symbols" })?.value, symbols.joined(separator: ","))
     }
 
+    func testExpiredFixtureRequestsCannotContaminateTheNextTest() async throws {
+        let oldSession = URLSession(configuration: StockPricesEndpoint.configuration())
+        defer { oldSession.invalidateAndCancel() }
+        let session = URLSession(configuration: StockPricesEndpoint.configuration())
+        defer { session.invalidateAndCancel() }
+        do {
+            _ = try await TossInvestAPI.prices(token: "old-test-token", symbols: ["OLD"], session: oldSession)
+            XCTFail("An earlier fixture must not record requests or consume the current script")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .cancelled)
+        }
+        XCTAssertTrue(StockPricesEndpoint.requests.isEmpty)
+        let quotes = try await TossInvestAPI.prices(token: "test-token", symbols: ["T199"], session: session)
+        XCTAssertEqual(quotes["us:T199"]?.price, 199)
+        XCTAssertEqual(StockPricesEndpoint.requests.count, 1)
+    }
+
     func testUSPreviousCloseWhenNewestDailyBarIsAfterQuote() async throws {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let configuration = StockPricesEndpoint.configuration()
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        StockPricesEndpoint.reset()
         let quoteTime = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-25T03:05:48Z"))
 
         let close = try await TossInvestAPI.previousClose(
@@ -337,11 +350,9 @@ final class StockQuoteTests: XCTestCase {
     }
 
     func testQuoteDailyAndCalendarRequestsAreFreshPublicAndAdjusted() async throws {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let configuration = StockPricesEndpoint.configuration(calendar: "{\"result\":{\"today\":{},\"previousBusinessDay\":{},\"nextBusinessDay\":\(mondaySessions)}}")
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        StockPricesEndpoint.reset(calendar: "{\"result\":{\"today\":{},\"previousBusinessDay\":{},\"nextBusinessDay\":\(mondaySessions)}}")
         let before = Date()
         let daily = try await TossInvestAPI.quoteCloses(token: "test-token", stock: WatchedStock(symbol: "SOXL", market: .us), session: session)
         let calendar = try await TossInvestAPI.marketSessions(token: "test-token", market: .us,
@@ -373,11 +384,9 @@ final class StockQuoteTests: XCTestCase {
         let preferences = Preferences(defaults: defaults)
         preferences.stockSymbols = ["us:SOXL"]
         preferences.showsStocks = true
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let configuration = StockPricesEndpoint.configuration(delayedQuote: true)
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        StockPricesEndpoint.reset(delayedQuote: true)
         let monitor = StockQuotesMonitor(preferences: preferences, session: session,
             loadCredentials: { ("monitor-\(name)", "synthetic-secret") },
             stream: { _, _, _ in throw TossInvestAPI.Failure.http(503) })
@@ -412,10 +421,6 @@ final class StockQuoteTests: XCTestCase {
         preferences.stockQuoteSource = .toss
         preferences.stockSymbols = ["kr:005930", "us:SOXL"]
         preferences.showsStocks = true
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [StockPricesEndpoint.self]
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
 
         let krDaily = #"{"result":{"candles":[{"timestamp":"2026-03-25T00:00:00+09:00","closePrice":"101"},{"timestamp":"2026-03-24T00:00:00+09:00","closePrice":"100"},{"timestamp":"2026-03-23T00:00:00+09:00","closePrice":"99"}]}}"#
         let usDaily = #"{"result":{"candles":[{"timestamp":"2026-09-25T04:00:00Z","closePrice":"101"},{"timestamp":"2026-09-24T04:00:00Z","closePrice":"100"},{"timestamp":"2026-09-23T04:00:00Z","closePrice":"99"}]}}"#
@@ -423,10 +428,12 @@ final class StockQuoteTests: XCTestCase {
         let prices99 = #"{"result":[{"symbol":"005930","lastPrice":"99","currency":"KRW","timestamp":"2026-03-25T09:31:42.000+09:00"},{"symbol":"SOXL","lastPrice":"99","currency":"USD","timestamp":"2026-09-25T14:01:00Z"}]}"#
         let calendarOK = "{\"result\":{\"today\":\(fridaySessions),\"previousBusinessDay\":{},\"nextBusinessDay\":{}}}"
         let unavailable = #"{"error":{"code":"unavailable"}}"#
-        StockPricesEndpoint.reset(
+        let configuration = StockPricesEndpoint.configuration(
             prices: [(200, prices101), (200, prices99)],
             candles: [(200, krDaily), (200, usDaily), (503, unavailable), (503, unavailable)],
             calendars: [(200, calendarOK), (503, unavailable)])
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
 
         let monitor = StockQuotesMonitor(preferences: preferences, session: session,
             loadCredentials: { ("monitor-\(name)", "synthetic-secret") },
@@ -471,17 +478,15 @@ final class StockQuoteTests: XCTestCase {
         let preferences = Preferences(defaults: defaults)
         preferences.stockSymbols = ["us:SOXL"]
         preferences.showsStocks = true
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [StockPricesEndpoint.self]
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
         let prices = [101, 99].map { price in
             (200, #"{"result":[{"symbol":"SOXL","lastPrice":"\#(price)","currency":"USD","timestamp":"2026-09-25T14:00:00Z"}]}"#)
         }
         let daily = #"{"result":{"candles":[{"timestamp":"2026-09-24T04:00:00Z","closePrice":"100"}]}}"#
-        StockPricesEndpoint.reset(prices: prices, candles: [(200, daily), (200, daily)],
+        let configuration = StockPricesEndpoint.configuration(prices: prices, candles: [(200, daily), (200, daily)],
             calendars: [(200, "{\"result\":{\"today\":\(fridaySessions),\"previousBusinessDay\":{}}}"),
                         (200, #"{"result":{}}"#)])
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
         let monitor = StockQuotesMonitor(preferences: preferences, session: session,
             loadCredentials: { (name, "synthetic-secret") },
             stream: { _, _, _ in try await Task.sleep(for: .seconds(60)) }, pollInterval: 1)
@@ -732,17 +737,24 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
     private static var startedAt: Date?
     private static var delaysQuote = false
     private static var responses: [String: [(Int, String)]] = [:]
+    private static var fixtureID = ""
     private var responseTask: DispatchWorkItem?
     static var firstRequestAt: Date? { lock.withLock { startedAt } }
     static var candleRequestCount: Int { requests.filter { $0.url?.path == "/api/v1/candles" }.count }
-    static func reset(calendar: String = "", delayedQuote: Bool = false,
+    static func configuration(calendar: String = "", delayedQuote: Bool = false,
                       prices: [(Int, String)] = [], candles: [(Int, String)] = [],
-                      calendars: [(Int, String)] = []) {
+                      calendars: [(Int, String)] = []) -> URLSessionConfiguration {
+        let id = UUID().uuidString
         lock.withLock {
+            fixtureID = id
             recorded = []; calendarPayload = calendar; startedAt = nil; delaysQuote = delayedQuote
             responses = prices.isEmpty ? [:] : ["/api/v1/prices": prices,
                 "/api/v1/candles": candles, "/api/v1/market-calendar/US": calendars]
         }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StockPricesEndpoint.self]
+        configuration.httpAdditionalHeaders = ["X-Stock-Test-Fixture": id]
+        return configuration
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -750,7 +762,8 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
     override func stopLoading() { responseTask?.cancel() }
 
     override func startLoading() {
-        let (calendar, delayedQuote, scripted) = Self.lock.withLock {
+        let fixture = Self.lock.withLock { () -> (String, Bool, (Int, String)?)? in
+            guard request.value(forHTTPHeaderField: "X-Stock-Test-Fixture") == Self.fixtureID else { return nil }
             if Self.startedAt == nil { Self.startedAt = Date() }
             Self.recorded.append(request)
             let path = request.url?.path ?? ""
@@ -760,6 +773,10 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
                 Self.responses[path] = rows
             }
             return (Self.calendarPayload, Self.delaysQuote, scripted)
+        }
+        guard let (calendar, delayedQuote, scripted) = fixture else {
+            client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+            return
         }
         let data: Data
         if let scripted {
