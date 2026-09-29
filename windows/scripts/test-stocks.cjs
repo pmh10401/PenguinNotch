@@ -233,18 +233,18 @@ async function main(){
 
   // Quote sessions are independent of forecasts/accounts and use the trade clock.
   const quoteFixture=(patch={})=>{
-    const state={now:sundayQuote,quoteAt:sundayQuote,price:144.1,calendar:quoteCalendar,daily:soxlDaily,...patch},requests=[];
+    const state={now:sundayQuote,quoteAt:sundayQuote,price:144.1,calendar:quoteCalendar,daily:soxlDaily,symbol:'SOXL',market:'us',currency:'USD',...patch},requests=[];
     const result=new S.Store({owner:true,now:()=>state.now,invoke:async(cmd,{request})=>{
       assert.equal(cmd,'stock_request');requests.push(clone(request));
       let data;
-      if(request.kind==='prices')data={result:[{symbol:'SOXL',lastPrice:state.price,currency:'USD',timestamp:typeof state.quoteAt==='number'?new Date(state.quoteAt).toISOString():state.quoteAt}]};
+      if(request.kind==='prices')data={result:[{symbol:state.symbol,lastPrice:state.price,currency:state.currency,timestamp:typeof state.quoteAt==='number'?new Date(state.quoteAt).toISOString():state.quoteAt}]};
       else if(request.kind==='calendar'){if(state.calendarError)throw Error('Calendar unavailable');data=state.calendar;}
       else if(request.kind==='candles'){if(state.candleError)throw Error('Candles unavailable');data=dailyRaw(state.daily);}
       else if(request.kind==='names')data={result:[]};
       else throw Error('Unexpected quote request '+request.kind);
       return {data,fetchedAt:request.kind==='candles'?(state.candleFetchedAt??state.now):state.now};
     }});
-    result.settingsReady=true;result.credentials={toss:true};result.settings=S.normalizeSettings({enabled:true,forecastsEnabled:false,symbols:[{symbol:'SOXL',market:'us',visible:true}]});
+    result.settingsReady=true;result.credentials={toss:true};result.settings=S.normalizeSettings({enabled:true,forecastsEnabled:false,symbols:[{symbol:state.symbol,market:state.market,visible:true}]});
     return {store:result,state,requests};
   };
   const sunday=quoteFixture();await sunday.store.refreshQuotes();
@@ -274,6 +274,40 @@ async function main(){
   for(const patch of [{candleError:true},{quoteAt:date('2026-09-25T23:01:00Z'),daily:soxlDaily.slice(2)}]) {
     const unavailable=quoteFixture(patch);await unavailable.store.refreshQuotes();const value=unavailable.store.quotes.get('us:SOXL');assert.ok(value.context);assert.equal(value.previousClose,null,'no fallback to an older close when the required daily candle is unavailable');assert.equal(S.changeRate(value),null);unavailable.store.dispose();
   }
+  const close100=[{date:S.timestamp('2026-09-25','us'),price:100},{date:S.timestamp('2026-09-24','us'),price:98}],krClose100=[{date:S.timestamp('2026-09-26','kr'),price:100},{date:S.timestamp('2026-09-25','kr'),price:98}];
+  const expectQuote=(store,price,close)=>{
+    const q=[...store.quotes.values()][0],meter=S.cells(store,'en')[0].meter;
+    assert.equal(q.price,price);assert.equal(q.previousClose,close);
+    if(close==null){assert.equal(S.changeRate(q),null);assert.equal(meter.fraction,null);assert.equal(meter.color,'var(--ink-dim)');}
+    else{near(S.changeRate(q),(price-close)/close);assert.equal(meter.color,price<close?'#FF453A':'var(--ample)');assert.equal(meter.counterclockwise,price<close);}
+    return q;
+  };
+  const refreshAt=async(fix,patch={})=>{fix.state.now+=60001;if(patch.quoteAt===undefined)fix.state.quoteAt=fix.state.now;Object.assign(fix.state,patch);await fix.store.refreshQuotes();};
+  const usCandle=quoteFixture({price:101,daily:close100});await usCandle.store.refreshQuotes();expectQuote(usCandle.store,101,100);
+  await refreshAt(usCandle,{price:99,candleError:true});assert.equal(expectQuote(usCandle.store,99,100).context.phase,'dayMarket');
+  await refreshAt(usCandle,{price:99,candleError:false,daily:[{date:S.timestamp('2026-09-25','us'),price:102},{date:S.timestamp('2026-09-24','us'),price:98}]});expectQuote(usCandle.store,99,102);usCandle.store.dispose();
+  const usCal=quoteFixture({price:101,daily:close100});await usCal.store.refreshQuotes();expectQuote(usCal.store,101,100);
+  await refreshAt(usCal,{price:99,calendarError:true});assert.equal(expectQuote(usCal.store,99,100).context.tradingDay,'2026-09-28');
+  await refreshAt(usCal,{price:99,calendarError:false});expectQuote(usCal.store,99,100);usCal.store.dispose();
+  const krCandle=quoteFixture({price:101,daily:krClose100,symbol:'005930',market:'kr',currency:'KRW'});await krCandle.store.refreshQuotes();expectQuote(krCandle.store,101,100);
+  assert.ok(!krCandle.requests.some(req=>req.kind==='calendar'));
+  await refreshAt(krCandle,{price:99,candleError:true});expectQuote(krCandle.store,99,100);
+  await refreshAt(krCandle,{price:99,candleError:false,daily:[{date:S.timestamp('2026-09-26','kr'),price:102},{date:S.timestamp('2026-09-25','kr'),price:98}]});expectQuote(krCandle.store,99,102);krCandle.store.dispose();
+  const krFirst=quoteFixture({price:101,daily:krClose100,symbol:'005930',market:'kr',currency:'KRW',candleError:true});await krFirst.store.refreshQuotes();expectQuote(krFirst.store,101,null);krFirst.store.dispose();
+  const emptyDaily=quoteFixture({price:101,daily:close100});await emptyDaily.store.refreshQuotes();await refreshAt(emptyDaily,{price:99,daily:[]});assert.ok(expectQuote(emptyDaily.store,99,null).context);emptyDaily.store.dispose();
+  const emptyCal=quoteFixture({price:101,daily:close100});await emptyCal.store.refreshQuotes();await refreshAt(emptyCal,{price:99,calendar:{}});assert.equal(expectQuote(emptyCal.store,99,null).context,null);emptyCal.store.dispose();
+  const missingBasis=quoteFixture({price:101,daily:close100});await missingBasis.store.refreshQuotes();await refreshAt(missingBasis,{price:99,daily:[{date:S.timestamp('2026-09-28','us'),price:105}]});expectQuote(missingBasis.store,99,null);missingBasis.store.dispose();
+  const regularToAfter=quoteFixture({now:date('2026-09-25T19:58:00Z'),quoteAt:date('2026-09-25T19:58:00Z'),price:101,daily:[{date:S.timestamp('2026-09-24','us'),price:100},{date:S.timestamp('2026-09-23','us'),price:98}]});
+  await regularToAfter.store.refreshQuotes();expectQuote(regularToAfter.store,101,100);assert.equal(regularToAfter.store.quotes.get('us:SOXL').context.phase,'regularMarket');
+  regularToAfter.state.now=date('2026-09-25T20:00:01Z');regularToAfter.state.quoteAt=regularToAfter.state.now;regularToAfter.state.price=99;regularToAfter.state.candleError=true;
+  await regularToAfter.store.refreshQuotes();expectQuote(regularToAfter.store,99,null);assert.equal(regularToAfter.store.quotes.get('us:SOXL').context.phase,'afterMarket');regularToAfter.store.dispose();
+  const krNext=quoteFixture({now:date('2026-09-28T01:00:00Z'),quoteAt:date('2026-09-28T01:00:00Z'),price:101,daily:krClose100,symbol:'005930',market:'kr',currency:'KRW'});
+  await krNext.store.refreshQuotes();expectQuote(krNext.store,101,100);
+  krNext.state.now=date('2026-09-28T16:00:00Z');krNext.state.quoteAt=krNext.state.now;krNext.state.price=99;krNext.state.candleError=true;
+  await krNext.store.refreshQuotes();expectQuote(krNext.store,99,null);krNext.store.dispose();
+  const wiped=quoteFixture({price:101,daily:close100});await wiped.store.refreshQuotes();expectQuote(wiped.store,101,100);
+  wiped.store.invalidate();assert.equal(wiped.store.quotes.size,0);assert.equal(wiped.store.quoteTimes.size,0);
+  wiped.state.price=99;wiped.state.candleError=true;await wiped.store.refreshQuotes();expectQuote(wiped.store,99,null);wiped.store.dispose();
   const futureQuote=quoteFixture({quoteAt:sundayQuote+60000});await futureQuote.store.refreshQuotes();assert.equal(futureQuote.store.quotes.size,0,'future trade rejected, not retimestamped');assert.ok(!futureQuote.requests.some(req=>req.kind==='candles'));futureQuote.store.dispose();
   const orderedQuote=quoteFixture();await orderedQuote.store.refreshQuotes();orderedQuote.state.now+=60001;orderedQuote.state.quoteAt--;orderedQuote.state.price=999;await orderedQuote.store.refreshQuotes();assert.equal(orderedQuote.store.quotes.get('us:SOXL').price,144.1,'older REST trade cannot replace a newer quote');
   orderedQuote.state.now+=60001;orderedQuote.state.quoteAt=null;orderedQuote.state.price=145;await orderedQuote.store.refreshQuotes();assert.equal(orderedQuote.store.quotes.get('us:SOXL').price,144.1,'a newer fetch with no trade timestamp cannot replace a known dated quote');assert.equal(orderedQuote.store.quotes.get('us:SOXL').quoteAt,sundayQuote);

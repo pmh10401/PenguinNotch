@@ -213,6 +213,41 @@ final class StockQuoteTests: XCTestCase {
         XCTAssertNil(StockQuoteCodec.changeBasis(daily: preFetched, quote: quote, market: .us, session: regular))
     }
 
+    func testKoreanChangeBasisUsesSameLocalDayCacheAndRejectsNextDay() throws {
+        let close = (instant("2026-03-24T00:00:00+09:00"), Decimal(100))
+        let sameDay = StockDailyCloses(values: [close], requestedAt: instant("2026-03-25T00:05:00+09:00"))
+        let quote = StockTick(price: 99, volume: nil, timestamp: instant("2026-03-25T09:30:42+09:00"), currency: "KRW")
+        XCTAssertEqual(StockQuoteCodec.changeBasis(daily: sameDay, quote: quote, market: .kr, session: nil)?.close, 100)
+        XCTAssertNil(StockQuoteCodec.changeBasis(
+            daily: StockDailyCloses(values: [close], requestedAt: instant("2026-03-24T23:59:59+09:00")),
+            quote: quote, market: .kr, session: nil))
+        XCTAssertNil(StockQuoteCodec.changeBasis(
+            daily: sameDay,
+            quote: StockTick(price: 99, volume: nil, timestamp: instant("2026-03-26T09:30:42+09:00"), currency: "KRW"),
+            market: .kr, session: nil))
+    }
+
+    func testUSChangeBasisKeepsPhaseStartFreshnessAcrossTransition() throws {
+        let calendar = try marketCalendar(previous: fridaySessions)
+        let values: [(date: Date, close: Decimal)] = [
+            (instant("2026-09-25T04:00:00Z"), Decimal(string: "151.45")!),
+            (instant("2026-09-24T04:00:00Z"), Decimal(string: "146.33")!)]
+        let duringRegular = StockDailyCloses(values: values, requestedAt: instant("2026-09-25T19:59:59Z"))
+        let afterQuote = StockTick(price: 144, volume: nil, timestamp: instant("2026-09-25T20:01:00Z"), currency: "USD")
+        let after = try XCTUnwrap(StockQuoteCodec.usSession(at: afterQuote.timestamp, calendar: calendar))
+        XCTAssertNil(StockQuoteCodec.changeBasis(daily: duringRegular, quote: afterQuote, market: .us, session: after))
+        let regularQuote = StockTick(price: 145, volume: nil, timestamp: instant("2026-09-25T19:59:00Z"), currency: "USD")
+        let regular = try XCTUnwrap(StockQuoteCodec.usSession(at: regularQuote.timestamp, calendar: calendar))
+        XCTAssertEqual(StockQuoteCodec.changeBasis(daily: duringRegular, quote: regularQuote, market: .us, session: regular)?.close,
+                       Decimal(string: "146.33"))
+    }
+
+    func testEmptyDailyClosesYieldNoChangeBasis() throws {
+        let quote = StockTick(price: 99, volume: nil, timestamp: instant("2026-03-25T09:30:42+09:00"), currency: "KRW")
+        let empty = StockDailyCloses(values: [], requestedAt: quote.timestamp)
+        XCTAssertNil(StockQuoteCodec.changeBasis(daily: empty, quote: quote, market: .kr, session: nil))
+    }
+
     func testTossPercentTruncatesWhileFinnhubKeepsRounding() throws {
         let time = instant("2026-09-28T00:30:00Z")
         let session = try XCTUnwrap(StockQuoteCodec.usSession(at: time, calendar: try marketCalendar(next: mondaySessions)))
@@ -355,6 +390,119 @@ final class StockQuoteTests: XCTestCase {
         }
         defer { subscription.cancel() }
         await fulfillment(of: [displayed], timeout: 2)
+    }
+
+    @MainActor
+    func testAutomaticRESTKeepsCompletedCloseWhenLaterDailyReturns503() async throws {
+        XCTAssertEqual(StockQuoteCodec.changeRate(price: 101, previousClose: 100), Decimal(string: "0.01"))
+        XCTAssertEqual(StockQuoteCodec.formatChange(Decimal(string: "0.01")!, locale: Locale(identifier: "en_US_POSIX"),
+                                                    roundingMode: .down), "+1.00%")
+        XCTAssertEqual(StockQuoteCodec.changeRate(price: 99, previousClose: 100), Decimal(string: "-0.01"))
+        XCTAssertEqual(StockQuoteCodec.formatChange(Decimal(string: "-0.01")!, locale: Locale(identifier: "en_US_POSIX"),
+                                                    roundingMode: .down), "-1.00%")
+        let gainText = StockQuoteCodec.formatChange(Decimal(string: "0.01")!, locale: L10n.locale, roundingMode: .down)
+        let lossText = StockQuoteCodec.formatChange(Decimal(string: "-0.01")!, locale: L10n.locale, roundingMode: .down)
+        let krPrice99 = StockQuoteCodec.format(price: 99, currency: "KRW", locale: L10n.locale)
+        let usPrice99 = StockQuoteCodec.format(price: 99, currency: "USD", locale: L10n.locale)
+
+        let name = "StockREST.daily503.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.stockQuoteSource = .toss
+        preferences.stockSymbols = ["kr:005930", "us:SOXL"]
+        preferences.showsStocks = true
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let krDaily = #"{"result":{"candles":[{"timestamp":"2026-03-25T00:00:00+09:00","closePrice":"101"},{"timestamp":"2026-03-24T00:00:00+09:00","closePrice":"100"},{"timestamp":"2026-03-23T00:00:00+09:00","closePrice":"99"}]}}"#
+        let usDaily = #"{"result":{"candles":[{"timestamp":"2026-09-25T04:00:00Z","closePrice":"101"},{"timestamp":"2026-09-24T04:00:00Z","closePrice":"100"},{"timestamp":"2026-09-23T04:00:00Z","closePrice":"99"}]}}"#
+        let prices101 = #"{"result":[{"symbol":"005930","lastPrice":"101","currency":"KRW","timestamp":"2026-03-25T09:30:42.000+09:00"},{"symbol":"SOXL","lastPrice":"101","currency":"USD","timestamp":"2026-09-25T14:00:00Z"}]}"#
+        let prices99 = #"{"result":[{"symbol":"005930","lastPrice":"99","currency":"KRW","timestamp":"2026-03-25T09:31:42.000+09:00"},{"symbol":"SOXL","lastPrice":"99","currency":"USD","timestamp":"2026-09-25T14:01:00Z"}]}"#
+        let calendarOK = "{\"result\":{\"today\":\(fridaySessions),\"previousBusinessDay\":{},\"nextBusinessDay\":{}}}"
+        let unavailable = #"{"error":{"code":"unavailable"}}"#
+        StockPricesEndpoint.reset(
+            prices: [(200, prices101), (200, prices99)],
+            candles: [(200, krDaily), (200, usDaily), (503, unavailable), (503, unavailable)],
+            calendars: [(200, calendarOK), (503, unavailable)])
+
+        let monitor = StockQuotesMonitor(preferences: preferences, session: session,
+            loadCredentials: { ("monitor-\(name)", "synthetic-secret") },
+            stream: { _, _, _ in
+                while !Task.isCancelled { try await Task.sleep(for: .seconds(60)) }
+            },
+            pollInterval: 1)
+        defer { monitor.stop() }
+
+        let settled = expectation(description: "second automatic REST poll applied 99 after daily 503")
+        settled.assertForOverFulfill = false
+        var sawGain = false
+        let subscription = monitor.$snapshots.sink { snapshots in
+            func used(_ id: String, _ window: String) -> String? {
+                snapshots.first { $0.id == id }?.windows.first { $0.id == window }?.usedText
+            }
+            if used("widget-stock:kr:005930", "change") == gainText { sawGain = true }
+            // Candle 4 is the second-cycle US daily 503; prices-only publish still has the KR baseline.
+            if sawGain, used("widget-stock:kr:005930", "price") == krPrice99,
+               used("widget-stock:us:SOXL", "price") == usPrice99,
+               StockPricesEndpoint.candleRequestCount >= 4 {
+                settled.fulfill()
+            }
+        }
+        defer { subscription.cancel() }
+        await fulfillment(of: [settled], timeout: 8)
+
+        let kr = try XCTUnwrap(monitor.snapshots.first { $0.id == "widget-stock:kr:005930" })
+        XCTAssertEqual(kr.windows.first { $0.id == "change" }?.usedText, lossText)
+        XCTAssertEqual(kr.bandOverride, .critical)
+        let us = try XCTUnwrap(monitor.snapshots.first { $0.id == "widget-stock:us:SOXL" })
+        XCTAssertEqual(us.windows.first { $0.id == "change" }?.usedText, lossText)
+        XCTAssertEqual(us.bandOverride, .critical)
+        XCTAssertTrue(us.windows.first { $0.id == "session" }?.detail?.contains(L10n.t("Regular market")) == true)
+    }
+
+    @MainActor
+    func testMalformedCalendarClearsPreviouslyValidPercentage() async throws {
+        let name = "StockREST.invalidCalendar.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.stockSymbols = ["us:SOXL"]
+        preferences.showsStocks = true
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StockPricesEndpoint.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let prices = [101, 99].map { price in
+            (200, #"{"result":[{"symbol":"SOXL","lastPrice":"\#(price)","currency":"USD","timestamp":"2026-09-25T14:00:00Z"}]}"#)
+        }
+        let daily = #"{"result":{"candles":[{"timestamp":"2026-09-24T04:00:00Z","closePrice":"100"}]}}"#
+        StockPricesEndpoint.reset(prices: prices, candles: [(200, daily), (200, daily)],
+            calendars: [(200, "{\"result\":{\"today\":\(fridaySessions),\"previousBusinessDay\":{}}}"),
+                        (200, #"{"result":{}}"#)])
+        let monitor = StockQuotesMonitor(preferences: preferences, session: session,
+            loadCredentials: { (name, "synthetic-secret") },
+            stream: { _, _, _ in try await Task.sleep(for: .seconds(60)) }, pollInterval: 1)
+        defer { monitor.stop() }
+        let received = expectation(description: "next price after malformed calendar")
+        var sawInitialBasis = false
+        var second: ProviderSnapshot?
+        let subscription = monitor.$snapshots.sink { snapshots in
+            guard let snapshot = snapshots.first else { return }
+            if snapshot.bandOverride == .ample { sawInitialBasis = true }
+            if second == nil,
+               snapshot.windows.first(where: { $0.id == "price" })?.usedText == StockQuoteCodec.format(price: 99, currency: "USD", locale: L10n.locale) {
+                second = snapshot
+                received.fulfill()
+            }
+        }
+        defer { subscription.cancel() }
+        await fulfillment(of: [received], timeout: 5)
+        XCTAssertTrue(sawInitialBasis)
+        XCTAssertEqual(second?.windows.first(where: { $0.id == "change" })?.usedText, "—")
+        XCTAssertNil(second?.bandOverride)
     }
 
     @MainActor
@@ -583,10 +731,18 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
     private static var calendarPayload = ""
     private static var startedAt: Date?
     private static var delaysQuote = false
+    private static var responses: [String: [(Int, String)]] = [:]
     private var responseTask: DispatchWorkItem?
     static var firstRequestAt: Date? { lock.withLock { startedAt } }
-    static func reset(calendar: String = "", delayedQuote: Bool = false) {
-        lock.withLock { recorded = []; calendarPayload = calendar; startedAt = nil; delaysQuote = delayedQuote }
+    static var candleRequestCount: Int { requests.filter { $0.url?.path == "/api/v1/candles" }.count }
+    static func reset(calendar: String = "", delayedQuote: Bool = false,
+                      prices: [(Int, String)] = [], candles: [(Int, String)] = [],
+                      calendars: [(Int, String)] = []) {
+        lock.withLock {
+            recorded = []; calendarPayload = calendar; startedAt = nil; delaysQuote = delayedQuote
+            responses = prices.isEmpty ? [:] : ["/api/v1/prices": prices,
+                "/api/v1/candles": candles, "/api/v1/market-calendar/US": calendars]
+        }
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -594,13 +750,21 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
     override func stopLoading() { responseTask?.cancel() }
 
     override func startLoading() {
-        let (calendar, delayedQuote) = Self.lock.withLock {
+        let (calendar, delayedQuote, scripted) = Self.lock.withLock {
             if Self.startedAt == nil { Self.startedAt = Date() }
             Self.recorded.append(request)
-            return (Self.calendarPayload, Self.delaysQuote)
+            let path = request.url?.path ?? ""
+            var scripted: (Int, String)?
+            if var rows = Self.responses[path] {
+                scripted = rows.isEmpty ? (503, #"{"error":{"code":"unavailable"}}"#) : rows.removeFirst()
+                Self.responses[path] = rows
+            }
+            return (Self.calendarPayload, Self.delaysQuote, scripted)
         }
         let data: Data
-        if request.url?.path == "/oauth2/token" {
+        if let scripted {
+            data = Data(scripted.1.utf8)
+        } else if request.url?.path == "/oauth2/token" {
             data = Data(#"{"access_token":"monitor-test-token","expires_in":3600}"#.utf8)
         } else if delayedQuote && request.url?.path == "/api/v1/prices" {
             data = Data(#"{"result":[{"symbol":"SOXL","lastPrice":"144.1","currency":"USD","timestamp":null}]}"#.utf8)
@@ -621,7 +785,7 @@ private final class StockPricesEndpoint: URLProtocol, @unchecked Sendable {
             }
             data = try! JSONSerialization.data(withJSONObject: ["result": rows])
         }
-        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+        let response = HTTPURLResponse(url: request.url!, statusCode: scripted?.0 ?? 200, httpVersion: nil,
                                        headerFields: ["Content-Type": "application/json"])!
         let finish = DispatchWorkItem { [weak self] in
             guard let self, self.responseTask?.isCancelled != true else { return }

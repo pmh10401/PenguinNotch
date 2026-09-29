@@ -31,6 +31,9 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.22.1", headline: L10n.t("Keep stock changes visible during temporary outages"),
+                        changes: [.init(title: L10n.t("Validated same-session closing prices survive temporary request failures on macOS and Windows.")),
+                                  .init(title: L10n.t("Stock hover bars follow green gains and red losses."))]),
             ReleaseNote(version: "1.22.0", headline: L10n.t("Consistent notch controls across platforms"),
                         changes: [.init(title: L10n.t("Windows usage display and limits now follow the macOS settings.")),
                                   .init(title: L10n.t("Six dots to carry the notch")),

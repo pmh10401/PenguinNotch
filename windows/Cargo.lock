@@ -2768,7 +2768,7 @@ dependencies = [
 
 [[package]]
 name = "penguinnotch"
-version = "1.22.0"
+version = "1.22.1"
 dependencies = [
  "chrono",
  "dirs 5.0.1",

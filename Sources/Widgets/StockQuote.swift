@@ -333,6 +333,7 @@ enum StockQuoteCodec {
             }
         } else {
             tradingDay = calendar.startOfDay(for: quote.timestamp)
+            guard daily.requestedAt >= tradingDay else { return nil }
         }
         return daily.values.filter { calendar.startOfDay(for: $0.date) < tradingDay && $0.close > 0 }
             .max { $0.date < $1.date }

@@ -1,6 +1,27 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Keep stock changes visible during temporary outages": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Keep stock changes visible during temporary outages" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "일시적인 조회 오류에도 주식 등락률 유지" } }
+      }
+    },
+    "Validated same-session closing prices survive temporary request failures on macOS and Windows.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Validated same-session closing prices survive temporary request failures on macOS and Windows." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "macOS와 Windows에서 요청이 일시적으로 실패해도 같은 거래 구간에 유효한 기준 종가를 유지합니다." } }
+      }
+    },
+    "Stock hover bars follow green gains and red losses.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Stock hover bars follow green gains and red losses." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "주식 호버 막대에도 상승 녹색·하락 빨간색을 적용합니다." } }
+      }
+    },
     "Consistent notch controls across platforms": {
       "extractionState": "manual",
       "localizations": {

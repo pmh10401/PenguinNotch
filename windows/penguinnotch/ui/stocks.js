@@ -353,23 +353,27 @@ class Store {
           if(revision!==this.revision)return;
           const id=stockID(stock),q=quotes.get(id);if(!q)continue;
           q.fetchedAt=r.fetchedAt;if(!this.canAcceptQuote(id,q))continue;
+          const prior=this.quotes.get(id);
           q.previousClose=null;q.basisDate=null;q.context=null;
           if(stock.market==='us'&&historyTime(q.quoteAt)) {
-            try{const calendar=await this.request({kind:'calendar',market:'us',date:dayKey(q.quoteAt,'us')},60000);q.context=quoteContext(calendar.data,q.quoteAt);}catch(_){}
+            try{const calendar=await this.request({kind:'calendar',market:'us',date:dayKey(q.quoteAt,'us')},60000);q.calendar=calendar.data;q.context=quoteContext(q.calendar,q.quoteAt);}
+            catch(_){if(prior?.calendar){q.calendar=prior.calendar;q.context=quoteContext(q.calendar,q.quoteAt);}}
           }
           if(revision!==this.revision)return;
           const request={kind:'candles',symbol:stock.symbol,market:stock.market,interval:'1d',count:3,adjusted:true},prefix=JSON.stringify(request)+'|quote:';
           q.contextKey=q.context?JSON.stringify(q.context):stock.market==='kr'?dayKey(q.quoteAt,'kr'):'';
-          if(this.quotes.get(id)?.contextKey!==q.contextKey)for(const key of this.cache.keys())if(key.startsWith(prefix))this.cache.delete(key);
+          if(prior?.contextKey!==q.contextKey)for(const key of this.cache.keys())if(key.startsWith(prefix))this.cache.delete(key);
           if(historyTime(q.quoteAt)&&(stock.market==='kr'||q.context)) {
-            try{
-              const daily=await this.request(request,60000,'quote:'+q.contextKey),after=q.context?.phase==='afterMarket';
+            let daily;
+            try{daily=await this.request(request,60000,'quote:'+q.contextKey);}
+            catch(_){if(q.contextKey&&prior?.contextKey===q.contextKey&&positive(prior.previousClose)){q.previousClose=prior.previousClose;q.basisDate=prior.basisDate;}}
+            if(daily){
+              const after=q.context?.phase==='afterMarket';
               // A cached, still-open daily candle is not the official after-hours baseline.
               if(!after||daily.fetchedAt>=q.context.regularEnd) {
-                const basis=closeForDay(dailyCloses(daily.data,stock.market),q.context?.tradingDay||dayKey(q.quoteAt,stock.market),stock.market,after);
-                if(basis){q.previousClose=basis.price;q.basisDate=dayKey(basis.date,stock.market);}
+                try{const basis=closeForDay(dailyCloses(daily.data,stock.market),q.context?.tradingDay||dayKey(q.quoteAt,stock.market),stock.market,after);if(basis){q.previousClose=basis.price;q.basisDate=dayKey(basis.date,stock.market);}}catch(_){}
               }
-            }catch(_){}
+            }
           }
           if(revision!==this.revision)return;
           this.setQuote(id,q);

@@ -354,13 +354,16 @@ final class StockQuotesMonitor: ObservableObject {
     private let session: URLSession
     private let loadCredentials: () -> (clientID: String, clientSecret: String)
     private let stream: (String, [WatchedStock], @escaping @MainActor (TossSocketEvent) -> Void) async throws -> Void
+    private let pollInterval: TimeInterval
 
     init(preferences: Preferences, session: URLSession = .shared,
          loadCredentials: @escaping () -> (clientID: String, clientSecret: String) = TossCredentials.load,
-         stream: @escaping (String, [WatchedStock], @escaping @MainActor (TossSocketEvent) -> Void) async throws -> Void = TossInvestAPI.stream) {
+         stream: @escaping (String, [WatchedStock], @escaping @MainActor (TossSocketEvent) -> Void) async throws -> Void = TossInvestAPI.stream,
+         pollInterval: TimeInterval = 60) {
         self.session = session
         self.loadCredentials = loadCredentials
         self.stream = stream
+        self.pollInterval = pollInterval
         preferences.$showsStocks.combineLatest(preferences.$stockSymbols, preferences.$stockSettingsRevision)
             .sink { [weak self] shows, symbols, _ in
                 self?.restart(shows: shows, symbols: WatchedStock.parseList(symbols),
@@ -453,7 +456,7 @@ final class StockQuotesMonitor: ObservableObject {
                     link = .reconnecting
                     publish()
                 }
-                try? await Task.sleep(for: .seconds(max(1, 60 - Date().timeIntervalSince(startedAt))))
+                try? await Task.sleep(for: .seconds(max(1, pollInterval - Date().timeIntervalSince(startedAt))))
             }
         }
         defer { polling.cancel() }
@@ -492,9 +495,16 @@ final class StockQuotesMonitor: ObservableObject {
     private func refreshToss(_ symbols: [WatchedStock], accessToken: String, generation token: UUID) async {
         async let fetchedPrices = TossInvestAPI.prices(token: accessToken, symbols: symbols.map(\.symbol), session: session)
         if symbols.contains(where: { $0.market == .us }) {
-            let calendar = try? await TossInvestAPI.marketSessions(token: accessToken, market: .us, session: session)
+            var calendar = usCalendar
+            do {
+                calendar = try await TossInvestAPI.marketSessions(token: accessToken, market: .us, session: session)
+            } catch is DecodingError {
+                calendar = nil
+            } catch {
+                // Keep the last official intervals through a failed request.
+                // usSession still requires them to contain the actual trade.
+            }
             guard generation == token, !Task.isCancelled else { return }
-            // A failed/unknown calendar must not authorize an old percentage.
             usCalendar = calendar
         }
         do {
@@ -513,7 +523,7 @@ final class StockQuotesMonitor: ObservableObject {
             guard generation == token, !Task.isCancelled else { return }
             let daily = try? await TossInvestAPI.quoteCloses(token: accessToken, stock: stock, session: session)
             guard generation == token, !Task.isCancelled else { return }
-            dailyCloses[stock.id] = daily
+            if let daily { dailyCloses[stock.id] = daily }
             publish()
             try? await Task.sleep(for: .milliseconds(250))
         }

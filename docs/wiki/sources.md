@@ -118,3 +118,29 @@ node windows/scripts/test-settings-browser.cjs
 node windows/scripts/test-notch-scroll-browser.cjs
 node windows/scripts/test-updater-ui.cjs
 ```
+
+
+## S13
+
+- 확인: 2026-09-29 KST. 기준 `5a3d2772e230f179eef1228f55aaadd974b313cb` 이후의 1.22.1 작업 트리(macOS build 62, Windows r54). 정식 배포·사용자 설치본 교체는 수행하지 않았습니다.
+- Grok 4.6 high가 격리된 작업 트리의 공개 소스를 읽고 회귀 검사·수정 패치를 작성했습니다. 편집 호출은 취소되어 파일에 반영되지 않았으므로 Codex가 출력 패치를 적용하고, 잘못된 달력 응답 처리와 검사 코드를 보완했습니다. 외부 에이전트에는 실제 계정·키·사용자 시세 로그를 제공하지 않았습니다.
+- 재현: 현재가 101→99, 기준 종가 100에서 자동 갱신의 종가/달력 요청이 HTTP 503이면 기존 구현은 등락률과 방향 색상을 지웠습니다. macOS `StockQuoteTests.testAutomaticRESTKeepsCompletedCloseWhenLaterDailyReturns503`와 Windows 실제 Store의 공개 IPC 모의 응답에서 수정 전 실패·수정 후 통과했습니다. 실제 서비스가 왜 실패했는지는 확인하지 않았습니다.
+- 색상: `NotchRenderTests.testStockHoverChangeBarKeepsGreenAndRedAgainstABlueAccent`에서 실제 SwiftUI 호버 화면의 픽셀을 검사했습니다. 상승·하락·보합을 확인하며 사용자 지정 파란색이 변동 막대를 덮지 않습니다.
+- macOS: StockQuote/Chart/Forecast/ForecastJournal/TimingSignal, NotchRender, TooltipRender 집중 검사 **98개, 선택적 실제 Claude 검사 1개 제외, 실패 0**, 종료 코드 0. 키체인 이동 검사는 실행 대상에서 제외했습니다. 로그 `/tmp/penguin-stock-recovery/mac-final.log`.
+- Windows: Node 주식·위젯·한국어·인증 UI·사용량 회귀 **23개 통과**, 3개 HTML 문법 검사 통과. Chromium의 실제 노치 HTML **48개 배치**, 네 방향·원/막대·75–150% 크기·호버·클릭·드래그·휠 검사 통과. Browser plugin이 제공되지 않아 설치된 Playwright를 사용했으며 공개 모의 IPC만 사용했습니다. 로그 `/tmp/penguin-stock-recovery/windows-regressions.log`, `/tmp/penguin-stock-recovery/windows-ui.log`; 화면 `/tmp/penguin-stock-recovery/windows-ui/right.png`, `top.png`.
+- 제한: 실제 Toss 네트워크·사용자 자격 증명·Windows WebView2/기기는 검증하지 않았습니다. Rust 시세 전송·계정·영속 기록·예측 계산은 변경하지 않았으며, 이 로컬 검사는 새 Windows 네이티브 빌드나 원격 CI 결과가 아닙니다.
+- 배포 전 추가 검사: 로컬 전체 Xcode 검사 2,193개 중 건너뜀 8개, 노치 이동 애니메이션 5개 검사에서 단언 7개가 실패했습니다. 같은 7개 애니메이션 검사만 다시 실행해도 동일했습니다. 주식·릴리즈 노트 검사는 통과했습니다. 실행 당시 macOS 세션의 화면 잠금이 확인되었으며, 이전 코드와의 비교 및 별도 macOS CI로 원인을 구분합니다. 로그 `/tmp/penguin-1.22.1-mac-full.log`, `/tmp/penguin-1.22.1-edge-recheck.log`.
+- 이전 코드 비교: 변경 전 `5a3d277`의 Git 추출본을 별도 빌드 폴더에서 실행해도 동일한 5개 애니메이션 검사·7개 단언이 실패했습니다. 로그 `/tmp/penguin-1.22.0-baseline-edge.log`. 이번 주식 변경의 회귀로 판정하지 않으며, 잠금 해제 상태의 재현 여부는 미확인입니다. 애니메이션 코드를 바꾸거나 검사를 새로 제외하지 않았습니다.
+- 관련 구현: [Mac 갱신](../../Sources/Widgets/TossInvestClient.swift), [거래일·세션 검증](../../Sources/Widgets/StockQuote.swift), [호버 색상](../../Sources/Features/TooltipCard.swift), [Windows 갱신](../../windows/penguinnotch/ui/stocks.js). 재현 검사는 [Swift](../../Tests/StockQuoteTests.swift), [Windows](../../windows/scripts/test-stocks.cjs)에 있습니다.
+- 검증 소스 SHA-256 `Sources/Widgets/TossInvestClient.swift`: `5fc23d4f432fd34df6b4729a0389ba6afe782495f23019bcff918b26290b904b`.
+- 검증 소스 SHA-256 `Sources/Widgets/StockQuote.swift`: `c116d8a5dc42513b808898b6f151fa8d5faab58dbc82ddfbf66633d37e668174`.
+- 검증 소스 SHA-256 `Sources/Features/TooltipCard.swift`: `b9ed543c5e1773f8a374949e3708e4736339805555be99d15919fef2cdd8865f`.
+- 검증 소스 SHA-256 `windows/penguinnotch/ui/stocks.js`: `cdb1da136854704a71227a62f45b344502f61993a7412438298e0d3543a21ce6`.
+
+Windows 회귀 검사는 저장소 루트에서 실행합니다. Playwright는 앱 의존성이 아니며 이미 설치된 환경에서만 사용합니다.
+
+```sh
+node --test windows/scripts/test-stocks.cjs windows/scripts/test-widgets.cjs windows/scripts/test-ko-i18n.cjs windows/scripts/test-claude-auth-ui.cjs windows/scripts/test-usage-display.cjs
+node windows/scripts/check-ui-scripts.mjs
+node windows/scripts/test-notch-scroll-browser.cjs
+```

@@ -45,6 +45,47 @@ final class NotchRenderTests: XCTestCase {
         }
     }
 
+    func testStockHoverChangeBarKeepsGreenAndRedAgainstABlueAccent() throws {
+        XCTAssertEqual(StockQuoteCodec.changeRate(price: 101, previousClose: 100), Decimal(string: "0.01"))
+        XCTAssertEqual(StockQuoteCodec.changeRate(price: 99, previousClose: 100), Decimal(string: "-0.01"))
+        for (price, wantGreen) in [(Decimal(101), true), (Decimal(99), false), (Decimal(100), false)] {
+            var snapshot = StockBoard.snapshot(stock: WatchedStock(symbol: "AAPL", market: .us),
+                quote: StockTick(price: price, volume: nil, timestamp: Date(), currency: "USD"),
+                previousClose: 100, name: nil, link: .live,
+                locale: Locale(identifier: "en_US_POSIX"), source: .finnhub)
+            snapshot.systemColor = .blue
+            XCTAssertEqual(snapshot.windows.first { $0.id == "change" }?.usedText,
+                           price == 100 ? "+0.00%" : wantGreen ? "+1.00%" : "-1.00%")
+            let renderer = ImageRenderer(content: TooltipCard(snapshot: snapshot, now: Date(), direction: .trailing)
+                .padding(20)
+                .background(Color.black)
+                .environment(\.colorScheme, .dark)
+                .environment(\.notchSurfaceStyle, .solid)
+                .environment(\.penguinnotchAccentColor, AccentColorChoice.blue.color)
+                .environment(\.penguinnotchHeadlessGlass, true))
+            renderer.scale = 3
+            let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+            var ample = 0, stockRed = 0
+            for x in 0..<bitmap.pixelsWide {
+                for y in 0..<bitmap.pixelsHigh {
+                    guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                          color.alphaComponent > 0.5 else { continue }
+                    let r = color.redComponent, g = color.greenComponent, b = color.blueComponent
+                    guard max(r, g, b) - min(r, g, b) > 0.2 else { continue }
+                    if g > r && g > b { ample += 1 }
+                    if r > g && r > b && b > 0.08 { stockRed += 1 }
+                }
+            }
+            if price == 100 {
+                XCTAssertEqual(ample + stockRed, 0, "An unchanged stock must have a neutral hover bar")
+            } else if wantGreen {
+                XCTAssertGreaterThan(ample, 40, "Hover change bar must be Palette.ample green, not the blue accent")
+            } else {
+                XCTAssertGreaterThan(stockRed, 40, "Hover change bar must be Palette.generationSlow red, not usage-orange or the blue accent")
+            }
+        }
+    }
+
     private func model(edge: NotchEdge, cells: Int = 4) -> NotchViewModel {
         let model = NotchViewModel()
         model.edge = edge

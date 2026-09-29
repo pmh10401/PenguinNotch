@@ -690,6 +690,17 @@ private struct ProviderTooltip: View {
         return result
     }
 
+    private var rowColorOverride: Color? {
+        if snapshot.kind == .stocks {
+            switch snapshot.bandOverride {
+            case .ample: return Palette.ample
+            case .critical: return Palette.generationSlow
+            default: return nil
+            }
+        }
+        return snapshot.systemColor?.color
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             TooltipHeader(title: snapshot.kind == .localRuntime
@@ -729,7 +740,7 @@ private struct ProviderTooltip: View {
 
                                 VStack(alignment: .leading, spacing: NotchLayout.blockSpacing) {
                                     ForEach(Array(group.windows.enumerated()), id: \.element.id) { windowIndex, window in
-                                        LimitWindowRow(window: window, inset: 2 * Design.px(16), fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace, colorOverride: snapshot.systemColor?.color)
+                                        LimitWindowRow(window: window, inset: 2 * Design.px(16), fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace, colorOverride: rowColorOverride)
                                             .padding(.top, windowIndex == 0 ? 0 : NotchLayout.blockSpacing)
                                     }
                                 }
@@ -742,7 +753,7 @@ private struct ProviderTooltip: View {
                             .padding(.top, groupIndex == 0 ? NotchLayout.headerToBlock : Design.px(28))
                         } else {
                             ForEach(Array(group.windows.enumerated()), id: \.element.id) { windowIndex, window in
-                                LimitWindowRow(window: window, fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace, colorOverride: snapshot.systemColor?.color)
+                                LimitWindowRow(window: window, fidelity: snapshot.fidelity, now: now, resetTimeFormat: resetTimeFormat, showsUsagePace: showUsagePace, colorOverride: rowColorOverride)
                                     .padding(.top, (groupIndex == 0 && windowIndex == 0) ? NotchLayout.headerToBlock : NotchLayout.blockSpacing)
                             }
                         }
