@@ -212,7 +212,8 @@ final class NotchScrollTests: XCTestCase {
             }
             // The final pointer position proves a drag without an intermediate
             // movement event; short releases remain clicks.
-            NSApp.postEvent(try mouse(.leftMouseUp, at: end), atStart: true)
+            var events = [try mouse(.leftMouseUp, at: end)].makeIterator()
+            panel.nextCellDragEvent = { events.next() }
             panel.mouseDown(with: try mouse(.leftMouseDown, at: start))
             XCTAssertEqual(dropped, distance >= 5, "distance \(distance)")
             XCTAssertEqual(clicked, distance < 5, "distance \(distance)")
@@ -251,7 +252,8 @@ final class NotchScrollTests: XCTestCase {
             clicked.fulfill()
         }
         let click = location(39)
-        NSApp.postEvent(try mouse(.leftMouseUp, click), atStart: true)
+        var clickEvents = [try mouse(.leftMouseUp, click)].makeIterator()
+        panel.nextCellDragEvent = { clickEvents.next() }
         panel.mouseDown(with: try mouse(.leftMouseDown, click))
         await fulfillment(of: [clicked], timeout: 1)
         let target = location(38)
@@ -266,8 +268,8 @@ final class NotchScrollTests: XCTestCase {
             XCTAssertEqual(destination.y, target.y, accuracy: 1)
             drop?(source, destination)
         }
-        NSApp.postEvent(try mouse(.leftMouseUp, target), atStart: true)
-        NSApp.postEvent(try mouse(.leftMouseDragged, target), atStart: true)
+        var dragEvents = try [mouse(.leftMouseDragged, target), mouse(.leftMouseUp, target)].makeIterator()
+        panel.nextCellDragEvent = { dragEvents.next() }
         panel.mouseDown(with: try mouse(.leftMouseDown, click))
         XCTAssertTrue(didDrop)
         XCTAssertEqual(Array(preferences.providerOrder.suffix(2)), ["p39", "p38"])

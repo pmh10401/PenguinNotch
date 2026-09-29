@@ -230,7 +230,8 @@ final class OllamaModelCellTests: XCTestCase {
                     context: nil, eventNumber: 0, clickCount: 1, pressure: 0))
                 var requestedIDs: [String] = []
                 controller.onRefreshProvider = { requestedIDs.append($0) }
-                NSApp.postEvent(release, atStart: true)
+                var releases = [release].makeIterator()
+                panel.nextCellDragEvent = { releases.next() }
                 panel.mouseDown(with: event)
                 for _ in 0..<100 where requestedIDs.isEmpty { await Task.yield() }
                 XCTAssertEqual(requestedIDs, ["ollama-local"], edge.rawValue)

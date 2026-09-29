@@ -69,8 +69,8 @@ final class NotchWidgetsTests: XCTestCase {
             XCTAssertEqual(panel.canReorder?(destination), true)
             drop?(source, destination)
         }
-        NSApp.postEvent(try mouse(.leftMouseUp, at: target), atStart: true)
-        NSApp.postEvent(try mouse(.leftMouseDragged, at: target), atStart: true)
+        var events = try [mouse(.leftMouseDragged, at: target), mouse(.leftMouseUp, at: target)].makeIterator()
+        panel.nextCellDragEvent = { events.next() }
 
         panel.mouseDown(with: try mouse(.leftMouseDown, at: start))
 

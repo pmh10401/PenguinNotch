@@ -84,3 +84,11 @@ node windows/scripts/test-notch-scroll-browser.cjs
 - 같은 통합 커밋의 [Windows 테스트](https://github.com/pmh10401/PenguinNotch/actions/runs/36501163310)는 네이티브 Rust 188개 통과·4개 제외, [Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36501163351)는 NSIS 설치·doctor·제거·업데이트 피드 생성에 성공했습니다. [macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36501163299)도 성공했습니다. 패키지 성공은 macOS CI 실패를 대신하지 않으며, 정식 버전 태그 배포나 사용자 설치본 변경과도 구분합니다.
 - 후속 수정의 집중 검사: 드래그·스크롤 18개 중 건너뜀 1개·실패 0, 별도 Ollama 셀 클릭 검사 1개 통과. 실제 사용자 계정·키체인 읽기·설치·주식 시세 API는 사용하지 않았습니다.
 - 1.21.1 최종 로컬 검사: 서명을 끈 ARM64 Debug 전체 Xcode 테스트 **2,187개, 건너뜀 11개, 실패 0**, 종료 코드 0. 로그 `/tmp/penguin-upstream-1.21.1-full.log`. 기존 CI 실패 검사와 새 놓기 처리 회귀를 모두 포함합니다. 이 결과는 후속 GitHub CI의 성공을 미리 보장하지 않습니다.
+
+## S11
+
+- 확인: 2026-09-29 KST. [2ae6eb182f6156620f05764cfcaca67132ca5dce](https://github.com/pmh10401/PenguinNotch/commit/2ae6eb182f6156620f05764cfcaca67132ca5dce)의 [macOS CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36503733901)는 합성 이벤트의 좌표 불일치를 직접 기록했습니다. `testReleaseCompletesDragWithoutAnIntermediateEvent`에서 기대 `(100, 100)`과 실제 `(100, -468)`, 작은 목록 드래그에서 기대 `(383.025641, 418.406838)`와 실제 `(989.025641, 340.406838)`가 달랐습니다. 드롭 자체는 호출됐지만 잘못된 좌표가 항목 영역 밖이어서 순서가 유지됐습니다.
+- Apple의 [mouseEvent 문서](https://developer.apple.com/documentation/appkit/nsevent/mouseevent(with:location:modifierflags:timestamp:windownumber:context:eventnumber:clickcount:pressure:))는 입력 위치를 창의 기본 좌표로 정의합니다. 위 오류는 로컬 macOS 27의 큐에서는 재현되지 않았으며, 테스트가 공급한 창 내부 좌표와 CI macOS 26에서 큐가 돌려준 좌표의 불일치입니다. 일반 사용자 마우스 이벤트의 좌표 오류라고 단정하지 않습니다.
+- 후속 소스: 1.21.2(macOS build 60, Windows r52). [NotchPanel](../../Sources/Notch/NotchPanel.swift)의 선택적 `nextCellDragEvent`가 없으면 기존 `nextEvent`를 호출합니다. [위젯](../../Tests/NotchWidgetsTests.swift)·[스크롤](../../Tests/NotchScrollTests.swift)·[Ollama 셀](../../Tests/OllamaTests.swift) 검사에서만 유한 이벤트 목록을 공급합니다. 실제 클릭·히트 테스트·드롭·순서 저장·숨김 항목·5포인트 경계 단언은 유지합니다. `NotchPanel.swift` SHA-256: `ddb4025685acb65ba0e4145af6b3e1beb49e8b7dcf35b6630e66cfa2de82a350`.
+- 집중 검사: 26개, 건너뜀 1개, 실패 0, 종료 코드 0. 로그 `/tmp/penguin-local-event-fixtures.log`. Grok의 읽기 전용 검토는 이벤트 수명·종료 처리와 기존 단언 보존을 확인했습니다. 실제 AppKit 큐를 흉내 낸 좌표 보정은 적용하지 않았습니다.
+- 최종 로컬 전체 검사: **2,187개, 건너뜀 8개, 실패 0**, 종료 코드 0. 로그 `/tmp/penguin-upstream-1.21.2-full.log`. macOS 26 GitHub CI 통과 여부는 이 로컬 macOS 27 결과와 구분합니다.

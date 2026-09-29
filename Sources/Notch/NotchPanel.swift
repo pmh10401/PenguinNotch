@@ -16,6 +16,9 @@ final class NotchPanel: NSPanel {
     var onReorderHover: ((CGPoint, CGPoint) -> Void)?
     var onReorderDrop: ((CGPoint, CGPoint) -> Void)?
     var onReorderEnd: (() -> Void)?
+    /// Nil uses AppKit. Tests supply window-local events without the platform's
+    /// synthetic event queue changing their coordinates.
+    var nextCellDragEvent: (() -> NSEvent?)?
     /// Consume wheel input only over an overflowing list. Cards keep native scrolling.
     var onScroll: ((NSEvent) -> Bool)?
     /// ⌥-drag on the chrome, reported as the raw pointer delta since the last
@@ -84,7 +87,8 @@ final class NotchPanel: NSPanel {
     private func trackCellDrag(from start: CGPoint) {
         var dragging = false
         defer { if dragging { onReorderEnd?() } }
-        while let event = nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+        let readEvent = nextCellDragEvent ?? { self.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) }
+        while let event = readEvent() {
             switch event.type {
             case .leftMouseDragged:
                 let point = event.locationInWindow

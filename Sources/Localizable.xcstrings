@@ -1,6 +1,20 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Verify notch gestures across macOS versions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Verify notch gestures across macOS versions" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "macOS 버전별 노치 동작 검증 보완" } }
+      }
+    },
+    "Click, scroll and reorder checks now use the same input coordinates on local Macs and CI.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Click, scroll and reorder checks now use the same input coordinates on local Macs and CI." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클릭·스크롤·순서 변경 검사에서 로컬 Mac과 CI에 동일한 좌표의 입력을 제공합니다." } }
+      }
+    },
     "Complete a fast notch drag on release": {
       "extractionState": "manual",
       "localizations": {
