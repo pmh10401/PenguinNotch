@@ -18,7 +18,7 @@ PenguinNotch의 화면 예시입니다. 사용량과 시세는 촬영 시점의 
 
 </div>
 
-**최신 정식 릴리스: [1.20.4](../../releases/tag/v1.20.4).** 화면 밖으로 잘리던 항목을 마우스 휠이나 트랙패드로 볼 수 있습니다. macOS와 Windows 모두 네 방향과 원형·막대 표시를 지원합니다. [긴 목록 스크롤](#긴-목록-스크롤)에서 사용 방법을 확인하세요.
+**최신 정식 릴리스: [1.22.0](../../releases/tag/v1.22.0).** Windows의 노치 조작·사용량 설정을 macOS에 맞추고, 업데이트 선택 카드와 날씨 상세를 개선했습니다. 두 플랫폼 모두 네 방향의 원형·막대 표시에서 휠·트랙패드 스크롤을 지원합니다. [긴 목록 스크롤](#긴-목록-스크롤)에서 사용 방법을 확인하세요.
 
 항목에 포인터를 올리면 사용 한도와 작업 상태, 시스템 수치, 주식 차트, 생활 위젯의 상세 정보가 나옵니다. Claude 원의 **현재 세션**은 Claude Code의 `/usage`가 맨 앞에 보여주는 기간을 사용합니다.
 
@@ -26,7 +26,7 @@ PenguinNotch의 화면 예시입니다. 사용량과 시세는 촬영 시점의 
 
 [![macOS용 다운로드](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
-[최신 릴리스](../../releases/latest)의 `PenguinNotch.dmg`를 받습니다. 1.20.4는 임시 서명되며 **Apple 공증을 받지 않았습니다**. Sparkle 업데이트 서명은 파일의 출처를 검증하지만 Gatekeeper 경고를 없애지는 않습니다.
+[최신 릴리스](../../releases/latest)의 `PenguinNotch.dmg`를 받습니다. 1.22.0은 임시 서명되며 **Apple 공증을 받지 않았습니다**. Sparkle 업데이트 서명은 파일의 출처를 검증하지만 Gatekeeper 경고를 없애지는 않습니다.
 
 Xcode를 설치하지 않고 `main`의 개발 빌드를 시험하려면 커밋마다 다시 만들어지는 [preview 빌드](../../releases/tag/preview) 또는 [Package 작업](../../actions/workflows/package.yml)의 커밋별 DMG를 사용하세요. CI에는 Developer ID 인증서가 없어서 이 파일들은 임시 서명되며 Apple 공증을 받지 않습니다. 출처와 커밋을 확인한 뒤 앱을 `/Applications`로 옮겼다면 검역 속성을 한 번 제거할 수 있습니다.
 

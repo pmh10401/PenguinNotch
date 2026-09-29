@@ -105,6 +105,10 @@ node windows/scripts/test-notch-scroll-browser.cjs
 - Playwright Chromium: 설정 **24개 배치**, 노치 **48개 배치**, 쌍 수치 **48개 조합**, 업데이트 카드 **네 방향 × 원/막대·호버 1.5배**, 미리보기·나중에·다시 표시·확인 중 입력·설치 연속 클릭·진행률·포커스 검사가 통과했습니다. 각각 `test-settings-browser.cjs`, `test-notch-scroll-browser.cjs`, `test-updater-ui.cjs`. 네이티브 IPC는 공개 모의 자료이며 외부 API를 호출하지 않습니다. 실제 Windows WebView2·물리적 다중 모니터·실제 계정 검증을 대신하지 않습니다.
 - 로컬 화면 로그: `/tmp/penguin-1.22-settings-final.log`, `/tmp/penguin-1.22-notch-final2.log`, `/tmp/penguin-1.22-updater-final2.log`. 저장된 설정·노치 화면도 직접 확인했습니다.
 - 원격 빌드·정식 설치 파일·업데이트 서명·최종 자산 해시 결과는 완료 후 이 항목에 추가합니다.
+- 후속 공개: [정식 v1.22.0](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.22.0), 소스 [a1e1bd764248e2d120bf2cdb1c0b2bc7ff2eeb4e](https://github.com/pmh10401/PenguinNotch/commit/a1e1bd764248e2d120bf2cdb1c0b2bc7ff2eeb4e). [macOS CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36514869787)는 **2,187개, 건너뜀 13개, 실패 0**, [Windows CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36514869756)는 **228개 통과, 4개 제외, 실패 0**입니다. Windows CI에서도 같은 실제 HTML 화면 검사를 통과했습니다.
+- [macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36514869785)의 DMG를 읽기 전용으로 마운트하여 1.22.0/build 61, macOS 15+, arm64·x86_64, 임시 서명 유효성, 디버그 entitlement 없음까지 확인했습니다. [Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36514869794)는 설치·doctor·제거와 서명된 업데이트 피드 생성에 성공했습니다.
+- 기존 공개 키로 Sparkle Ed25519 및 Tauri Minisign 설치 파일·신뢰 주석의 서명을 검증하고, 한 바이트를 바꾸면 검증이 실패함을 확인했습니다. 비공개 서명 키는 내보내지 않았습니다. macOS Apple 공증 및 Windows Authenticode 서명과는 별개의 업데이트 검증입니다.
+- [최종 Windows 배포 작업](https://github.com/pmh10401/PenguinNotch/actions/runs/36517687166)도 설치·doctor·제거·게시를 통과했습니다. 이 작업이 교체한 최종 설치 파일과 피드를 공개 최신 릴리즈 URL에서 다시 받아 두 업데이트 서명·변조 거부·GitHub 자산 해시를 검증한 뒤 [SHA256SUMS.txt](https://github.com/pmh10401/PenguinNotch/releases/download/v1.22.0/SHA256SUMS.txt)를 갱신했습니다. 공개된 해시 파일도 다시 내려받아 일치를 확인했습니다. 파일 자체의 SHA-256: `58d8b96e4fb0bbe0d42043472322347c61ff3ab4c5d5d37e70ae2caa62948d28`.
 
 저장소 루트에서 추가된 UI 검사를 재현합니다. Playwright는 앱 의존성이 아니며 CI의 임시 검사 폴더에 고정 버전으로 설치합니다.
 

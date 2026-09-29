@@ -20,10 +20,10 @@ Screenshot from PenguinNotch. Usage and prices reflect the capture time; click f
 
 </div>
 
-**Latest stable release: [1.20.4](../../releases/tag/v1.20.4).** Use the mouse wheel
-or trackpad to reach items that would otherwise extend beyond the screen.
-All four edges and both circles and bars are supported on macOS and Windows.
-See [Scrolling long lists](#scrolling-long-lists).
+**Latest stable release: [1.22.0](../../releases/tag/v1.22.0).** Windows notch controls
+and usage settings now follow macOS, with an explicit update card and improved
+weather details. Both platforms support wheel/trackpad scrolling on all four
+edges, in circle and bar styles. See [Scrolling long lists](#scrolling-long-lists).
 
 Hover an item for details: quota windows and session activity, system readings,
 stock charts, or daily widgets. Claude's ring uses the **current session** window
@@ -34,7 +34,7 @@ that Claude Code's own `/usage` leads with.
 [![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
 Download `PenguinNotch.dmg` from the [latest release](../../releases/latest).
-Version 1.20.4 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
+Version 1.22.0 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
 signature verifies the download's origin; it does not remove Gatekeeper warnings.
 
 To try unreleased `main` without an Xcode install, the [preview
