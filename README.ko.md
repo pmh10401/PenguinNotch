@@ -65,7 +65,7 @@ Mac에서 **Settings › Phone › Connect a Phone…** 또는 메뉴 항목을 
 | **Antigravity** | 사용 가능한 공식 데이터 또는 요청 수 | 로컬 language server와 Google 할당량 응답을 차례로 사용하며, 둘 다 제공되지 않으면 단순 요청 수를 표시합니다. |
 | **GLM** | 공식 데이터 | Claude Code의 `settings.json`, ZCode, OpenCode 중 이미 보유한 키로 Z.ai Coding Plan 모니터 엔드포인트를 읽습니다. |
 | **MiniMax** | Coding Plan은 공식 데이터, 앱 로그인은 공식 응답에서 계산 | 설정에 붙여 넣은 Coding Plan 키 또는 앱 자체 WKWebView에서의 명시적 로그인. |
-| **QianwenAI** | 공식 콘솔 응답에서 계산 | 앱 자체 WKWebView에 명시적으로 로그인한 뒤 Token Plan 게이트웨이에서 개인 요금제의 7일 크레딧 기간을 읽습니다. |
+| **QianwenAI** | 공식 콘솔 응답에서 계산 | 앱 자체 WKWebView에 명시적으로 로그인한 뒤 Token Plan 게이트웨이에서 콘솔이 제공하는 주간 또는 월간 크레딧 기간을 읽습니다. |
 | **Ollama (Local)** | 로컬 런타임 | 로컬 모델, RAM/VRAM, 언로드 시간, 컨텍스트를 자동 감지합니다. 선택적 응답 캡처로 추론 상태와 생성 속도도 확인할 수 있습니다. |
 | **LM Studio** | 로컬 런타임 | SDK 소켓에서 로드된 모델의 작업 상태를, 서버 로그에서 속도·컨텍스트·일일 토큰을 읽습니다. 별도 릴레이는 필요하지 않습니다. |
 | **Grok** | 공식 데이터 | `~/.grok/auth.json`의 Grok CLI 세션으로 CLI `/usage`가 사용하는 크레딧 청구 엔드포인트를 읽습니다. |
@@ -75,6 +75,8 @@ Mac에서 **Settings › Phone › Connect a Phone…** 또는 메뉴 항목을 
 | **Kimi** | 공식 데이터 | `~/.kimi-code/credentials/kimi-code.json`의 Kimi Code CLI 세션으로 CLI `/usage`와 같은 `/usages`를 읽어 5시간·주간 한도를 표시합니다. |
 | **Kiro** | 공식 데이터 | 이 Mac의 `kiro-cli` 세션으로 `/usage`를 읽어 월간 크레딧을 표시합니다. |
 | **Amp** | 구독은 공식 비율, 무료 사용량은 계산값 | `~/.local/share/amp/secrets.json`의 Amp CLI 로그인으로 `userDisplayBalanceInfo`를 읽어 Agent·Orb 사용량 또는 무료 허용량과 보충 속도를 표시합니다. [Amp 설명](docs/providers/amp.md) 참고. |
+| **Apify** | 공식 데이터 | `apify login` 세션, 설정에 입력한 토큰 또는 `APIFY_TOKEN`으로 이번 청구 기간의 사용 금액과 한도를 읽습니다. [Apify 설명](docs/providers/apify.md) 참고. |
+| **Kilo** | 공식 데이터 | `~/.local/share/kilo/auth.json`의 Kilo CLI 로그인으로 요금제 한도와 크레딧 잔액을 읽습니다. |
 
 대부분의 제공자는 Mac에 이미 설치된 도구의 세션 또는 인증 정보를 빌려 씁니다. DeepSeek는 예외로, **Sign in to DeepSeek**를 선택한 뒤 앱 자체 WKWebView에서만 로그인합니다. 브라우저의 쿠키나 인증 정보를 읽지 않습니다. MiniMax도 설정에 키를 입력하거나 자체 WKWebView에서 명시적으로 로그인합니다. QianwenAI는 공개 사용량 API와 입력 가능한 키가 없어 자체 WKWebView 로그인만 사용합니다. 이 셋은 브라우저의 쿠키 저장소를 열지 않습니다.
 
@@ -259,10 +261,14 @@ macOS에서는 [Sparkle](https://sparkle-project.org)로 [이 저장소의 릴�
 
 Windows에서는 **설정 → 일반 → 업데이트 확인**으로 최신 릴리스의 `latest.json`을 읽고, 실행 직후에도 자동으로 확인합니다. 업데이트 설치 전에 설치 파일의 서명을 검증합니다. 자세한 내용은 [Windows 업데이트 안내](windows/README.md#updates)를 참고하세요. 1.20.4 릴리스에는 두 운영체제의 설치 파일과 업데이트 피드, 파일 해시를 확인할 수 있는 [`SHA256SUMS.txt`](../../releases/latest/download/SHA256SUMS.txt)가 포함됩니다.
 
+## 원본 업데이트 통합 (1.21.0 소스)
+
+이 개발 버전은 [CodeNotch 1.19.0](https://github.com/vinzdg/codenotch/commit/0083369)을 병합하면서 PenguinNotch의 주식·모니터링·위젯·스크롤과 업데이트 주소를 유지합니다. macOS에서는 설정 버튼 옆 여섯 점을 잡아 화면 가장자리를 따라 노치를 옮기며, 새 버전은 노치에서 **업데이트** 또는 **나중에**를 선택합니다. Kilo·Apify, 주간 한도 대표 표시, 알림 표시 위치, 사용량 색상 연속 변화를 추가했습니다. Windows에는 OpenCode Go, 시스템 프록시와 표면·최상위 창 개선을 반영하고 설정의 여섯 분류를 유지합니다. 이 소스 버전은 현재 공개된 설치 파일과 구분됩니다.
+
 ## 빌드
 
 ```sh
-brew install xcodegen   # 처음 한 번
+brew install xcodegen create-dmg   # 처음 한 번
 make run                # 프로젝트 생성 후 PenguinNotch Dev 실행
 make test               # 단위 테스트
 make install            # PenguinNotch 설치 후 중간 Release 앱을 휴지통으로 이동
@@ -292,6 +298,8 @@ Scripts/sign-local.sh   # /Applications/PenguinNotch.app 서명; 다른 경로�
 이 도구들이 모두 ‘세션 한도 N% 사용’을 깔끔하게 제공하는 공식 API를 공개한 것은 아닙니다. 각 어댑터는 원래 앱이 사용하는 내부 엔드포인트, 로컬 데이터베이스, language server RPC 등을 읽으므로 형식이 예고 없이 바뀔 수 있습니다. 응답 형태는 테스트로 고정하고, 실패하면 임의의 숫자 대신 `stale`, `needsAuth`, `error` 같은 상태를 표시합니다.
 
 **Claude Desktop 캐시:** Claude Desktop은 Chromium 앱이라 사용량 패널의 응답을 `~/Library/Application Support/Claude` 아래 HTTP 캐시에 씁니다. Desktop만 사용해도 원이 올바르게 남도록 이 캐시를 읽습니다. Claude Code를 한동안 실행하지 않아 `claude "/usage"`가 기간을 출력하지 않고 키체인 토큰도 다시 발급되지 않은 경우 두 CLI 경로만으로는 값이 없을 수 있기 때문입니다. 캐시는 엄격하게 읽기 전용이며, 현재 프로필에 기록된 조직과 URL의 `/api/organizations/<id>/usage`가 일치하는 항목만 엽니다. 계정 간 값이 섞이지 않고 토큰·쿠키·인증 정보를 읽거나 Anthropic에 요청하지 않습니다. 30분이 지난 캐시는 현재 값으로 쓰지 않고 아래 경로로 넘어가며 마지막 정상값은 시간이 지나면 흐려집니다. Chromium 비공개 형식이 바뀌면 이 출처는 조용히 중단되고 다른 출처를 사용합니다. 본문이 `content-encoding: zstd`라 macOS에 없는 디코더의 읽기 전용 부분을 [`Sources/Vendor/zstd`](Sources/Vendor/zstd)에 포함했습니다(BSD-3-Clause).
+
+**Claude의 남은 재설정 횟수(macOS):** 같은 계정의 Claude Desktop에서 **Settings → Usage**를 열면 캐시에 기록된 남은 횟수와 만료 시각을 호버 카드에 표시합니다. 일반 사용량을 새로 읽어도 재설정 정보의 관측 시각은 갱신하지 않으며, 이미 사용했거나 중지·만료된 항목과 미래 시각의 항목은 숨깁니다. 재설정 실행은 Claude에서 진행합니다. CLI/OAuth만으로는 이 정보를 얻지 못할 수 있으며 [원본의 확인 근거](docs/providers/claude-resets.md)를 참고하세요.
 
 **키체인:** Claude는 저장된 키체인 로그인을 읽기 전에 Desktop 캐시와 설치된 `claude` CLI를 우선 사용합니다. 토큰 갱신으로 새 항목이 생기면 이전 항목과 접근 권한이 다를 수 있습니다. 1.20.1부터 Claude·Antigravity의 백그라운드 접근이 거절되면 암호 창을 다시 띄울 수 있는 `security -w`로 재시도하지 않습니다. 필요할 때 설정에서 **접근 허용…**을 선택하세요. 인증 정보 캐시로 반복 조회를 줄입니다. 현재 공개 DMG는 Developer ID 서명이 아닌 임시 서명이므로 교체 후 키체인 권한을 다시 요청할 수 있습니다. 이 수정은 macOS의 첫 접근 안내를 없애거나 기존 키체인 권한을 변경하지 않습니다.
 

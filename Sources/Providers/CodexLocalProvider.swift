@@ -29,7 +29,8 @@ actor CodexLocalProvider: UsageProvider {
 
     nonisolated var signInRoute: SignInRoute {
         guard profile.slug != nil else { return .openApp(bundleID: "com.openai.codex", name: "Codex") }
-        return .guidance(L10n.t("Run \(profile.signInCommand) in Terminal to sign in to \(displayName)."))
+        return .command(profile.signInCommand, name: displayName,
+                        install: URL(string: "https://developers.openai.com/codex/cli"))
     }
 
     nonisolated func account() -> ProviderAccount? {
@@ -131,7 +132,7 @@ actor CodexLocalProvider: UsageProvider {
     private static func fetchResetCredits(
         session: URLSession,
         credential: CodexCredentials.Credential
-    ) async -> CodexResetCredits? {
+    ) async -> UsageResetCredits? {
         var request = URLRequest(
             url: URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")!,
             cachePolicy: .reloadIgnoringLocalCacheData,

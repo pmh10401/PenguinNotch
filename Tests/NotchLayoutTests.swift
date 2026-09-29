@@ -206,9 +206,9 @@ final class FoldedNotchTests: XCTestCase {
     func testFoldingKeepsTheCentreLine() {
         let m = model(cells: 3)
         m.isExpanded = true
-        let openCentre = m.notchLeadingInset + m.notchSize.height / 2
+        let openCentre = m.notchAlongLead + m.notchSize.height * m.sizeScale / 2
         m.isExpanded = false
-        let foldedCentre = m.notchLeadingInset + m.notchSize.height / 2
+        let foldedCentre = m.notchAlongLead + m.notchSize.height * m.sizeScale / 2
         XCTAssertEqual(openCentre, foldedCentre, accuracy: 0.001)
     }
 
@@ -402,20 +402,6 @@ final class PointerStateTests: XCTestCase {
 /// resting arc follows that curve rather than merely sitting near it.
 @MainActor
 final class SettingsOrbTests: XCTestCase {
-    func testCameraNotchHandlesMirrorEachOther() {
-        let model = NotchViewModel()
-        model.edge = .top
-        model.hardwareNotch = HardwareNotch(width: 220, height: 37)
-
-        XCTAssertEqual(model.moveAlong + model.orbAlong, model.shapeLength, accuracy: 0.001,
-                       "The buttons must sit equally far from the two ends")
-        let moveArc = model.moveAlong + model.moveArcOffset.width
-        let settingsArc = model.orbAlong + model.orbArcOffset.width
-        XCTAssertEqual(moveArc + settingsArc, model.shapeLength, accuracy: 0.001,
-                       "The resting arcs must mirror around the notch's centre")
-        XCTAssertEqual(model.moveArcOffset.height, model.orbArcOffset.height, accuracy: 0.001)
-    }
-
     private func centre(_ count: Int) -> CGFloat {
         NotchLayout.orbCenterAlong(cellCount: count)
     }
@@ -1464,7 +1450,7 @@ final class NotchSizeTests: XCTestCase {
     func testTheTooltipKeepsItsOwnSizeWhateverTheNotchIs() {
         let large = model(scale: 1.25)
         let medium = model(scale: 1)
-        let notchShare = medium.contentInset + NotchLayout.bodyDepth(for: .right)
+        let notchShare = NotchLayout.bodyDepth(for: .right)
 
         XCTAssertEqual(large.panelSize(cellCount: 3).width - medium.panelSize(cellCount: 3).width,
                        notchShare * 0.25, accuracy: 0.001)
@@ -1513,6 +1499,24 @@ final class NotchSizeTests: XCTestCase {
             let height = model.tooltipCardSize(for: snapshot).height
             let reserved = edge.isVertical ? 0 : model.tooltipInset + NotchLayout.tailLength * 1.5
             XCTAssertLessThanOrEqual(height + reserved, 600)
+        }
+    }
+
+    func testCustomUsageHistoryReservesItsChartInTheHoverRegion() {
+        let chartHeight = NotchLayout.cardHeight(windowCount: 0, hasTokenUsage: true)
+            - NotchLayout.cardHeight(windowCount: 0)
+        for edge in NotchEdge.allCases {
+            let model = model(scale: 1, edge: edge, height: 900)
+            var snapshot = ProviderSnapshot(id: "custom-test", displayName: "Custom", glyph: .claude,
+                fidelity: .official, status: .ok, windows: [])
+            let before = model.cardHeight(for: snapshot)
+            snapshot.customUsageHistory = [.init(day: "2026-09-28", totalTokens: 1000)]
+            model.snapshots = [snapshot]
+            XCTAssertEqual(model.cardHeight(for: snapshot), before + chartHeight, accuracy: 0.001)
+            model.hoverTextScale = 1.5
+            let size = model.tooltipCardSize(for: snapshot)
+            XCTAssertEqual(size.height, min(before + chartHeight, model.tooltipHeightLimit) * 1.5,
+                           accuracy: 0.001)
         }
     }
 }

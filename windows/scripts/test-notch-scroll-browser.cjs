@@ -15,7 +15,7 @@ function mockIPC(){
     if(cmd==='report_dpr') return devicePixelRatio*testSize;
     const replies={get_theme_resolved:'dark',get_notch_edge:'right',get_notch_insets:[0,0,0,0],get_move_handle:true,
       get_ui_flags:{notch_visible:true,notch_on_hover:false},get_notch_meter_style:'ring',get_hover_text_scale:1,
-      get_notch_slots:[],get_weekly_ring:'off',get_state:{sessions:[],agg:'idle',lang_resolved:'en'},
+      get_notch_slots:[],get_weekly_ring:'off',get_color_transition:'hard_step',get_opencode:{status:'absent'},get_state:{sessions:[],agg:'idle',lang_resolved:'en'},
       get_usage:{status:'ok',windows:[],fetched_at:0},get_codex:{status:'absent'},get_cursor:{status:'absent'},get_grok:{status:'absent'},get_glm:{status:'absent'},get_antigravity:{status:'absent'},
       get_activity:[],get_glyphs:{},get_stock_settings:{enabled:false,symbols:[]},get_stock_credential_status:{toss:false,finnhub:false},load_stock_history:{version:1,trends:[],forecasts:[]}};
     if(cmd==='stock_request') throw Error('Unexpected external request');
@@ -191,10 +191,14 @@ if(process.argv.includes('--serve')){
       await page.mouse.move(0,0);
       await page.evaluate(()=>{applyUiFlags({notch_on_hover:true});send('notch_pointer',false);});
       await page.waitForFunction(()=>folded);
+      const probe=await page.evaluate(()=>calls.filter(c=>c.cmd==='set_hot').at(-1).args.probe);
+      assert.equal(probe.length,4,'folded pill reports a physical screen probe');
+      assert.ok(probe.every(Number.isFinite)&&probe[2]>0&&probe[3]>0);
       await page.evaluate(()=>pill.dispatchEvent(new WheelEvent('wheel',{deltaY:100,bubbles:true,cancelable:true})));
       assert.equal((await measure()).offset,beforeFold,'folded wheel cannot move the hidden list');
       await page.evaluate(()=>send('notch_pointer',true));
       await page.waitForFunction(()=>!folded);
+      assert.equal(await page.evaluate(()=>calls.filter(c=>c.cmd==='set_hot').at(-1).args.probe??null),null,'unfolding stops backdrop sampling');
       assert.equal((await measure()).offset,beforeFold,'folding retains scroll position');
     }
     console.log('PASS real pointer clicks, clipped drop cancellation, visible reorder, Alt move and fold/unfold on every edge');
@@ -208,6 +212,41 @@ if(process.argv.includes('--serve')){
       assert.deepEqual(await measure(),before,'no overflow means no layout or scroll shift');
     }
     console.log('PASS no-overflow geometry and scroll stability at 75%, 100%, 150% on all edges');
+
+    // The newly merged provider and appearance events redraw the actual ring and its open card.
+    await configure('right',1,'ring',1);
+    await page.evaluate(()=>{
+      stockStore.settings.enabled=false;
+      send('notch_slots',[{provider:'opencode'}]);
+      send('opencode',{status:'ok',windows:[{id:'rolling',label:'5-hour Limit',used:.25},{id:'weekly',label:'Weekly limit',used:.6}],fetched_at:Date.now()});
+      send('weekly_ring','inside');
+      send('color_transition','hard_step');
+    });
+    await page.locator('[data-p="opencode"] .ringwrap').hover();
+    await page.waitForFunction(()=>card.classList.contains('show')&&hoverId==='opencode');
+    assert.equal(await page.locator('[data-p="opencode"] .pct').textContent(),'25%');
+    for(const theme of ['dark','light']){
+      await page.evaluate(theme=>send('theme_resolved',theme),theme);
+      for(const style of ['hard_step','ramp']){
+        await page.evaluate(style=>send('color_transition',style),style);
+        const colors=await page.evaluate(()=>{
+          const normalized=document.createElement('span');normalized.style.color=tone(.25);
+          return {ring:document.querySelector('[data-p="opencode"] .reading circle').getAttribute('stroke'),
+            card:document.querySelector('#card .w-fill').style.backgroundColor,expected:normalized.style.color,tone:tone(.25)};
+        });
+        assert.equal(colors.ring,colors.tone,`${theme} ${style} ring`);
+        assert.equal(colors.card,colors.expected,`${theme} ${style} open card redraws with ring`);
+      }
+    }
+    await page.mouse.move(0,0);
+    await page.evaluate(()=>{applyUiFlags({notch_on_hover:true});send('notch_pointer',false);});
+    await page.waitForFunction(()=>folded);
+    for(const [behind,color] of [['dark','rgb(245, 245, 247)'],['light','rgb(0, 0, 0)'],['off','rgb(245, 245, 247)']]){
+      await page.evaluate(behind=>send('pill_backdrop',behind),behind);
+      await page.waitForFunction(color=>getComputedStyle(document.getElementById('rest')).backgroundColor===color,color);
+    }
+    assert.equal(await page.locator('body').getAttribute('data-behind'),null,'off restores the selected theme');
+    console.log('PASS OpenCode rolling/weekly rendering, live dark/light color transitions in the open card, folded probe lifecycle and adaptive pill opt-out');
     assert.deepEqual(errors,[],'no console warnings/errors or page exceptions');
     assert.deepEqual(requests,[],'no non-fixture network requests');
     assert.equal(await page.evaluate(()=>calls.some(c=>c.cmd==='stock_request')),false,'no account or market calls');

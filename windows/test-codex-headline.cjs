@@ -48,6 +48,12 @@ test('Other provider headline selection is unchanged', () => {
   assert.equal(pick([{ id: 'weekly_all' }, { id: 'session' }], 'claude'), 'session');
   assert.equal(pick([{ id: 'on_demand' }, { id: 'included' }], 'cursor'), 'included');
 });
+test('OpenCode uses its rolling headline and separate weekly quota', () => {
+  const windows = [{ id: 'monthly' }, { id: 'weekly' }, { id: 'rolling' }];
+  assert.equal(pick(windows, 'opencode'), 'rolling');
+  assert.equal(context.weeklyOf({ windows }, 'opencode').id, 'weekly');
+  assert.equal(pick([{ id: 'weekly' }], 'opencode'), null);
+});
 
 test('Selected providers and system widgets are listed together', () => {
   const widgets = {
@@ -58,7 +64,7 @@ test('Selected providers and system widgets are listed together', () => {
   const selected = vm.createContext({
     claudeCells: () => [{ id: 'claude', base: 'claude' }],
     codexSnap: { status: 'ready' }, glmSnap: absent, cursorSnap: absent,
-    grokSnap: absent, agSnap: absent,
+    grokSnap: absent, agSnap: absent, opencodeSnap: absent,
     notchSlots: [{ provider: 'claude' }],
     window: { PenguinNotchWidgets: widgets }, PenguinNotchWidgets: widgets,
     systemPayload: { order: [] }, uiLang: 'en',
@@ -70,6 +76,8 @@ test('Selected providers and system widgets are listed together', () => {
   assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['system-cpu']);
   selected.notchSlots = null;
   assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['claude', 'codex', 'system-cpu']);
+  selected.opencodeSnap = { status: 'ok' };
+  assert.deepEqual(Array.from(selected.providers(), cell => cell.id), ['claude', 'codex', 'opencode', 'system-cpu']);
 });
 
 test('Settings can save the last AI provider off and restore automatic selection', async () => {

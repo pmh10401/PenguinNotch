@@ -31,27 +31,31 @@ final class NotchScrollTests: XCTestCase {
                         let screen = Screen(hardwareNotch: hardware ? HardwareNotch(width: 220, height: 32) : nil)
                         model.adopt(screen: screen)
                         let extent = edge.isVertical ? screen.frameValue.height : screen.frameValue.width
-                        XCTAssertLessThanOrEqual(model.shapeLength * scale + model.leadingExtent + model.trailingExtent, extent)
+                        XCTAssertLessThanOrEqual(model.shapeLength * model.sizeScale + model.leadingExtent + model.trailingExtent, extent)
                         XCTAssertGreaterThan(model.maxScrollOffset, 0)
-                        let first = model.slack + model.ringCenter(index: 0) * scale
+                        let first = model.ringAlong(index: 0, in: model.cellWing)
                         XCTAssertEqual(controller.cellIndex(along: first), 0)
-                        XCTAssertNil(controller.cellIndex(along: model.slack + model.ringCenter(index: 39) * scale))
+                        XCTAssertNil(controller.cellIndex(along: model.ringAlong(index: 39, in: model.cellWing)))
                         XCTAssertFalse(model.isCellVisible(index: 39))
                         let frame = NotchGeometry.panelFrame(for: screen, panelSize: model.panelSize,
-                            edge: edge, alongOffset: 10_000, slack: model.slack,
+                            edge: edge, alongOffset: model.alongOffset, slack: model.slack,
                             trailingExtent: model.trailingExtent, leadingExtent: model.leadingExtent)
                         let place = NotchPlacement(edge: edge, panelSize: frame.size)
-                        let local = place.rect(along: model.slack - model.leadingExtent, across: 0,
-                            length: model.shapeLength * scale + model.leadingExtent + model.trailingExtent,
-                            depth: model.notchDrawnDepth)
-                        let global = CGRect(x: frame.minX + local.minX, y: frame.maxY - local.maxY,
-                            width: local.width, height: local.height)
-                        XCTAssertGreaterThanOrEqual(global.minX, screen.frameValue.minX - 1)
-                        XCTAssertLessThanOrEqual(global.maxX, screen.frameValue.maxX + 1)
-                        XCTAssertGreaterThanOrEqual(global.minY, screen.frameValue.minY - 1)
-                        XCTAssertLessThanOrEqual(global.maxY, screen.frameValue.maxY + 1)
+                        for wing in model.wings where wing.length > 0 {
+                            let leading = wing.carriesCells ? model.leadingExtent : 0
+                            let trailing = wing.carriesCells ? model.trailingExtent : 0
+                            let local = place.rect(along: wing.lead - leading, across: 0,
+                                length: wing.length + leading + trailing,
+                                depth: wing.depth * model.sizeScale)
+                            let global = CGRect(x: frame.minX + local.minX, y: frame.maxY - local.maxY,
+                                width: local.width, height: local.height)
+                            XCTAssertGreaterThanOrEqual(global.minX, screen.frameValue.minX - 1)
+                            XCTAssertLessThanOrEqual(global.maxX, screen.frameValue.maxX + 1)
+                            XCTAssertGreaterThanOrEqual(global.minY, screen.frameValue.minY - 1)
+                            XCTAssertLessThanOrEqual(global.maxY, screen.frameValue.maxY + 1)
+                        }
                         model.scroll(by: 100_000)
-                        let last = model.slack + model.ringCenter(index: 39) * scale
+                        let last = model.ringAlong(index: 39, in: model.cellWing)
                         XCTAssertEqual(controller.cellIndex(along: last), 39)
                         XCTAssertTrue(model.isCellVisible(index: 39))
                         XCTAssertFalse(model.isCellVisible(index: 0))
@@ -83,6 +87,57 @@ final class NotchScrollTests: XCTestCase {
         XCTAssertFalse(model.scroll(by: .infinity))
     }
 
+    func testCarryPreservesCappedViewportAndScrolledCells() {
+        for edge in NotchEdge.allCases {
+            for style in [NotchMeterStyle.ring, .bar] {
+                for scale: CGFloat in [0.75, 1, 1.5] {
+                    let controller = NotchWindowController(), model = controller.model
+                    model.edge = edge
+                    model.requestedScale = scale
+                    model.notchMeterStyle = style
+                    model.showsNotchReadings = true
+                    fill(model)
+                    model.adopt(screen: Screen())
+                    model.scroll(by: 100_000)
+                    let offset = model.scrollOffset
+                    let size = model.travelSize(on: edge)
+                    XCTAssertEqual(size.length, model.shapeLength * scale, accuracy: 0.001)
+                    XCTAssertEqual(model.plainBarLength, size.length, accuracy: 0.001)
+                    for index in model.snapshots.indices {
+                        XCTAssertEqual(size.ringCenters[index], model.ringCenter(index: index) * scale,
+                                       accuracy: 0.001)
+                    }
+                    let visible = model.snapshots.indices.filter { model.isCellVisible(index: $0) }
+                        .map { model.snapshots[$0].id }
+                    let carried = controller.passageRings(from: size, to: size, turned: 0)
+                    XCTAssertEqual(carried.map(\.id), visible)
+                    XCTAssertTrue(carried.contains { $0.id == "p39" })
+                    XCTAssertFalse(carried.contains { $0.id == "p0" })
+                    XCTAssertEqual(model.scrollOffset, offset)
+                    if style == .bar { XCTAssertEqual(size.cellShift, 0) }
+                }
+            }
+        }
+    }
+
+    func testTurningDoesNotBringOffViewportCellsBack() {
+        let controller = NotchWindowController(), model = controller.model
+        model.edge = .right
+        model.notchMeterStyle = .bar
+        fill(model)
+        model.adopt(screen: Screen())
+        model.scroll(by: 500)
+        let from = model.travelSize(on: .right), to = model.travelSize(on: .top)
+        let visible = Set(model.snapshots.indices.filter { model.isCellVisible(index: $0) }
+            .map { model.snapshots[$0].id })
+        for turned: CGFloat in [0, 0.25, 0.5, 0.75, 1] {
+            let carried = controller.passageRings(from: from, to: to, turned: turned)
+            XCTAssertEqual(Set(carried.map(\.id)), visible)
+        }
+        XCTAssertLessThanOrEqual(from.length + model.freeTrailingExtent, model.screenSize.height)
+        XCTAssertLessThanOrEqual(to.length + model.freeTrailingExtent, model.screenSize.width)
+    }
+
     func testWheelUsesScaledCoordinatesPreservesCardAndFoldedScrolling() throws {
         for edge in NotchEdge.allCases {
             let controller = NotchWindowController(), model = controller.model
@@ -96,15 +151,15 @@ final class NotchScrollTests: XCTestCase {
                 let p = placement.point(along: along, across: across)
                 return CGPoint(x: p.x, y: panel.frame.height - p.y)
             }
-            let point = location(along: model.slack + model.ringCenter(index: 2) * model.sizeScale,
-                                 across: model.notchDrawnDepth / 2)
+            let point = location(along: model.ringAlong(index: 2, in: model.cellWing),
+                                 across: model.ringAcross * model.sizeScale)
             XCTAssertTrue(controller.scroll(at: point, deltaX: 0, deltaY: -90, precise: true))
-            XCTAssertEqual(model.scrollOffset, 60, accuracy: 0.001)
+            XCTAssertEqual(model.scrollOffset, 90 / model.sizeScale, accuracy: 0.001)
             let local = CGPoint(x: point.x, y: panel.frame.height - point.y)
             XCTAssertEqual(model.hoveredIndex, controller.cellIndex(along: placement.along(of: local)))
             if !edge.isVertical {
                 XCTAssertTrue(controller.scroll(at: point, deltaX: -90, deltaY: 0, precise: true))
-                XCTAssertEqual(model.scrollOffset, 120, accuracy: 0.001)
+                XCTAssertEqual(model.scrollOffset, 180 / model.sizeScale, accuracy: 0.001)
             }
             let before = model.scrollOffset
             let card = location(along: placement.along(of: local), across: model.notchDrawnDepth + 60)
@@ -115,7 +170,7 @@ final class NotchScrollTests: XCTestCase {
             XCTAssertEqual(model.scrollOffset, before)
             model.isExpanded = true
             XCTAssertTrue(controller.scroll(at: point, deltaX: 0, deltaY: -1, precise: false))
-            XCTAssertEqual(model.scrollOffset, before + 20 / 1.5, accuracy: 0.001)
+            XCTAssertEqual(model.scrollOffset, before + 20 / model.sizeScale, accuracy: 0.001)
         }
     }
 
@@ -151,8 +206,8 @@ final class NotchScrollTests: XCTestCase {
         panel.contentView?.layoutSubtreeIfNeeded()
         let placement = NotchPlacement(edge: model.edge, panelSize: panel.frame.size)
         func location(_ index: Int) -> CGPoint {
-            let p = placement.point(along: model.slack + model.ringCenter(index: index),
-                                    across: model.notchDrawnDepth / 2)
+            let p = placement.point(along: model.ringAlong(index: index, in: model.cellWing),
+                                    across: model.ringAcross * model.sizeScale)
             return CGPoint(x: p.x, y: panel.frame.height - p.y)
         }
         func mouse(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
@@ -209,7 +264,7 @@ final class NotchScrollTests: XCTestCase {
             attachment.name = "mac-scroll-\(edge.rawValue)"
             attachment.lifetime = .keepAlways
             add(attachment)
-            let centre = model.placement.point(along: model.slack + model.ringCenter(index: 39),
+            let centre = model.placement.point(along: model.ringAlong(index: 39, in: model.cellWing),
                 across: NotchLayout.ringMargin(for: edge) + NotchLayout.ringDiameter / 2)
             var greenPixels = 0
             for x in Int(centre.x - 22)...Int(centre.x + 22) {

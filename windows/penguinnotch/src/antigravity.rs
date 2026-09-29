@@ -247,7 +247,8 @@ fn local_agent() -> Option<ureq::Agent> {
         .danger_accept_invalid_hostnames(true)
         .build()
         .ok()?;
-    Some(ureq::AgentBuilder::new().tls_connector(Arc::new(tls)).timeout(Duration::from_secs(10)).build())
+    // Global system-proxy adoption must not send the local bridge's token to a proxy.
+    Some(ureq::AgentBuilder::new().try_proxy_from_env(false).tls_connector(Arc::new(tls)).timeout(Duration::from_secs(10)).build())
 }
 
 fn bridge_quota(ep: &Endpoint) -> Result<Vec<LimitWindow>, String> {

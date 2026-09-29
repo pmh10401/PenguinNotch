@@ -106,7 +106,7 @@ wire-level details.
 | **Antigravity** | official where licensed, otherwise a request count | Antigravity's local language server first, then Google's quota endpoint; a plain count when neither will answer for the account. |
 | **GLM** | official | Z.ai's Coding Plan monitor endpoint, with a key borrowed from whichever coding tool already holds one — Claude Code's `settings.json`, ZCode, or OpenCode. |
 | **MiniMax** | official where a Coding Plan key is used, derived from official Platform responses for the in-app sign-in | A Coding Plan key pasted in Settings, or explicit sign-in in PenguinNotch's own WKWebView. |
-| **QianwenAI** | derived from official console responses | Explicit sign-in in PenguinNotch's own WKWebView, then the console's own Token Plan gateway. Shows the personal plan's 7-day credits window. |
+| **QianwenAI** | derived from official console responses | Explicit sign-in in PenguinNotch's own WKWebView, then the console's own Token Plan gateway. Shows the plan's credits window for whichever period the console reports — weekly or monthly. |
 | **Ollama (Local)** | local runtime | Automatically detected local models, RAM/VRAM, unload time and context. Optional response capture adds thinking and generation speed. |
 | **LM Studio** | local runtime | Loaded models from LM Studio's own listing, what each one is doing (prompt, generating, queue) from its SDK socket, and speed, context use and tokens per day from its server log. No relay needed. |
 | **Grok** | official | The Grok CLI session in `~/.grok/auth.json`, against the same credits billing endpoint `/usage` uses. |
@@ -116,6 +116,8 @@ wire-level details.
 | **Kimi** | official | The Kimi Code CLI session in `~/.kimi-code/credentials/kimi-code.json`, against the same `/usages` endpoint the CLI's `/usage` asks. Shows the 5-hour rate window and the weekly quota. |
 | **Kiro** | official | The kiro-cli session already on this Mac, against the same `/usage` that command prints. Shows monthly credits. |
 | **Amp** | official subscription percentages; derived free-allowance percentage | The Amp CLI login in `~/.local/share/amp/secrets.json`, against Amp's `userDisplayBalanceInfo` endpoint. Shows Agent and Orb usage, or the Free allowance and replenishment rate. See [Amp details](docs/providers/amp.md). |
+| **Apify** | official | The `apify login` session already on this Mac (`~/.apify/auth.json`, or the token the CLI keeps in the keychain), or a token pasted in Settings or exported as `APIFY_TOKEN`, against the `/v2/users/me/limits` endpoint the Console's Billing page draws from. Shows this cycle's platform spend against the account's monthly usage limit. See [Apify details](docs/providers/apify.md). |
+| **Kilo** | official | The Kilo CLI's own sign-in (`~/.local/share/kilo/auth.json`), against the same coding-plan quota and balance endpoints the CLI asks. Shows the plan's quota windows and the credit balance. |
 
 Most providers borrow a credential or session from a tool already on your Mac.
 DeepSeek is the explicit browser-login exception: it never reads a browser's
@@ -125,9 +127,11 @@ paste in Settings, or an explicit WKWebView sign-in. QianwenAI is a third: it
 publishes no usage API and has no key to paste, so that WKWebView session is the
 only way in. None of them opens a browser's cookie store.
 
-Ollama Cloud accepts an API key in Settings. Switching a provider off stops its
-usage polling and forgets its readings; borrowed accounts stay signed in to
-the tools that own them.
+Ollama Cloud accepts an API key in Settings. Apify borrows the `apify login`
+session when there is one and otherwise takes a token pasted in Settings or
+exported as `APIFY_TOKEN`. Switching a provider off stops its usage polling
+and forgets its readings; borrowed accounts stay signed in to the tools that
+own them.
 
 **Local Ollama is detected automatically.** Configure its address or stop monitoring in **Settings → Ollama**.
 Each loaded model gets a notch cell; reorder or hide it in **Settings → AI subscriptions**.
@@ -677,10 +681,14 @@ verifies the installer signature before running it. See [Windows updates](window
 The 1.20.4 release includes both installers, both update feeds and
 [`SHA256SUMS.txt`](../../releases/latest/download/SHA256SUMS.txt) for checking file hashes.
 
+## Upstream integration (1.21.0 source)
+
+This development version merges [CodeNotch 1.19.0](https://github.com/vinzdg/codenotch/commit/0083369) while retaining PenguinNotch's stocks, monitoring, widgets, scrolling and update feeds. On macOS, drag the six dots beside Settings to carry the notch around screen edges; updates are offered in the notch with **Update** and **Later**. Kilo and Apify, weekly headline readings, notification destinations and continuous usage colors are included. Windows gains OpenCode Go, system proxy handling and surface/topmost fixes, while keeping the six settings sections. This source version is separate from the latest published installer.
+
 ## Building
 
 ```sh
-brew install xcodegen   # once
+brew install xcodegen create-dmg   # once
 make run                # generate and launch PenguinNotch Dev
 make test               # unit tests
 make install            # install PenguinNotch, then trash the intermediate Release app
@@ -752,6 +760,18 @@ is private and may change; if it does, the source goes quiet and the existing
 ones take over. Bodies are `content-encoding: zstd` and macOS ships no decoder,
 so a decode-only build of Zstandard is vendored under
 [`Sources/Vendor/zstd`](Sources/Vendor/zstd) (BSD-3-Clause).
+
+**Claude's unused resets (macOS):** the hover card shows the remaining resets
+and their expiry, using the same section as Codex. Open **Settings → Usage**
+in Claude Desktop for the same account to populate its reset data. That data
+is read from Desktop's usage cache and is labeled as cached with the time it
+was last observed. Ordinary usage refreshes do not re-date it; old usage
+windows still fall back to the CLI/OAuth sources after 30 minutes. Used, paused, future,
+and expired grants are hidden. There is no built-in promotion date or assumed
+entitlement. As checked on September 23, 2026, the OAuth usage endpoint does
+not expose the grants (`ineligible_reason: surface`), so a CLI/OAuth-only
+setup cannot show them yet. PenguinNotch displays availability only; redeem a
+reset in Claude. See [the provider notes](docs/providers/claude-resets.md).
 
 **Keychain:** Claude prefers the Desktop cache and the installed `claude` CLI
 before reading a saved Keychain login. Token rotation can create new items

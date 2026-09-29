@@ -9,7 +9,8 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-**Latest stable release: [1.20.4](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.20.4).**
+**Source version: 1.21.0 (Windows build r50).** This integrates upstream 1.19.0
+with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.
 Overflowing notch items now scroll with the mouse wheel or trackpad on every edge,
 in both Circles and Bars. See [Scrolling long lists](#scrolling-long-lists).
 
@@ -21,9 +22,21 @@ in both Circles and Bars. See [Scrolling long lists](#scrolling-long-lists).
 | **Codex** | The local Codex sign-in in `~/.codex/auth.json` (read only, never refreshed), falling back to the newest session snapshot | Live primary/secondary windows (5h + weekly on paid plans, a monthly window on free) while Codex is signed in; Spark and Code review appear on the hover card when Codex reports them; otherwise the last snapshot, marked stale by its own timestamp. |
 | **Cursor** | The editor's own session from `state.vscdb` → `cursor.com/api/usage-summary` | Included usage / API usage / on-demand, reset at billing-cycle end. Nothing to sign into: it borrows the editor's session, so there is only ever one account. |
 | **Grok** | The Grok CLI's own session in `~/.grok/auth.json` (read only, never refreshed) → `cli-chat-proxy.grok.com/v1/billing?format=credits`, the endpoint that CLI's own `/usage` asks | The weekly Grok Build allowance, with the account on the hover card. Only a session minted by `auth.x.ai` is used — the file can also hold a customer IdP token meant for that customer's private proxy. A fresh weekly period reads 0 %, not "unmetered". |
+| **OpenCode** | OpenCode's own sign-in, read only: the `opencode-go` key in `~/.local/share/opencode/auth.json` → `opencode.ai/zen/go/v1/usage`, or — since OpenCode 1.18 — the OAuth sign-in in `opencode.db` (`credential` table) → `opencode.ai/inference/go/v1/usage` | The Go plan's 5-hour, weekly and monthly windows. A sign-in without a Go plan shows "No OpenCode Go subscription" instead of a ring; Zen pay-as-you-go credit has no balance or usage API, so it is not shown. |
 | **Antigravity** | Official `agy` CLI `/usage` print when installed; otherwise the existing local `language_server` bridge, Google Cloud Code API, or transcript model count | Official four quota rows (Gemini & Claude/GPT 5h/weekly) without running the full IDE. When CLI is absent, falls back to legacy local bridge/API. |
+| **Z.ai / GLM** | Z.ai's `/api/monitor/usage/quota/limit` | Reads a Z.ai key from `glm.json`, Claude Code configured for Z.ai, ZCode, or OpenCode's Z.ai provider entries. OpenCode Go is a separate subscription; its key is never claimed as a Z.ai credential. |
 
 Providers that are not installed simply do not get a cell.
+
+OpenCode credentials are borrowed read-only from its XDG data directory (normally
+`~/.local/share/opencode`). The active database sign-in takes precedence over the
+legacy OAuth mirror; the Go API key remains a separate credential type. No tokens
+are returned to the web UI or written to the usage cache.
+
+Public usage requests honor explicit proxy environment settings. If none are set,
+PenguinNotch adopts an enabled static Windows Internet Options proxy at startup;
+PAC scripts and automatic proxy discovery are not evaluated. The local Antigravity
+bridge connects directly to loopback, and proxy addresses are not logged.
 
 The same notch also shows **CPU, RAM, GPU, DISK, NET, BAT and PWR**, plus a calendar,
 weather and a to-do list. CPU, memory, disk, network and battery use documented
@@ -95,7 +108,19 @@ Focused checks from `windows/`:
 node --test scripts/test-stocks.cjs
 node scripts/test-widgets.cjs
 node scripts/check-ui-scripts.mjs
+node --test test-codex-headline.cjs test-light-surface.cjs scripts/test-ko-i18n.cjs scripts/test-claude-auth-ui.cjs
+node scripts/test-settings-browser.cjs
+node scripts/test-notch-scroll-browser.cjs
 cargo test --locked
+```
+
+On macOS, host-side Rust unit tests require the Tauri feature below for its
+transparent-window API. The cross-check needs the Windows GNU target and its
+build tools installed. Neither command runs Windows itself.
+
+```sh
+cargo test --locked --offline --workspace --features tauri/macos-private-api
+cargo check --locked --offline --workspace --all-targets --target x86_64-pc-windows-gnu
 ```
 
 Tests use synthetic market data and a local HTTP server. Cross-compilation and
@@ -226,7 +251,8 @@ npx @tauri-apps/cli@2 build --config tauri.bundle.conf.json
 The sidebar follows macOS: **AI subscriptions → Stocks → Computer monitoring →
 Daily widgets → Appearance → General**. AI accounts and the weekly ring stay together;
 hardware meters have their own page; calendar, weather city and to-do visibility/colors
-are under Daily widgets. Appearance controls notch placement and size. General holds
+are under Daily widgets. Appearance controls notch placement, size, theme, folded
+pill contrast and usage-ring colour transition. General holds
 language, the tray icon, startup and updates. Existing settings and the last selected
 page survive the change. Moving items within a section leaves other categories in place.
 Features not implemented on Windows do not get empty settings pages.
@@ -288,6 +314,20 @@ attached falls back to the primary one, so unplugging a screen cannot strand the
 **Recentre** centres only the current edge, keeping other edges' positions and the
 saved monitor. When an unavailable monitor reconnects, the notch returns to it.
 
+Folded (**Appearance → Show → Show on hover**), the notch rests as a small pill at the edge, in
+**Theme**'s colour, with an edge that shows even against a backdrop of that colour.
+**Appearance → Adaptive pill**, off unless switched on, makes it follow what is behind it instead:
+light over a dark backdrop, black over a light one, the way the iPhone's home indicator does. To tell
+which, PenguinNotch reads a thin strip of the screen beside the pill twice a second while it is folded,
+and keeps only its average brightness, which is never stored or sent. With the switch off, the notch
+open, or Show set to Always show, nothing is read.
+
+**Colour transition** keeps solid bands by default (green below 50%, yellow from
+50%, red from 70%). **Colour ramp** blends continuously through yellow at 50%.
+The folded pill has a contrasting outline in both Light and Dark themes. A native
+topmost watchdog restores the notch after other windows disturb its z-order,
+without taking focus or fighting an active drag.
+
 ### Icons
 
 Provider marks are the SVGs from [`@lobehub/icons-static-svg`](https://github.com/lobehub/lobe-icons)
@@ -301,18 +341,13 @@ Three surfaces draw their own text, so each keeps its own table:
 
 | Surface | Table | Languages today |
 |---|---|---|
-| Tray menu | `penguinnotch/src/i18n.rs` (`tr`), `penguinnotch/src/traymenu.rs` (`label`) | en · ru · zh · ja · ko · uk |
-| Hover card | `penguinnotch/ui/notch.html` (`TEXT`, `PATTERNS`, `UI`) | en · ru · zh |
-| Settings window | `penguinnotch/ui/settings.html` (`STATIC_TEXT`, `STATUS_TEXT`) | en · ru · zh · ja · ko |
+| Tray menu | `penguinnotch/src/i18n.rs` (`tr`), `penguinnotch/src/traymenu.rs` (`label`) | en · pt-BR · ru · zh · zh-Hant · ja · ko · uk |
+| Hover card | `penguinnotch/ui/notch.html` (`TEXT`, `PATTERNS`, `UI`) | en · pt-BR · ru · zh · zh-Hant · ko · uk |
+| Settings window | `penguinnotch/ui/settings.html` (`STATIC_TEXT`, `STATUS_TEXT`) | en · pt-BR · ru · zh · zh-Hant · ja · ko · uk |
 
-Help is welcome on the gaps, which fall back to English rather than breaking anything:
-
-- the hover card has no Japanese, Korean or Ukrainian;
-- the settings window has no Ukrainian, although the tray menu and the language picker have had it
-  since Ukrainian was added;
-- Korean has none of the window names the Mac's catalog carries — `Current session`, `Weekly limit`,
-  `Monthly limit`, `5-hour Limit`, `Included usage`, `API usage` — because the catalog has no Korean
-  to take them from.
+Missing strings fall back to English; the provider hover card still has no Japanese
+table. Korean includes the quota-window labels and the settings controls exercised
+by `scripts/test-ko-i18n.cjs` and the settings browser regression.
 
 Keys are the exact English string. A string the Mac also shows should be taken from
 `Sources/Localizable.xcstrings` rather than translated afresh, so both platforms word it the same
@@ -332,11 +367,12 @@ inside forks until the pull request is opened here.
 
 ## Relationship to upstream
 
-This port follows the upstream design and provider semantics. It is developed at
-[Im-Midi/penguinnotch-windows](https://github.com/Im-Midi/penguinnotch-windows) and offered to the
-upstream project as its `windows/` tree; the two are kept in sync. Session detection
+This fork is maintained at [pmh10401/PenguinNotch](https://github.com/pmh10401/PenguinNotch).
+The Windows port originated in
+[Im-Midi/codenotch-windows](https://github.com/Im-Midi/codenotch-windows) and was offered to
+Codenotch as its `windows/` tree. Session detection
 originated in [Im-Midi/Pac-Man](https://github.com/Im-Midi/Pac-Man) (MIT).
 
 ## License
 
-MIT — see `LICENSE`. The PenguinNotch design and name belong to the upstream author.
+MIT — see `LICENSE`. The original Codenotch design and name belong to the upstream author.

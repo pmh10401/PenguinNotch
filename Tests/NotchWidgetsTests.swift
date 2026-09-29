@@ -25,8 +25,8 @@ final class NotchWidgetsTests: XCTestCase {
         let placement = NotchPlacement(edge: controller.model.edge, panelSize: panel.frame.size)
         func location(_ index: Int) -> CGPoint {
             let point = placement.point(
-                along: controller.model.slack + controller.model.ringCenter(index: index),
-                across: controller.model.contentInset + NotchLayout.bodyDepth(for: controller.model.edge) / 2
+                along: controller.model.ringAlong(index: index, in: controller.model.cellWing),
+                across: controller.model.ringAcross * controller.model.sizeScale
             )
             return CGPoint(x: point.x, y: panel.frame.height - point.y)
         }
@@ -40,9 +40,7 @@ final class NotchWidgetsTests: XCTestCase {
         XCTAssertNotNil(panel.contentView?.hitTest(location(2)))
         XCTAssertEqual(panel.canReorder?(location(2)), true)
         XCTAssertEqual(panel.canReorder?(location(0)), true)
-        // AppKit translates queued synthetic events through the panel origin.
-        let target = CGPoint(x: location(0).x - panel.frame.minX,
-                             y: location(0).y + panel.frame.minY)
+        let target = location(0)
         NSApp.postEvent(try mouse(.leftMouseUp, at: target), atStart: true)
         NSApp.postEvent(try mouse(.leftMouseDragged, at: target), atStart: true)
 

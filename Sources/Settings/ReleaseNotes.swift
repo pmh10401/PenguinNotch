@@ -31,6 +31,12 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.21.0", headline: L10n.t("CodeNotch upstream integration"),
+                        changes: [.init(title: L10n.t("Six dots to carry the notch")),
+                                  .init(title: L10n.t("Updates ask first, in the notch")),
+                                  .init(title: L10n.t("The weekly limit can be the main ring")),
+                                  .init(title: L10n.t("Kilo, Apify and provider reliability improvements")),
+                                  .init(title: L10n.t("Windows settings organized by task"))]),
             ReleaseNote(version: "1.20.5", headline: L10n.t("Windows settings organized by task"),
                         changes: [.init(title: L10n.t("Find monitoring and daily widgets in their own sections"),
                                         detail: L10n.t("Windows settings now follow the macOS section order. Existing choices, colors and positions are preserved; language and the app icon are under General."))]),

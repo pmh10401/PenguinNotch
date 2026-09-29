@@ -7,12 +7,12 @@ const {chromium} = require('playwright');
 const root = path.join(__dirname, '../penguinnotch/ui');
 
 function mockIPC() {
-  const initial = {lang:'en', weekly:'inside', slots:[], flags:{notch_visible:true,notch_on_hover:true,tray_visible:true}, widgets:{system:true,calendar:true,weatherOn:true,todoOn:true,
+  const initial = {lang:'en', weekly:'inside', transition:'hard_step', adaptive:false, slots:[], flags:{notch_visible:true,notch_on_hover:true,tray_visible:true}, widgets:{system:true,calendar:true,weatherOn:true,todoOn:true,
     hidden:['system-gpu','widget-weather'], colors:{'system-cpu':'36a8eb','widget-weather':'00e5cc'},
     order:['system-cpu','codex','widget-calendar','system-memory','widget-stock:us:AAPL','widget-weather','system-gpu','widget-todo'],
     weatherCity:{id:1,name:'Seoul',latitude:37.56,longitude:126.97}}};
   window.fixture = JSON.parse(localStorage.getItem('settings-fixture') || 'null') || initial;
-  window.calls = []; window.emitted = []; window.failNextPrefs = false;
+  window.calls = []; window.emitted = []; window.unmocked = []; window.failNextPrefs = false; window.failNextTransition = false;
   const events = new Map(), save = () => localStorage.setItem('settings-fixture', JSON.stringify(fixture));
   window.__TAURI__ = {core:{invoke:async(cmd,args={})=>{
     calls.push({cmd,args:structuredClone(args)});
@@ -25,6 +25,11 @@ function mockIPC() {
     }
     if(cmd==='set_lang'){fixture.lang=args.lang;save();return args.lang;}
     if(cmd==='set_weekly_ring'){fixture.weekly=args.placement;save();return args.placement;}
+    if(cmd==='set_color_transition'){
+      if(window.failNextTransition){window.failNextTransition=false;throw Error('fixture transition rejected');}
+      fixture.transition=args.style;save();return args.style;
+    }
+    if(cmd==='set_adaptive_pill'){fixture.adaptive=args.on;save();return args.on;}
     if(cmd==='set_ui_flags'){
       fixture.flags={notch_visible:args.notchVisible,notch_on_hover:args.notchOnHover,tray_visible:args.trayVisible||!args.notchVisible};
       save();return fixture.flags;
@@ -35,13 +40,13 @@ function mockIPC() {
     const flags=fixture.flags;
     const replies={get_lang:fixture.lang,get_lang_resolved:fixture.lang,get_system_look:{mica:false},get_theme:'dark',get_theme_resolved:'dark',
       get_notch_size_prefs:{preset:1,custom:1,uses_custom:false},get_scale:1,get_notch_edge:'right',get_notch_meter_style:'ring',get_hover_text_scale:1,
-      get_monitors:[],get_weekly_ring:fixture.weekly,get_ui_flags:flags,show_notch_now:flags,get_move_handle:true,
+      get_monitors:[],get_weekly_ring:fixture.weekly,get_color_transition:fixture.transition,get_adaptive_pill:fixture.adaptive,get_ui_flags:flags,show_notch_now:flags,get_move_handle:true,
       get_autostart:false,get_hooks_installed:false,get_glyphs:{},get_notch_slots:fixture.slots,
-      get_tray_options:[{id:'claude',label:'Claude',status:'ok',used:0.25},{id:'codex',label:'Codex',status:'ok',used:0.5}],
+      get_tray_options:[{id:'claude',label:'Claude',status:'ok',used:0.25},{id:'codex',label:'Codex',status:'ok',used:0.5},{id:'opencode',label:'OpenCode',status:'ok',used:12}],
       get_antigravity_prefs:{limit:'automatic',model:'gemini'},get_widget_prefs:fixture.widgets,
       get_update_state:{available:null,checking:false,installing:false,message:null},
       get_stock_settings:{enabled:false,symbols:[]},get_stock_credential_status:{toss:false,finnhub:false},load_stock_history:{version:1,trends:[],forecasts:[]}};
-    if(!(cmd in replies))throw Error('Unmocked native call: '+cmd);
+    if(!(cmd in replies)){unmocked.push(cmd);throw Error('Unmocked native call: '+cmd);}
     return structuredClone(replies[cmd]);
   }},event:{listen:async(name,fn)=>{events.set(name,fn);return()=>events.delete(name);},emit:async(name,payload)=>{emitted.push({name,payload});}},
   app:{getVersion:async()=>'settings QA'},window:{getCurrentWindow:()=>({close:async()=>{}})}};
@@ -113,9 +118,27 @@ function mockIPC() {
     await page.locator('#wx-results button').click();
     await page.waitForFunction(()=>fixture.widgets.weatherCity?.id===2);
     await page.locator('#tab-accounts').click();
+    await page.locator('[data-np="opencode"]').click();
+    await page.waitForFunction(()=>fixture.slots?.some(s=>s.provider==='opencode'));
+    assert.equal(await page.locator('[data-np="opencode"]').getAttribute('aria-checked'),'true');
     assert.equal(await page.locator('#seg-weekly').isVisible(),true);
     await page.locator('#seg-weekly [data-v="outside"]').click();
     await page.waitForFunction(()=>fixture.weekly==='outside');
+    await page.locator('#tab-appearance').click();
+    assert.equal(await page.locator('#seg-weekly').count(),1,'weekly ring stays in AI subscriptions');
+    assert.equal(await page.locator('#seg-weekly').isVisible(),false);
+    assert.equal(await page.locator('#seg-size').count(),1,'custom size does not duplicate the preset control');
+    assert.equal(await page.locator('#sw-adaptive').getAttribute('aria-checked'),'false','screen sampling is opt-in');
+    await page.locator('#sw-adaptive').click();
+    await page.waitForFunction(()=>fixture.adaptive&&!adaptivePill.busy);
+    await page.locator('#seg-transition [data-v="ramp"]').click();
+    await page.waitForFunction(()=>fixture.transition==='ramp'&&!transitionBusy);
+    assert.match(await page.locator('#cap-transition').textContent(),/continuously/);
+    await page.evaluate(()=>window.failNextTransition=true);
+    await page.locator('#seg-transition [data-v="hard_step"]').click();
+    await page.waitForFunction(()=>!transitionBusy);
+    assert.equal(await page.locator('#seg-transition [data-v="ramp"]').getAttribute('aria-pressed'),'true','failed transition save restores native value');
+    assert.match(await page.locator('#strip').textContent(),/fixture transition rejected/);
     await page.locator('#tab-general').click();
     assert.equal(await page.locator('#seg-tray').isVisible(),true);
     await page.locator('#seg-tray [data-v="none"]').click();
@@ -135,6 +158,9 @@ function mockIPC() {
     await page.waitForSelector('#pane-widgets:visible [data-hide="widget-calendar"]');
     assert.deepEqual(await state(),saved,'settings and selected pane survive reload');
     assert.equal(await page.evaluate(()=>fixture.weekly),'outside');
+    assert.equal(await page.evaluate(()=>fixture.transition),'ramp');
+    assert.equal(await page.evaluate(()=>fixture.adaptive),true);
+    assert.deepEqual(await page.evaluate(()=>fixture.slots),[{provider:'opencode'}]);
     assert.equal(await page.evaluate(()=>fixture.flags.tray_visible),false);
     assert.equal(await page.locator('[data-hide="widget-calendar"]').getAttribute('aria-checked'),'false');
     const evidence=process.env.SETTINGS_EVIDENCE;
@@ -145,10 +171,16 @@ function mockIPC() {
         await page.locator('#tab-'+tab).click();
         const overflow=await page.evaluate(()=>({page:document.documentElement.scrollWidth>innerWidth,body:document.getElementById('body').scrollWidth>document.getElementById('body').clientWidth}));
         assert.deepEqual(overflow,{page:false,body:false},`${tab} ${theme} ${size.width} overflow`);
-        if(evidence&&size.width===680&&theme==='dark'&&['monitoring','widgets'].includes(tab))await page.screenshot({path:path.join(evidence,tab+'-ko.png')});
+        if(evidence&&size.width===680&&theme==='dark'&&['accounts','appearance','monitoring','widgets'].includes(tab))await page.screenshot({path:path.join(evidence,tab+'-ko.png')});
       }
     }
+    await page.locator('#tab-general').click();
+    await page.locator('#lang').selectOption('ru');
+    await page.locator('#tab-appearance').click();
+    await page.setViewportSize({width:680,height:520});
+    assert.equal(await page.evaluate(()=>document.getElementById('body').scrollWidth>document.getElementById('body').clientWidth),false,'Russian segmented controls wrap at the native size');
+    assert.deepEqual(await page.evaluate(()=>unmocked),[]);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
-    console.log('PASS: six macOS-aligned sections, English/Korean, keyboard and saved tabs, independent hardware/widgets, legacy visibility, scoped order/color, city search, failed-save preservation, stock view events, persistence and 24 layout checks; no console errors or external requests');
+    console.log('PASS: six macOS-aligned sections, English/Korean, keyboard and saved tabs, independent hardware/widgets, legacy visibility, scoped order/color, city search, OpenCode, adaptive pill, color transition rollback, stock view events, persistence and 24 layout checks; no console errors, unmocked calls or external requests');
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

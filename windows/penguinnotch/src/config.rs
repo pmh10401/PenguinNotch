@@ -106,8 +106,14 @@ pub struct Config {
     /// Where the weekly limit gets a ring of its own: "off", "inside" or "outside".
     #[serde(default = "default_weekly_ring")]
     pub weekly_ring: String,
+    /// How a usage ring changes colour: "hard_step" or "ramp".
+    #[serde(default = "default_color_transition")]
+    pub color_transition: String,
     /// Which appearance the pages draw in: "system", "light" or "dark".
-    #[serde(default = "default_theme")]
+    #[serde(
+        default = "default_theme",
+        deserialize_with = "deserialize_theme_or_system"
+    )]
     pub theme: String,
     /// Which providers the notch itself shows, in order. Empty means every provider that has
     /// something to report — the original behaviour, and the default. Superseded by `notch_slots`,
@@ -130,6 +136,9 @@ pub struct Config {
     /// notch once; an explicit later un-tick is respected and never overridden.
     #[serde(default)]
     pub glm_notch_fixed: bool,
+    /// The same one-shot migration for the OpenCode ring.
+    #[serde(default)]
+    pub opencode_notch_fixed: bool,
     /// false = the pill is kept off the screen edge entirely; the tray icon is then the only way in
     #[serde(default = "yes")]
     pub notch_visible: bool,
@@ -170,6 +179,10 @@ pub struct Config {
     pub weather_location: Option<crate::widgets::WeatherLocation>,
     #[serde(default, rename = "stockSettings")]
     pub stock_settings: crate::stocks::StockSettings,
+    /// true = the folded pill follows what is behind it, which means reading the screen beside it
+    /// (backdrop.rs). Opt-in for that reason; off, the pill takes Theme's colour.
+    #[serde(default)]
+    pub adaptive_pill: bool,
 }
 
 fn default_notch_y() -> f64 {
@@ -254,6 +267,9 @@ fn default_scale() -> f64 {
 fn default_weekly_ring() -> String {
     "off".into()
 }
+fn default_color_transition() -> String {
+    "hard_step".into()
+}
 fn default_theme() -> String {
     "system".into()
 }
@@ -266,12 +282,32 @@ pub fn theme_or_system(value: &str) -> String {
     }
 }
 
+/// A malformed theme must not leave the JSON parser mid-value and discard the user's other choices.
+fn deserialize_theme_or_system<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<serde_json::Value>::deserialize(deserializer)
+        .ok()
+        .flatten()
+        .and_then(|value| value.as_str().map(theme_or_system))
+        .unwrap_or_else(default_theme))
+}
+
 /// A second arc changes how every reading looks, so an unreadable value means off rather than a
 /// guess at what was meant.
 pub fn weekly_ring_or_off(value: &str) -> String {
     match value {
         "inside" | "outside" => value.to_string(),
         _ => default_weekly_ring(),
+    }
+}
+
+/// A new colour blend is opt-in, so an unknown value keeps the existing hard steps.
+pub fn color_transition_or_step(value: &str) -> String {
+    match value {
+        "ramp" => value.to_string(),
+        _ => default_color_transition(),
     }
 }
 fn yes() -> bool {
@@ -310,6 +346,7 @@ impl Default for Config {
             notch_meter_style: default_meter_style(),
             hover_text_scale: default_scale(),
             weekly_ring: default_weekly_ring(),
+            color_transition: default_color_transition(),
             theme: default_theme(),
             notch_providers: Vec::new(), // empty = show them all
             notch_slots: Vec::new(),     // filled in by load(), from notch_providers
@@ -317,6 +354,7 @@ impl Default for Config {
             antigravity_limit: default_antigravity_limit(),
             antigravity_model: default_antigravity_model(),
             glm_notch_fixed: true, // a fresh install picks from the full list already
+            opencode_notch_fixed: true,
             notch_visible: true,
             notch_on_hover: true,
             tray_visible: true,
@@ -331,6 +369,7 @@ impl Default for Config {
             todos: Vec::new(),
             weather_location: None,
             stock_settings: crate::stocks::StockSettings::default(),
+            adaptive_pill: false,
         }
     }
 }
@@ -372,6 +411,8 @@ pub fn load() -> Config {
     carry_shared_position(&mut cfg);
     // A selection saved before GLM existed gets the GLM ring back exactly once.
     migrate_glm_notch(&mut cfg, &raw);
+    // Likewise for OpenCode.
+    migrate_opencode_notch(&mut cfg, &raw);
 
     // Both hidden would leave the app unreachable: no pill, no tray icon, no way to open settings.
     if !cfg.notch_visible && !cfg.tray_visible {
@@ -382,6 +423,7 @@ pub fn load() -> Config {
     cfg.scale = snap_scale(cfg.scale);
     cfg.hover_text_scale = hover_text_scale(cfg.hover_text_scale);
     cfg.weekly_ring = weekly_ring_or_off(&cfg.weekly_ring);
+    cfg.color_transition = color_transition_or_step(&cfg.color_transition);
     cfg.theme = theme_or_system(&cfg.theme);
     cfg
 }
@@ -401,6 +443,21 @@ fn migrate_glm_notch(cfg: &mut Config, raw: &Option<String>) {
     cfg.glm_notch_fixed = true;
 }
 
+fn migrate_opencode_notch(cfg: &mut Config, raw: &Option<String>) {
+    let predates = raw
+        .as_deref()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(t).ok())
+        .map(|v| v.get("opencode_notch_fixed").is_none())
+        .unwrap_or(false);
+    if !predates {
+        return;
+    }
+    if !cfg.notch_slots.is_empty() && !cfg.notch_slots.iter().any(|s| s.provider == "opencode") {
+        cfg.notch_slots.push(TraySlot { provider: "opencode".into() });
+    }
+    cfg.opencode_notch_fixed = true;
+}
+
 pub fn save(cfg: &Config) {
     let path = config_path();
     if let Some(dir) = path.parent() {
@@ -415,7 +472,8 @@ pub fn save(cfg: &Config) {
 mod tests {
     use super::{custom_notch_scale, TraySlot};
     use super::{
-        carry_shared_position, keep_open_on_upgrade, snap_scale, theme_or_system, weekly_ring_or_off, Config,
+        carry_shared_position, color_transition_or_step, keep_open_on_upgrade, snap_scale, theme_or_system,
+        weekly_ring_or_off, Config,
     };
 
     /// Show on hover is the Mac's default, so a fresh install gets it — but an update must not start
@@ -598,9 +656,77 @@ mod tests {
         assert_eq!(weekly_ring_or_off("outside"), "outside");
         assert_eq!(weekly_ring_or_off("Inside"), "off");
         assert_eq!(weekly_ring_or_off(""), "off");
+        assert_eq!(color_transition_or_step("ramp"), "ramp");
+        assert_eq!(color_transition_or_step("Ramp"), "hard_step");
+        assert_eq!(color_transition_or_step(""), "hard_step");
         assert_eq!(theme_or_system("light"), "light");
         assert_eq!(theme_or_system("dark"), "dark");
         assert_eq!(theme_or_system("Dark"), "system");
         assert_eq!(theme_or_system(""), "system");
+    }
+
+    #[test]
+    fn opencode_upgrade_preserves_penguin_preferences_and_explicitly_hidden_providers() {
+        let raw = Some(r#"{"lang":"ko","notch_slots_custom":true,"notch_slots":[{"provider":"codex"}],
+            "cell_order":["system-cpu","codex","widget-stock:us:AAPL","widget-weather"],
+            "hidden_notch_items":["system-gpu"],"notch_colors":{"codex":"36a8eb"},
+            "shows_system_usage":false,"shows_weather":false,"hoverTextScale":1.3,
+            "usesCustomNotchScale":true,"customNotchScale":1.17,"theme":"light"}"#.to_string());
+        let mut cfg: Config = serde_json::from_str(raw.as_deref().unwrap()).unwrap();
+        let before = serde_json::to_value(&cfg).unwrap();
+        super::migrate_opencode_notch(&mut cfg, &raw);
+        assert_eq!(cfg.notch_slots.iter().map(|s| s.provider.as_str()).collect::<Vec<_>>(), ["codex", "opencode"]);
+        assert!(!cfg.adaptive_pill, "an upgrade never opts into screen sampling");
+        assert_eq!(cfg.color_transition, "hard_step");
+        let after = serde_json::to_value(&cfg).unwrap();
+        for (key, value) in before.as_object().unwrap() {
+            if key != "notch_slots" && key != "opencode_notch_fixed" {
+                assert_eq!(&after[key], value, "{key} survives the provider migration");
+            }
+        }
+        cfg.set_notch_slots(Some(Vec::new()));
+        let saved = Some(serde_json::to_string(&cfg).unwrap());
+        super::migrate_opencode_notch(&mut cfg, &saved);
+        assert!(cfg.notch_slots.is_empty(), "an explicit later un-tick stays hidden");
+        let empty = Some(r#"{"notch_slots_custom":true,"notch_slots":[]}"#.to_string());
+        let mut cfg: Config = serde_json::from_str(empty.as_deref().unwrap()).unwrap();
+        super::migrate_opencode_notch(&mut cfg, &empty);
+        assert!(cfg.notch_slots.is_empty(), "an intentionally empty selection is preserved on upgrade");
+    }
+
+    #[test]
+    fn theme_preserves_the_rest_of_a_config_when_it_is_missing_or_malformed() {
+        let old: Config = serde_json::from_str(r#"{"notch_visible":false}"#).unwrap();
+        assert_eq!(old.theme, "system", "an existing config follows Windows");
+        assert!(!old.notch_visible, "the existing choice survives");
+
+        for (raw, expected) in [
+            (r#""light""#, "light"),
+            (r#""dark""#, "dark"),
+            (r#""Light""#, "system"),
+            ("true", "system"),
+            ("[]", "system"),
+            ("{}", "system"),
+            ("null", "system"),
+        ] {
+            let cfg: Config =
+                serde_json::from_str(&format!(r#"{{"theme":{raw},"notch_visible":false}}"#))
+                    .unwrap();
+            assert_eq!(cfg.theme, expected, "{raw} resolves safely");
+            assert!(
+                !cfg.notch_visible,
+                "{raw} did not discard the rest of the config"
+            );
+        }
+
+        let saved = serde_json::to_value(Config {
+            theme: "light".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(
+            saved.get("theme").and_then(|value| value.as_str()),
+            Some("light")
+        );
     }
 }

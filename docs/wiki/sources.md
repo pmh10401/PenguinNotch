@@ -54,3 +54,24 @@
 - macOS 분류의 근거: [설정 섹션](../../Sources/Settings/SettingsView.swift), [모니터링·생활 위젯 페이지](../../Sources/Settings/WidgetSettingsPanes.swift).
 - Playwright Chromium에서 실제 HTML을 실행하고 네이티브 호출은 가짜 공개 데이터로 대체했습니다. 24개 배치와 설정 저장·복원·실패 경로 검사가 통과했습니다. 별도의 Browser 플러그인/스킬이 없어 설치된 Playwright를 사용했습니다. 계좌·인증 파일·실제 API에는 접근하지 않았습니다. 실제 Windows WebView2 검증은 아닙니다.
 - 추가 검사: `check-ui-scripts.mjs`, `test-stocks.cjs`, `test-widgets.cjs`, `test-claude-auth-ui.cjs`, `test-ko-i18n.cjs` 모두 종료 코드 0. 버전 메타데이터와 번역 JSON, 변경 공백 검사를 통과했습니다.
+
+## S9
+
+- 확인: 2026-09-29 KST. CodeNotch 원본 [00833690311067354c77951fcaaf6ffca774916e](https://github.com/vinzdg/codenotch/commit/00833690311067354c77951fcaaf6ffca774916e)(1.19.0)을 PenguinNotch `dd3f301d4bbf02962518ab51ce5c24b50618124d`의 설정 개편 위에 병합했습니다. 공통 기준은 `aae2c1f77bd2f2fb6c03aa58ca6329c5d003fab4`, 원본의 추가 커밋은 134개입니다.
+- 소스 버전: 1.21.0, macOS build 58, Windows r50. 정식 설치 파일 배포·설치와 구분합니다.
+- 통합 계약: [노치 모델](../../Sources/Notch/NotchViewModel.swift), [노치 컨트롤러](../../Sources/Notch/NotchWindowController.swift), [업데이터](../../Sources/App/Updater.swift), [Windows 설정](../../windows/penguinnotch/ui/settings.html). PenguinNotch의 업데이트 피드·기존 자격 증명 이동 규칙을 유지하며, 원본의 `site/Codenotch.dmg`와 앱캐스트를 게시하지 않습니다.
+- macOS 검증: 서명을 끈 ARM64 Debug 전체 Xcode 테스트 **2,186개, 건너뜀 11개, 실패 0**, 종료 코드 0. 건너뛴 항목은 선택적으로 실행하는 실제 서비스·모델 검사 8개와 실제 노치 디스플레이가 필요한 검사 3개입니다. 마지막 이동·늘어남·클리핑 수정까지 포함하며, 합성 화면과 이벤트로 스크롤·배치·드래그를 검사했습니다. 로컬 로그는 `/tmp/penguin-upstream-final-full.log`입니다.
+- Windows 검증: Mac 호스트 Rust 테스트 **184개 통과, 4개 제외**, GNU Windows 전체 대상 교차 컴파일, Node **19개 통과**, HTML 3개 문법 검사 모두 종료 코드 0. Playwright에서 가짜 네이티브 응답으로 설정 **24개**, 노치 **48개** 배치 및 저장·호버·드래그·휠·실시간 모양 변경을 검사했습니다. 실제 Windows 실행 결과와 구분합니다.
+- 검토 중 보완: Apify의 백그라운드 키체인 읽기는 기존 비대화형 규칙과 명시적인 접근 허용을 재사용합니다. 완료된 Codex 하위 작업이 완료 알림을 막던 조건과 사용자 지정 JSON 토큰 합계의 정수 변환 오류도 회귀 검사로 확인했습니다.
+- 검증 소스 SHA-256: `Sources/Notch/NotchViewModel.swift` = `aace35324c74d2555d93a986a74b3ddd2336d92a92e1b050dce185c7d5341c6b`, `Sources/Notch/NotchWindowController.swift` = `416a9f4ba8d331244fa86480c9ca7ae0db06b87e7835af0ab194dd3916eb38e9`, `windows/penguinnotch/ui/settings.html` = `36339fa826d70e8eefdece2c269ce191e8355f05c90acc1b1bc408eb97b5c46e`.
+- 한계: 실제 Windows/WebView2의 다중 모니터·배경 캡처·최상위 창 동작, 실제 계정·시세 API, 업데이트 다운로드·설치는 이 병합에서 실행하지 않았습니다. 연구 평가 자료와 설치본은 변경하지 않았습니다.
+
+다음 명령은 저장소 루트에서 macOS 검증을 재현합니다. Windows 브라우저 검사는 설치된 Playwright가 필요하며, 별도의 네이티브 Windows 확인을 대신하지 않습니다.
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test-ci
+node --test windows/test-codex-headline.cjs windows/test-light-surface.cjs windows/scripts/test-ko-i18n.cjs windows/scripts/test-stocks.cjs windows/scripts/test-claude-auth-ui.cjs windows/scripts/test-widgets.cjs
+node windows/scripts/check-ui-scripts.mjs
+node windows/scripts/test-settings-browser.cjs
+node windows/scripts/test-notch-scroll-browser.cjs
+```
