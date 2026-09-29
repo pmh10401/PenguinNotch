@@ -9,7 +9,7 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-**Source version: 1.22.1 (Windows build r54; not yet released).** Stock quotes retain
+**Source version: 1.22.1 (Windows build r54).** Stock quotes retain
 a validated same-session closing baseline through transient request failures;
 a new session or trading day still requires a valid new baseline. This integrates upstream 1.19.0
 with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.

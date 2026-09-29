@@ -147,3 +147,11 @@ node --test windows/scripts/test-stocks.cjs windows/scripts/test-widgets.cjs win
 node windows/scripts/check-ui-scripts.mjs
 node windows/scripts/test-notch-scroll-browser.cjs
 ```
+
+- 후속 정식 공개: [v1.22.1](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.22.1), 최종 소스 [7621465f19e60c2beccf6b5e83034a08f950968d](https://github.com/pmh10401/PenguinNotch/commit/7621465f19e60c2beccf6b5e83034a08f950968d). [macOS CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36533316180)는 **2,194개, 건너뜀 13개, 실패 0** 및 SwiftPM 고정 의존성 검사를 통과했습니다.
+- [Windows CI의 두 번째 시도](https://github.com/pmh10401/PenguinNotch/actions/runs/36533316244/attempts/2)는 **228개 통과, 4개 제외, 실패 0**이며 JS·실제 HTML·Clippy 검사도 성공했습니다. 첫 시도에서는 이번에 변경하지 않은 `claude_auth::tests::failed_exit_and_timeout_are_reaped`의 5초 제한을 둔 PowerShell 정상 종료 확인 단언이 실패했습니다. 코드 변경 없이 같은 커밋을 한 번 재실행해 통과했으며, 시간 초과의 구체적인 시스템 원인은 확인하지 않았습니다.
+- [macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36533316148)의 공개 DMG에서 1.22.1/build 62, macOS 15+, arm64·x86_64, 유효한 임시 서명과 디버그 entitlement 부재를 확인했습니다. [Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36533316346)의 설치·doctor·제거·서명 피드 생성도 성공했습니다.
+- 기존 Sparkle 키를 내보내지 않고 `generate_appcast --account penguin-notch`를 한 번 호출해 피드를 생성했습니다. 공개 키만으로 두 설치 파일의 Sparkle Ed25519·Tauri Minisign 및 신뢰 주석 서명, 한 바이트 변조 거부를 확인했습니다. 이번 서명 호출에는 추가 사용자 인증 요청이 발생하지 않았습니다.
+- 이 Mac 설치: `make install` 종료 코드 0. `/Applications/PenguinNotch.app` 1.22.1/build 62, arm64·x86_64, 기존 Apple Development 팀의 서명 검증과 단일 실행 프로세스를 확인했습니다. 실제 앱 접근성 화면에 1.22.1 새 기능 안내가 표시됐고 ‘계속’이 안내를 닫았습니다. 공개 DMG의 OS 서명·공증 상태와는 별개이며, 실제 계정 시세의 장시간 검증은 하지 않았습니다.
+- 후속 최종 Windows 소스 SHA-256 `windows/penguinnotch/ui/stocks.js`: `686fa0f136f9aef2682d7ed7b55c37c09ffd0d22985c953651f5c5ea570c73e2`. 위 초기 해시는 이전 검증 시점의 기록으로 보존합니다.
+- [릴리즈 후 최종 Windows 배포](https://github.com/pmh10401/PenguinNotch/actions/runs/36534413883)도 설치·doctor·제거·게시를 통과했습니다. 공개 최신 다운로드 주소에서 최종 네 파일을 다시 받아 두 서명·변조 거부·GitHub 자산 해시를 확인하고 [SHA256SUMS.txt](https://github.com/pmh10401/PenguinNotch/releases/download/v1.22.1/SHA256SUMS.txt)를 갱신했습니다. 해시 목록 자체의 SHA-256: `1033d013b5bf24e2dbfbd1e975b8a0111ab8568ccadcde307ad3da738469a4ce`.
