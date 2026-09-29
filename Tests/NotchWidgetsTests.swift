@@ -40,12 +40,41 @@ final class NotchWidgetsTests: XCTestCase {
         XCTAssertNotNil(panel.contentView?.hitTest(location(2)))
         XCTAssertEqual(panel.canReorder?(location(2)), true)
         XCTAssertEqual(panel.canReorder?(location(0)), true)
+        let start = location(2)
         let target = location(0)
+        let drop = panel.onReorderDrop
+        let click = panel.onClick, hover = panel.onReorderHover
+        defer {
+            panel.onReorderDrop = drop
+            panel.onClick = click
+            panel.onReorderHover = hover
+        }
+        var clicks = 0, hovers = 0
+        panel.onClick = { point in
+            clicks += 1
+            click?(point)
+        }
+        panel.onReorderHover = { source, destination in
+            hovers += 1
+            hover?(source, destination)
+        }
+        var didDrop = false
+        panel.onReorderDrop = { source, destination in
+            didDrop = true
+            XCTAssertEqual(source.x, start.x, accuracy: 1)
+            XCTAssertEqual(source.y, start.y, accuracy: 1)
+            XCTAssertEqual(destination.x, target.x, accuracy: 1)
+            XCTAssertEqual(destination.y, target.y, accuracy: 1)
+            XCTAssertEqual(panel.canReorder?(source), true)
+            XCTAssertEqual(panel.canReorder?(destination), true)
+            drop?(source, destination)
+        }
         NSApp.postEvent(try mouse(.leftMouseUp, at: target), atStart: true)
         NSApp.postEvent(try mouse(.leftMouseDragged, at: target), atStart: true)
 
-        panel.mouseDown(with: try mouse(.leftMouseDown, at: location(2)))
+        panel.mouseDown(with: try mouse(.leftMouseDown, at: start))
 
+        XCTAssertTrue(didDrop, "Synthetic drag: clicks=\(clicks), hovers=\(hovers), frame=\(panel.frame), start=\(start), target=\(target)")
         XCTAssertEqual(preferences.providerOrder, [stock.id, "hidden-item", ai.id, cpu.id])
         controller.model.apply(order: preferences.providerOrder)
         XCTAssertEqual(controller.model.snapshots.map(\.id), [stock.id, ai.id, cpu.id])

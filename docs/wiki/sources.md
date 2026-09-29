@@ -75,3 +75,12 @@ node windows/scripts/check-ui-scripts.mjs
 node windows/scripts/test-settings-browser.cjs
 node windows/scripts/test-notch-scroll-browser.cjs
 ```
+
+## S10
+
+- 확인: 2026-09-29 KST. 원본 통합 커밋 [34d30cb8122a93b5a432f93b910c50f94cfaca20](https://github.com/pmh10401/PenguinNotch/commit/34d30cb8122a93b5a432f93b910c50f94cfaca20)과 그 이후 1.21.1(macOS build 59, Windows r51)의 드래그 보완입니다.
+- 확정한 회귀: [NotchPanel](../../Sources/Notch/NotchPanel.swift)의 `mouseUp` 처리에서 최종 이동 거리를 확인하지 않았습니다. [NotchScrollTests](../../Tests/NotchScrollTests.swift)의 새 합성 입력은 중간 이동 이벤트 없이 0·4·5·30포인트를 움직여 놓습니다. 기존 구현은 5·30포인트 검사에서 실패했고 수정 후 통과했습니다. [NotchWidgetsTests](../../Tests/NotchWidgetsTests.swift)는 실제 드롭 호출·좌표·숨김 항목 보존까지 확인합니다. 소스 `NotchPanel.swift`의 SHA-256은 `9e3df393aff7241fa3464447fe9793b43d704f8a92be1ea88ca838d077e5e986`입니다.
+- 원본 통합의 GitHub 결과: [macOS CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36501163327)의 두 시도 모두 `testDraggingNotchItemSavesOrderAndKeepsHiddenSlot`에서 순서가 바뀌지 않는 실패가 있었습니다. 로컬의 같은 검사 15회는 모두 통과했습니다. Grok의 읽기 전용 교차 검토도 최종 거리 판정의 타당성과 CI 원인 미확인을 구분했습니다. 이벤트 병합이나 좌표 변환을 확인된 원인으로 단정하지 않습니다.
+- 같은 통합 커밋의 [Windows 테스트](https://github.com/pmh10401/PenguinNotch/actions/runs/36501163310)는 네이티브 Rust 188개 통과·4개 제외, [Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36501163351)는 NSIS 설치·doctor·제거·업데이트 피드 생성에 성공했습니다. [macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36501163299)도 성공했습니다. 패키지 성공은 macOS CI 실패를 대신하지 않으며, 정식 버전 태그 배포나 사용자 설치본 변경과도 구분합니다.
+- 후속 수정의 집중 검사: 드래그·스크롤 18개 중 건너뜀 1개·실패 0, 별도 Ollama 셀 클릭 검사 1개 통과. 실제 사용자 계정·키체인 읽기·설치·주식 시세 API는 사용하지 않았습니다.
+- 1.21.1 최종 로컬 검사: 서명을 끈 ARM64 Debug 전체 Xcode 테스트 **2,187개, 건너뜀 11개, 실패 0**, 종료 코드 0. 로그 `/tmp/penguin-upstream-1.21.1-full.log`. 기존 CI 실패 검사와 새 놓기 처리 회귀를 모두 포함합니다. 이 결과는 후속 GitHub CI의 성공을 미리 보장하지 않습니다.

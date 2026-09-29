@@ -4,6 +4,8 @@
 
 후속 변경: [Windows 설정 분류](project.md#windows-설정-분류)는 1.20.5에서 추가됐으며, [1.21.0 원본 통합](maintenance.md#원본-업데이트-통합)은 CodeNotch 1.19.0을 병합한 소스 기준입니다. 공개 릴리즈와 실제 Windows 기기 검증은 별도입니다.
 
+1.21.1에서는 [빠른 드래그의 놓기 처리](maintenance.md#빠른-드래그의-놓기-처리)를 보완합니다. 원본 통합의 로컬 성공과 GitHub CI 실패는 [S10](sources.md#s10)에 구분해 기록합니다.
+
 Karpathy의 [LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)를 PenguinNotch에 적용한 개발 지식 모음입니다. 원자료, 근거를 연결한 요약, 유지 규칙을 분리하고 새로 확인한 내용을 누적합니다. 기존 코드와 문서는 Git 커밋으로 고정하여 원자료로 사용합니다. [출처 목록](sources.md)은 그 시점의 기록이며, 현재 동작을 변경하기 전에는 최신 코드를 다시 확인해야 합니다.
 
 ## 주제

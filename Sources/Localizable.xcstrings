@@ -1,6 +1,20 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Complete a fast notch drag on release": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Complete a fast notch drag on release" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "빠르게 드래그한 항목도 놓을 때 순서 변경" } }
+      }
+    },
+    "A release five points away completes reordering even without an intermediate drag event.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "A release five points away completes reordering even without an intermediate drag event." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "중간 이동 이벤트가 없어도 시작점에서 5포인트 이상 움직여 놓으면 항목 순서를 변경합니다." } }
+      }
+    },
     "CodeNotch upstream integration": {
       "extractionState": "manual",
       "localizations": {

@@ -681,9 +681,11 @@ verifies the installer signature before running it. See [Windows updates](window
 The 1.20.4 release includes both installers, both update feeds and
 [`SHA256SUMS.txt`](../../releases/latest/download/SHA256SUMS.txt) for checking file hashes.
 
-## Upstream integration (1.21.0 source)
+## Upstream integration (1.21.1 source)
 
 This development version merges [CodeNotch 1.19.0](https://github.com/vinzdg/codenotch/commit/0083369) while retaining PenguinNotch's stocks, monitoring, widgets, scrolling and update feeds. On macOS, drag the six dots beside Settings to carry the notch around screen edges; updates are offered in the notch with **Update** and **Later**. Kilo and Apify, weekly headline readings, notification destinations and continuous usage colors are included. Windows gains OpenCode Go, system proxy handling and surface/topmost fixes, while keeping the six settings sections. This source version is separate from the latest published installer.
+
+The 1.21.1 follow-up also completes a macOS item drag from the release position when no intermediate movement event arrives. Movements shorter than five points remain clicks.
 
 ## Building
 

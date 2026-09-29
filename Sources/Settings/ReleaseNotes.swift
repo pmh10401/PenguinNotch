@@ -31,6 +31,8 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.21.1", headline: L10n.t("Complete a fast notch drag on release"),
+                        changes: [.init(title: L10n.t("A release five points away completes reordering even without an intermediate drag event."))]),
             ReleaseNote(version: "1.21.0", headline: L10n.t("CodeNotch upstream integration"),
                         changes: [.init(title: L10n.t("Six dots to carry the notch")),
                                   .init(title: L10n.t("Updates ask first, in the notch")),

@@ -190,6 +190,36 @@ final class NotchScrollTests: XCTestCase {
         XCTAssertEqual(calls, 1)
     }
 
+    func testReleaseCompletesDragWithoutAnIntermediateEvent() throws {
+        for distance: CGFloat in [0, 4, 5, 30] {
+            let panel = NotchPanel(contentRect: CGRect(x: 0, y: 0, width: 200, height: 200))
+            defer { panel.close() }
+            panel.contentView = NSView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+            let start = CGPoint(x: 100, y: 100), end = CGPoint(x: 100 + distance, y: 100)
+            var clicked = false, dropped = false, ended = false
+            panel.canReorder = { _ in true }
+            panel.onClick = { _ in clicked = true }
+            panel.onReorderDrop = { source, destination in
+                dropped = true
+                XCTAssertEqual(source, start)
+                XCTAssertEqual(destination, end)
+            }
+            panel.onReorderEnd = { ended = true }
+            func mouse(_ type: NSEvent.EventType, at point: CGPoint) throws -> NSEvent {
+                try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                    timestamp: 0, windowNumber: panel.windowNumber, context: nil,
+                    eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1))
+            }
+            // The final pointer position proves a drag without an intermediate
+            // movement event; short releases remain clicks.
+            NSApp.postEvent(try mouse(.leftMouseUp, at: end), atStart: true)
+            panel.mouseDown(with: try mouse(.leftMouseDown, at: start))
+            XCTAssertEqual(dropped, distance >= 5, "distance \(distance)")
+            XCTAssertEqual(clicked, distance < 5, "distance \(distance)")
+            XCTAssertEqual(ended, dropped)
+        }
+    }
+
     func testScrolledCellsStillClickAndDragTheVisibleItem() async throws {
         let name = "NotchScroll.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
@@ -221,8 +251,7 @@ final class NotchScrollTests: XCTestCase {
             clicked.fulfill()
         }
         let click = location(39)
-        let queuedClick = CGPoint(x: click.x - panel.frame.minX, y: click.y + panel.frame.minY)
-        NSApp.postEvent(try mouse(.leftMouseUp, queuedClick), atStart: true)
+        NSApp.postEvent(try mouse(.leftMouseUp, click), atStart: true)
         panel.mouseDown(with: try mouse(.leftMouseDown, click))
         await fulfillment(of: [clicked], timeout: 1)
         let target = location(38)

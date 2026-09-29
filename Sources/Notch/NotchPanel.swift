@@ -93,8 +93,11 @@ final class NotchPanel: NSPanel {
                 }
                 if dragging { onReorderHover?(start, point) }
             case .leftMouseUp:
+                // Release can be the first delivered movement in a fast drag.
+                let point = event.locationInWindow
+                dragging = dragging || hypot(point.x - start.x, point.y - start.y) >= 5
                 if dragging {
-                    onReorderDrop?(start, event.locationInWindow)
+                    onReorderDrop?(start, point)
                 } else {
                     onClick?(start)
                 }
