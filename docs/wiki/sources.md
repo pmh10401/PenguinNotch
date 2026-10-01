@@ -241,3 +241,18 @@ node windows/scripts/check-ui-scripts.mjs
 node windows/scripts/test-settings-browser.cjs
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project PenguinNotch.xcodeproj -scheme PenguinNotch -destination 'platform=macOS' -configuration Debug -only-testing:PenguinNotchTests/TossAccountTests -only-testing:PenguinNotchTests/StockForecastTests -only-testing:PenguinNotchTests/StockQuoteTests -only-testing:PenguinNotchTests/ReleaseNotesTests -only-testing:PenguinNotchTests/AppLanguageTests CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO test
 ```
+
+## S17
+
+### 2026-10-01 1.24.1 정식 릴리즈
+
+- 고정 소스: [`9006504b8a67a8e4a73882548a93467ab3fd8c49`](https://github.com/pmh10401/PenguinNotch/commit/9006504b8a67a8e4a73882548a93467ab3fd8c49), [v1.24.1](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.24.1). macOS **1.24.1/build 65**, Windows **1.24.1/r57**입니다. 2026-10-01 08:07:03 UTC에 정식 공개했으며 S14–S16의 계좌 뷰어·노치·네 탭 개선을 포함합니다. 이전 항목의 미배포 기록은 해당 검증 시점의 사실로 보존합니다.
+- 로컬 macOS 전체 검사: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test-ci`, **2,213개 중 선택적 11개 건너뜀·실패 0**, 종료 코드 0. [macOS CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36831487263)는 같은 소스에서 **2,213개 중 선택적 13개 건너뜀·실패 0**, 고정 SwiftPM 의존성 검사도 통과했습니다. 서로 겹치는 로컬·원격 검사를 합산하지 않습니다.
+- [Windows CI](https://github.com/pmh10401/PenguinNotch/actions/runs/36831487374): **232개 통과·선택적 4개 제외·실패 0**, Clippy와 실제 Chromium의 설정 24개·노치 48개 배치 및 업데이트 UI 검사를 통과했습니다. 영어·한국어, 네 방향, 원형/막대, 75–150% 크기, 휠·포인터·정렬 회귀를 포함합니다. HTML 모의 IPC 검사는 실제 개인 계좌나 Windows 자격 증명 동작의 증거로 사용하지 않습니다.
+- 초기 [macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36831487341)와 [Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/36831487387)는 같은 고정 소스에서 성공했습니다. Windows 러너의 NSIS 설치·doctor·제거 및 서명된 업데이트 피드 생성도 통과했습니다. DMG 내부 버전·build·macOS 15 최소 조건·arm64/x86_64·내장 업데이트 공개 키/URL, 코드 서명 검증과 디버그 권한 부재를 확인했습니다.
+- Sparkle 개인 키를 내보내지 않고 기존 `generate_appcast --account penguin-notch`를 **한 번** 호출했습니다. 사용자가 macOS 키체인 창을 직접 승인한 뒤 종료 코드 0을 확인했습니다. 암호나 개인 키를 채팅·Git·로그에 기록하지 않았습니다. 공개 키로 설치 파일의 Sparkle Ed25519·Tauri Minisign/신뢰 주석과 변조 거부를 검사합니다. 현재 Sparkle 피드는 enclosure의 DMG를 서명하며 XML 자체의 분리 서명이 있다고 주장하지 않습니다.
+- Grok에 공개 코드만 전달한 읽기 전용 검토 후 계좌 선택 보존·명시적 해제·탭 이탈 수명·소수점 표시를 기존 회귀와 대조했습니다. 확인된 추가 차단 문제는 없었으며 사용자 금융값·인증 파일·연구 자료를 전달하거나 변경하지 않았습니다. 기존 계좌 이력·앱 코드·버전은 이 릴리즈 기록 후속 작업에서 바꾸지 않습니다.
+- 배포 한계: 공개 Mac DMG는 임시 서명되며 **Apple 공증을 받지 않았습니다**. Windows 설치 파일은 **Authenticode 인증서가 없습니다**. 업데이트 서명과 OS 첫 설치 경고는 별개입니다. 실제 계좌 금액/손익률 대조, 사용자 Windows 기기의 WebView2·Credential Manager·모니터 동작은 미검증이며 Codex 수동 분석은 macOS 전용입니다. 이 Mac의 기존 Apple Development 서명 설치본 1.24.1/build 65는 공개 DMG로 덮어쓰지 않았습니다.
+- [릴리즈 후 최종 Windows 배포](https://github.com/pmh10401/PenguinNotch/actions/runs/36834349508)도 같은 소스의 설치·doctor·제거·설치 파일 게시·피드 게시를 모두 통과했습니다. 초기 패키지와 최종 릴리즈 실행의 자산을 섞지 않고, `releases/latest/download/`에서 받은 네 파일을 최종 게시 자산과 대조했습니다. 모든 URL의 HTTP 200, 두 설치 파일의 공개 키 서명·한 바이트 변조 거부, 피드 버전·URL·GitHub 자산 해시를 확인했습니다.
+- 최종 Windows 파일 변경에 맞춰 [SHA256SUMS.txt](https://github.com/pmh10401/PenguinNotch/releases/download/v1.24.1/SHA256SUMS.txt)를 갱신했습니다. 게시한 해시 목록 자체의 SHA-256은 `e94cf91b3b682fdc3df569b186b97a0ed01bb5d351a947db70fe45df18963708`이며 공개 최신 주소에서 다시 받은 내용과 정확히 일치합니다. GitHub의 latest는 v1.24.1이며 다섯 자산이 모두 공개 상태입니다.
+- 최종 파일 SHA-256: DMG `7e6e369e391503a898497a072007daaf140bbdb6a49b72d8e720732c74fc6903`, appcast `835375ca7f9bed0b091fa93e9173ad79e5f46182d6782b20479262214b9d55b9`, EXE `02c25a5260178719d9e6d71d293ab89fe489dd3ef63514b90e45042b750b52d0`, latest.json `3db1d9ad4507d60dc8f805fb88c18b29df40cbe3d88db816c96437980e96025a`.

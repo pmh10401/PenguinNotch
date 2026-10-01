@@ -9,7 +9,7 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-**Source version: 1.24.1 (Windows build r57; not yet released).** Stock quotes retain
+**Stable release: [1.24.1](../../../releases/tag/v1.24.1) (Windows build r57).** Stock quotes retain
 a validated same-session closing baseline through transient request failures;
 a new session or trading day still requires a valid new baseline. This integrates upstream 1.19.0
 with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.
@@ -86,7 +86,7 @@ by default. Windows quotes poll once a minute; chart requests are cached per
 symbol for 1 minute, 10 minutes or 1 day, with daily cache rollover on the market's
 local date. Charts display at most 20 candles and use earlier bars for analysis.
 
-**Stock settings (1.24.1 source)** use the same four local tabs as macOS: **Watchlist → My account → Analysis → History**. Watchlist opens first; connection and display options start collapsed. Charts and estimates live in Analysis; archives and exports live in History. Detailed methods, investment/total returns and holdings stay collapsed until needed. Windows has no Codex analysis control.
+**Stock settings (1.24.1)** use the same four local tabs as macOS: **Watchlist → My account → Analysis → History**. Watchlist opens first; connection and display options start collapsed. Charts and estimates live in Analysis; archives and exports live in History. Detailed methods, investment/total returns and holdings stay collapsed until needed. Windows has no Codex analysis control.
 
 **My Toss account** is the only account discovery/selection surface. Click **Load accounts**, choose a masked account, and use **Refresh** or **Hide account information**. Viewing still works with forecasts and notch stock display off. **Show account in notch** and **Include account holdings in estimates** remain separate opt-ins; opening tabs or loading accounts keeps saved choices, while an explicit new selection moves already-enabled account features to that account. KRW/USD stock values, profit/loss, fractional quantities and costs follow macOS. Cash, bonds and options are excluded; overall ratios are API KRW-converted values. Viewer replies bypass caches. With the account notch off, leaving My account clears its viewer. Provider/credential changes discard old private values. Private information is never persisted, exported or sent to AI.
 

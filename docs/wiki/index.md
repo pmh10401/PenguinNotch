@@ -1,8 +1,8 @@
 # PenguinNotch 개발 지식 위키
 
-검증일: 2026-10-01 · 초기 코드 기준: `b7b1b69d29944f76f7431933d5d78a41c135f81f` · 현재 정식 배포: [v1.22.1](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.22.1), [S13](sources.md#s13)
+검증일: 2026-10-01 · 초기 코드 기준: `b7b1b69d29944f76f7431933d5d78a41c135f81f` · 현재 정식 배포: [v1.24.1](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.24.1), [S17](sources.md#s17)
 
-1.24.1 작업 소스에는 [내 토스 계좌](stocks.md#명시적으로-여는-내-토스-계좌)와 [계좌 노치의 일간 증감](stocks.md#계좌-노치의-일간-증감)을 추가합니다. 노치 표시와 예측 포함은 별도 선택이며, [S14](sources.md#s14)는 이전 뷰어 검증, [S15](sources.md#s15)는 후속 노치·최적화 검증과 배포 경계를 기록합니다. 주식 설정을 목적별 네 탭으로 정리한 후속 검증은 [S16](sources.md#s16)에 기록합니다.
+정식 1.24.1에는 [내 토스 계좌](stocks.md#명시적으로-여는-내-토스-계좌)와 [계좌 노치의 일간 증감](stocks.md#계좌-노치의-일간-증감)을 추가합니다. 노치 표시와 예측 포함은 별도 선택이며, [S14](sources.md#s14)는 이전 뷰어 검증, [S15](sources.md#s15)는 후속 노치·최적화 검증과 배포 경계를 기록합니다. 주식 설정을 목적별 네 탭으로 정리한 후속 검증은 [S16](sources.md#s16), 정식 CI·설치 파일·업데이트 검증은 [S17](sources.md#s17)에 기록합니다.
 
 후속 변경: [Windows 설정 분류](project.md#windows-설정-분류)는 1.20.5에서 추가됐으며, [1.21.0 원본 통합](maintenance.md#원본-업데이트-통합)은 CodeNotch 1.19.0을 병합한 소스 기준입니다. 공개 릴리즈와 실제 Windows 기기 검증은 별도입니다.
 

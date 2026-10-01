@@ -20,9 +20,12 @@ Screenshot from PenguinNotch. Usage and prices reflect the capture time; click f
 
 </div>
 
-**Latest stable release: [1.22.1](../../releases/tag/v1.22.1).** Stock percentages on
-macOS and Windows retain a valid same-session closing-price basis through temporary
-request failures. macOS stock hover bars now use green for gains and red for losses.
+**Latest stable release: [1.24.1](../../releases/tag/v1.24.1).** Stock settings on
+macOS and Windows now separate **Watchlist / My account / Analysis / History**,
+with account selection in one place and detailed information collapsed until needed.
+Optional Toss account viewing and 60-second account-notch summaries keep private
+financial values in memory; notch display and holdings inclusion are separate choices.
+The summary covers stock assets, excluding cash, bonds and options.
 Both platforms support wheel/trackpad scrolling on all four edges, in circle and
 bar styles. See [Scrolling long lists](#scrolling-long-lists).
 
@@ -35,7 +38,7 @@ that Claude Code's own `/usage` leads with.
 [![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
 Download `PenguinNotch.dmg` from the [latest release](../../releases/latest).
-Version 1.22.1 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
+Version 1.24.1 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
 signature verifies the download's origin; it does not remove Gatekeeper warnings.
 
 To try unreleased `main` without an Xcode install, the [preview
@@ -512,7 +515,7 @@ older records. They survive restarts and settings/key/provider changes; unreadab
 archives are preserved. The paths below are macOS-specific, and histories are not
 automatically synchronized between computers.
 
-**Stock settings (1.24.1 source)** are split into **Watchlist → My account → Analysis → History** on macOS and Windows. Watchlist is the first screen; display options and the selected provider’s connection/keys start collapsed. Analysis holds chart, technical and estimate options; methodology and detailed results stay collapsed until needed. History keeps saved results and exports separate from everyday controls. Existing symbols, settings and records are retained. Codex analysis remains macOS-only.
+**Stock settings (1.24.1)** are split into **Watchlist → My account → Analysis → History** on macOS and Windows. Watchlist is the first screen; display options and the selected provider’s connection/keys start collapsed. Analysis holds chart, technical and estimate options; methodology and detailed results stay collapsed until needed. History keeps saved results and exports separate from everyday controls. Existing symbols, settings and records are retained. Codex analysis remains macOS-only.
 
 **My Toss account** is under **Settings → Stocks → My account**. Save your Toss keys in **Watchlist → Connection**, click **Load accounts** once, then choose a masked account. Opening these tabs never enables account access, forecasts or the account notch. **Show account in notch** and **Include account holdings in estimates** are separate switches; if already enabled, explicitly choosing another account moves those features to it. Saved selections are retained until that choice, including earlier selections that differ. Use **Refresh** for a new snapshot and **Hide account information** to clear it. With the account notch off, leaving My account clears its private viewer. Provider or credential changes discard old private values.
 
