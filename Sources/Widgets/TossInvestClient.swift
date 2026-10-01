@@ -158,6 +158,14 @@ enum TossInvestAPI {
         return try JSONDecoder().decode(TossResult<PortfolioHoldings>.self, from: await body(for: request, session: session)).result.items
     }
 
+    static func accountPortfolio(token: String, accountSeq: Int, session: URLSession = .shared) async throws -> TossAccountPortfolio {
+        guard accountSeq > 0, accountSeq <= 9_007_199_254_740_991 else { throw Failure.invalidResponse }
+        var request = URLRequest(url: base.appending(path: "/api/v1/holdings"), cachePolicy: .reloadIgnoringLocalCacheData)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(String(accountSeq), forHTTPHeaderField: "X-Tossinvest-Account")
+        return try TossAccountPortfolio.decode(await body(for: request, session: session))
+    }
+
     static func regularSession(token: String, market: WatchedStock.Market, at now: Date = Date(),
                                session: URLSession = .shared) async throws -> TradingSession? {
         let calendar = try await marketSessions(token: token, market: market, at: now, session: session)

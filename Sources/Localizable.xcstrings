@@ -1,6 +1,685 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Stock settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stock settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주식 설정"
+          }
+        }
+      }
+    },
+    "My account": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My account"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "내 계좌"
+          }
+        }
+      }
+    },
+    "Analysis": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysis"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "분석"
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록"
+          }
+        }
+      }
+    },
+    "Display options": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display options"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표시 옵션"
+          }
+        }
+      }
+    },
+    "Accounts require Toss Securities.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accounts require Toss Securities."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계좌 조회는 토스증권에서 지원합니다."
+          }
+        }
+      }
+    },
+    "Manage connection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage connection"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 설정"
+          }
+        }
+      }
+    },
+    "Manage accounts": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage accounts"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계좌 관리"
+          }
+        }
+      }
+    },
+    "Watchlist and account holdings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watchlist and account holdings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "관심 종목과 계좌 보유 종목"
+          }
+        }
+      }
+    },
+    "Current estimates": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current estimates"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 예측"
+          }
+        }
+      }
+    },
+    "How estimates work": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How estimates work"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예측 방식"
+          }
+        }
+      }
+    },
+    "Recording options": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording options"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록 옵션"
+          }
+        }
+      }
+    },
+    "How analysis works": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How analysis works"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "분석 방식"
+          }
+        }
+      }
+    },
+    "Include account holdings in estimates": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include account holdings in estimates"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계좌 보유 종목도 예측에 포함"
+          }
+        }
+      }
+    },
+    "The enabled account features follow your selection. Watchlist estimates work without an account.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The enabled account features follow your selection. Watchlist estimates work without an account."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "켜진 계좌 기능은 선택한 계좌를 따릅니다. 관심 종목 예측에는 계좌가 필요하지 않습니다."
+          }
+        }
+      }
+    },
+    "Estimates use a saved account. Select an account to change it, or turn off holdings.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimates use a saved account. Select an account to change it, or turn off holdings."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예측에 저장된 계좌를 사용 중입니다. 계좌를 선택해 바꾸거나 보유 종목 포함을 끄세요."
+          }
+        }
+      }
+    },
+    "Holdings (%d)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Holdings (%d)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보유 종목 (%d개)"
+          }
+        }
+      }
+    },
+    "Return details": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return details"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "수익 상세"
+          }
+        }
+      }
+    },
+    "Simpler stock settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simpler stock settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "간결해진 주식 설정"
+          }
+        }
+      }
+    },
+    "Find watchlists, accounts, analysis and history in separate tabs.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find watchlists, accounts, analysis and history in separate tabs."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "관심 종목·내 계좌·분석·기록을 별도 탭에서 확인하세요."
+          }
+        }
+      }
+    },
+    "Load accounts once and keep detailed information collapsed until needed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load accounts once and keep detailed information collapsed until needed."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계좌 조회를 한곳으로 모으고 상세 정보는 필요할 때 펼칩니다."
+          }
+        }
+      }
+    },
+    "The selected account is unavailable. Load accounts again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "The selected account is unavailable. Load accounts again."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "선택한 계좌를 사용할 수 없습니다. 계좌를 다시 불러오세요."}}
+      }
+    },
+    "Stock assets": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stock assets"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주식 자산"
+          }
+        }
+      }
+    },
+    "Account": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계좌"
+          }
+        }
+      }
+    },
+    "Show account in notch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show account in notch"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "노치에 계좌 표시"
+          }
+        }
+      }
+    },
+    "Cash, bonds and options are not included.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cash, bonds and options are not included."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현금·채권·옵션은 포함되지 않습니다."
+          }
+        }
+      }
+    },
+    "Read-only stock assets. Private values stay in memory while this screen or the account notch is active.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read-only stock assets. Private values stay in memory while this screen or the account notch is active."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주식 자산을 읽기 전용으로 조회합니다. 비공개 금액은 이 화면이나 계좌 노치가 활성화된 동안 메모리에만 보관합니다."
+          }
+        }
+      }
+    },
+    "The account notch refreshes every 60 seconds and shows the API daily return. Only the account selector and display choice are saved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The account notch refreshes every 60 seconds and shows the API daily return. Only the account selector and display choice are saved."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계좌 노치는 60초마다 갱신하여 API의 일간 수익률을 보여줍니다. 계좌 선택값과 표시 여부만 저장합니다."
+          }
+        }
+      }
+    },
+    "Account daily change in the notch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account daily change in the notch"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "노치에서 계좌의 일간 증감 확인"
+          }
+        }
+      }
+    },
+    "Opt in to a 60-second stock-asset summary without saving private balances.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opt in to a 60-second stock-asset summary without saving private balances."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "비공개 잔고를 저장하지 않고, 선택한 계좌의 주식 자산을 60초마다 확인합니다."
+          }
+        }
+      }
+    },
+    "Reuse account snapshots and avoid unnecessary viewer updates.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reuse account snapshots and avoid unnecessary viewer updates."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계좌 조회 결과를 재사용하고 불필요한 계좌 화면 갱신을 줄였습니다."
+          }
+        }
+      }
+    }
+,
+    "My Toss account": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "My Toss account"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "내 토스 계좌"}}
+      }
+    },
+    "Read-only stock assets. Account numbers are masked; balances and quantities are kept only while this screen is open.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Read-only stock assets. Account numbers are masked; balances and quantities are kept only while this screen is open."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "주식 자산을 읽기 전용으로 조회합니다. 계좌번호는 가리며, 잔고와 수량은 이 화면이 열린 동안에만 보관합니다."}}
+      }
+    },
+    "Hide account information": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Hide account information"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "계좌 정보 숨기기"}}
+      }
+    },
+    "Refresh account information": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Refresh account information"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "계좌 정보 새로고침"}}
+      }
+    },
+    "Loading account information…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Loading account information…"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "계좌 정보를 불러오는 중…"}}
+      }
+    },
+    "Stock asset summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Stock asset summary"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "주식 자산 요약"}}
+      }
+    },
+    "Last refreshed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Last refreshed"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "마지막 조회"}}
+      }
+    },
+    "Investment principal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Investment principal"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "투자원금"}}
+      }
+    },
+    "Market value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Market value"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "평가금액"}}
+      }
+    },
+    "Profit/loss": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Profit/loss"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "평가손익"}}
+      }
+    },
+    "Daily profit/loss": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Daily profit/loss"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "일간 손익"}}
+      }
+    },
+    "Overall return (KRW basis)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Overall return (KRW basis)"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "전체 수익률(원화 환산)"}}
+      }
+    },
+    "Daily return (KRW basis)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Daily return (KRW basis)"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "일간 수익률(원화 환산)"}}
+      }
+    },
+    "After taxes and fees": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "After taxes and fees"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "세금·수수료 공제 후"}}
+      }
+    },
+    "Quantity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Quantity"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "보유 수량"}}
+      }
+    },
+    "Average purchase price": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Average purchase price"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "평균 매입가"}}
+      }
+    },
+    "Current price": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Current price"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "현재가"}}
+      }
+    },
+    "Return": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Return"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "수익률"}}
+      }
+    },
+    "Daily return": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Daily return"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "일간 수익률"}}
+      }
+    },
+    "Commission": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Commission"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "수수료"}}
+      }
+    },
+    "Tax": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Tax"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "세금"}}
+      }
+    },
+    "KRW and USD are shown separately. Overall returns are the API's KRW-converted ratios. Cash, bonds and options are not included.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "KRW and USD are shown separately. Overall returns are the API's KRW-converted ratios. Cash, bonds and options are not included."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "원화와 달러는 별도로 표시합니다. 전체 수익률은 API의 원화 환산 기준입니다. 현금·채권·옵션은 포함하지 않습니다."}}
+      }
+    },
+    "Could not load account information. Check your saved keys, allowed IP and account access.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Could not load account information. Check your saved keys, allowed IP and account access."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "계좌 정보를 불러오지 못했습니다. 저장한 키, 허용 IP와 계좌 접근 권한을 확인하세요."}}
+      }
+    },
+    "View your Toss Securities stock assets": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "View your Toss Securities stock assets"}},
+        "ko": {"stringUnit": {"state": "translated", "value": "토스증권의 주식 자산 조회"}}
+      }
+    },
+    "View masked accounts, stock values and position details on macOS and Windows.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "View masked accounts, stock values and position details on macOS and Windows."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "macOS와 Windows에서 가린 계좌번호, 주식 평가금액과 보유 종목 상세 정보를 확인합니다."}}
+      }
+    },
+    "Account viewing is optional and independent of stock forecasts. Private data is not saved or sent to AI.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {"stringUnit": {"state": "translated", "value": "Account viewing is optional and independent of stock forecasts. Private data is not saved or sent to AI."}},
+        "ko": {"stringUnit": {"state": "translated", "value": "계좌 조회는 선택 사항이며 주식 예측과 별개입니다. 개인 계좌 데이터는 저장하거나 AI에 보내지 않습니다."}}
+      }
+    },
     "Keep stock changes visible during temporary outages": {
       "extractionState": "manual",
       "localizations": {

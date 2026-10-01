@@ -133,10 +133,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.widgets = widgets
         let stocks = StockQuotesMonitor(preferences: preferences)
         self.stocks = stocks
+        let account = TossAccountStore.shared
+        account.start(preferences: preferences)
         StockForecastStore.shared.start(preferences: preferences)
-        widgets.$snapshots.combineLatest(stocks.$snapshots, preferences.$systemUsageColors)
-            .sink { [weak fleet] widgets, quotes, colors in
-                fleet?.setWidgetSnapshots(widgets + quotes, colors: colors)
+        widgets.$snapshots.combineLatest(stocks.$snapshots, account.$snapshots, preferences.$systemUsageColors)
+            .sink { [weak fleet] widgets, quotes, account, colors in
+                fleet?.setWidgetSnapshots(widgets + quotes + account, colors: colors)
             }
             .store(in: &cancellables)
 
@@ -811,9 +813,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 store?.refreshNow()
                 widgets?.refreshWeather()
                 stocks?.refresh()
+                Task { await account.refreshNotch() }
             }
             fleet.onRefreshProvider = { [weak store, weak widgets, weak stocks] id in
-                if id == "widget-weather" { widgets?.refreshWeather() }
+                if id == "widget-account" { await account.refreshNotch() }
+                else if id == "widget-weather" { widgets?.refreshWeather() }
                 else if id == "widget-stocks" || id.hasPrefix("widget-stock:") { stocks?.refresh() }
                 else { await store?.refresh(providerID: id)?.value }
             }
@@ -1264,7 +1268,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         systemUsage?.setEnabled(false)
         widgets?.stop()
-        if !isRunningTests { StockForecastStore.shared.stop() }
+        if !isRunningTests {
+            StockForecastStore.shared.stop()
+            TossAccountStore.shared.hide()
+        }
         ollamaRelay?.configure(enabled: false, endpoint: OllamaEndpoint.defaultAddress)
         lmstudioMetrics?.stop()
         tokenRefresher?.stop()

@@ -155,3 +155,89 @@ node windows/scripts/test-notch-scroll-browser.cjs
 - 이 Mac 설치: `make install` 종료 코드 0. `/Applications/PenguinNotch.app` 1.22.1/build 62, arm64·x86_64, 기존 Apple Development 팀의 서명 검증과 단일 실행 프로세스를 확인했습니다. 실제 앱 접근성 화면에 1.22.1 새 기능 안내가 표시됐고 ‘계속’이 안내를 닫았습니다. 공개 DMG의 OS 서명·공증 상태와는 별개이며, 실제 계정 시세의 장시간 검증은 하지 않았습니다.
 - 후속 최종 Windows 소스 SHA-256 `windows/penguinnotch/ui/stocks.js`: `686fa0f136f9aef2682d7ed7b55c37c09ffd0d22985c953651f5c5ea570c73e2`. 위 초기 해시는 이전 검증 시점의 기록으로 보존합니다.
 - [릴리즈 후 최종 Windows 배포](https://github.com/pmh10401/PenguinNotch/actions/runs/36534413883)도 설치·doctor·제거·게시를 통과했습니다. 공개 최신 다운로드 주소에서 최종 네 파일을 다시 받아 두 서명·변조 거부·GitHub 자산 해시를 확인하고 [SHA256SUMS.txt](https://github.com/pmh10401/PenguinNotch/releases/download/v1.22.1/SHA256SUMS.txt)를 갱신했습니다. 해시 목록 자체의 SHA-256: `1033d013b5bf24e2dbfbd1e975b8a0111ab8568ccadcde307ad3da738469a4ce`.
+
+## S14
+
+### 2026-10-01 내 토스 계좌 뷰어
+
+- 근거: [토스 공식 OpenAPI JSON](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json), 명세 버전 **1.2.19**, 공개 다운로드 SHA-256 `7588debd863ac074e9e408185413ab573c3d45e9221e8cedaeec7c54ee295f03`. `/api/v1/accounts`, `/api/v1/holdings`와 HoldingsOverview/HoldingsItem/Price 및 MarketCountry/Currency의 unknown enum 규칙을 읽었습니다. 실제 사용자 응답·계좌 자료는 사용하지 않았습니다.
+- 검증 대상: 기존 HEAD `dac45dc` 위의 **1.23.0/build 63, Windows r55 작업 소스**입니다. 정식 릴리즈·GitHub CI·새 Windows 설치 파일 게시를 수행하지 않았으며, 최신 정식 공개는 계속 v1.22.1입니다.
+- macOS: 새 계좌 디코더/비동기 취소/숨김/오류/소수점/언어 표시와 기존 시세·예측·릴리즈 안내·언어의 집중 검사 **87개, 실패 0**. 정규식의 마지막 개행 우회 보완 후 계좌 검사 **9개, 실패 0**. 이후 두 플랫폼의 중간값 반올림을 half-up으로 맞추고 계좌 검사 10개를 다시 실행했습니다. 최종 계좌 검사 **10개, 실패 0**이며 Windows의 같은 반올림 경계도 검사했습니다.
+- Windows: Node 관련 검사 **23개 통과, 실패 0**, 인라인 JS 구문 검사 통과. 영어·한국어 실제 settings.html 모의 브라우저에서 680×640·1024×640 화면으로 계좌 불러오기 → 직접 선택 → 새로고침 → 오류 시 스냅샷 제거 → 숨김 → 탭 이동 시 삭제를 검증했습니다. Browser 스킬/플러그인이 없어 기존 번들 Playwright를 사용했으며, 별도 의존성을 설치하지 않았습니다. 기존 설정 브라우저도 24개 배치 검사와 언어·키보드·저장 검사를 통과했습니다. 과대 표는 접근 가능한 가로 스크롤 영역 안에 표시합니다.
+- Rust: 네이티브 주식 검사 **19개 통과**, Windows GNU 대상 `cargo check --locked` 통과. 저장소 CI와 같은 경고 허용 Clippy는 Windows GNU `--all-targets --locked` 종료 코드 0입니다. 별도로 실행한 macOS `-D warnings`는 플랫폼별 미사용 코드와 기존 스타일 경고를 오류로 처리해 실패했으며, 새 테스트 초기화 경고 한 건만 수정했습니다. 관련 없는 경고를 숨기거나 앱 코드를 바꾸지 않았습니다.
+- 미검증: 실제 계좌의 접근 권한/금액 대조, Windows 실기 Credential Manager·WebView·설치 파일 실행, GitHub CI, 정식 배포. 이 화면은 조회 전용이며 주문·송금·영구 저장·CSV·AI 입력을 추가하지 않습니다.
+- 공개 구현·검사: [Mac 계좌 모델](../../Sources/Widgets/TossAccountPortfolio.swift), [Mac 화면](../../Sources/Settings/TossAccountView.swift), [Mac 검사](../../Tests/TossAccountTests.swift), [Windows 전송](../../windows/penguinnotch/src/stocks.rs), [Windows 화면](../../windows/penguinnotch/ui/stocks.js), [Windows 검사](../../windows/scripts/test-stocks.cjs).
+- 소스 SHA-256 `Sources/Widgets/TossAccountPortfolio.swift`: `1bc452ea40159681c18a305e75ccde3826cfcb13fefe7675e8d5c1333b786049`.
+- 소스 SHA-256 `Sources/Settings/TossAccountView.swift`: `522273fb6855e5aeb5f4e154cbbebd2cb69d4a73a03026552b64d2bdcce1877e`.
+- 소스 SHA-256 `Sources/Widgets/TossInvestClient.swift`: `1b168319fce93343cd7e1b680d52071d54d2ee2f35f6dcbf1953eb6505b509a6`.
+- 소스 SHA-256 `windows/penguinnotch/src/stocks.rs`: `0ac5c9cc20418e106b8e86554c41540366a4826e91d2a704ec83d215cca00f04`.
+- 소스 SHA-256 `windows/penguinnotch/ui/stocks.js`: `4b4cb40e08ac2a2bcc3d6c6c9f2ccc2e83299306a5ab2f8afce6925736faf897`.
+- 최종 로컬 설치: `make install` 종료 코드 0, `/Applications/PenguinNotch.app` **1.23.0/build 63**, arm64·x86_64 및 `codesign --verify --deep --strict` 통과, 앱 실행 프로세스 확인. 기존 Apple Development 서명을 사용했으며 Sparkle 서명·GitHub 정식 릴리즈를 호출하지 않았습니다. 계좌 화면의 실제 사용자 응답/금액 대조는 하지 않았습니다.
+- 문서 로컬 링크 137개와 기존 문자열 카탈로그 1,501개 보존을 확인했습니다. GitHub 상대 릴리즈·Actions 링크는 로컬 파일 검사에서 제외했습니다. 계좌 관련 새 번역 26개를 추가했습니다.
+
+## S15
+
+### 2026-10-01 계좌 노치와 중복 작업 최적화
+
+- 기준: 커밋 `dac45dca5a1d0a7052065032fbfee84cfefb8d6d` 후속 작업 트리, macOS 1.24.0/build64 및 Windows 1.24.0/r56 소스. S14의 뷰어 수명 규칙을 명시적 계좌 노치 opt-in으로 보완합니다. 정식 공개 릴리즈는 별도입니다.
+- 공식 근거: [OpenAPI 1.2.19](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json)의 Asset/holdings. 주식 자산의 통화별 합산금액·손익과 원화 환산 손익률이며 현금 포함 계좌총액 API로 해석하지 않습니다.
+- 개인 계좌나 인증 정보는 기록하지 않습니다. 검증 입력은 공개 명세를 기반으로 한 모의 응답입니다. Grok 읽기 전용 검토에서 공유 뷰 수명과 네이티브 계좌 발견 집합 경계를 확인했습니다. 별도 Mac 토큰 캐시 제안은 기존 `TossInvestAPI.accessToken`이 이미 공유 캐시·in-flight 합류를 제공하므로 채택하지 않았습니다.
+- 구현: 기본값은 꺼짐이며 예측의 계좌 선택과 독립적입니다. 직접 불러온 계좌를 선택하고 노치 표시를 켜면 60초마다 조회합니다. 같은 계좌의 조회 중에는 기존 화면을 유지하고, 실패·숨김·제공처/인증 변경 시에는 이전 금액을 지웁니다. 늦은 응답은 세대 검사로 폐기합니다. 설정 화면을 닫아도 명시적으로 켠 노치는 유지하며, ‘계좌 정보 숨기기’는 노치를 끄고 조회를 중단합니다. 저장하는 설정은 표시 여부와 불투명 계좌 선택 번호뿐입니다.
+- 최적화: Mac 설정과 노치가 같은 저장소·기존 토큰 캐시를 재사용하고 중복 요청을 합칩니다. 고정 계좌 셀에는 주식 가격/등락률 교대 타이머를 만들지 않습니다. Windows 계좌 뷰어는 변하지 않은 공개 시세 갱신에서 다시 그리지 않습니다. 실제 Chromium의 `Store.changed()` 1,000회에서 개인 계좌 뷰어 DOM 변경 **0회**를 확인했습니다. 이 관찰을 CPU 사용률 개선 수치로 해석하지 않습니다.
+- macOS: 계좌·시세·예측·언어·릴리즈 안내·스크롤 회귀 **103개, 실패 0**. 최종 계좌/호버 렌더링 검사 **28개 중 건너뜀 1개, 실패 0**이며 계좌 검사 17개를 포함합니다. 두 실행의 중복 검사를 더해 고유 검사 수로 표시하지 않습니다. 영어·한국어 ImageRenderer 화면에서 원형·막대·가로 읽기와 통화별 호버 값을 확인했습니다. 초기 렌더링 fixture의 환경 API/다크 모드 설정 오류는 테스트만 수정하고 후속 검사를 통과했습니다.
+- Windows: 최종 Node 관련 검사 **23개 통과, 실패 0**, 인라인 JS 구문 검사 통과. 실제 notch.html의 영어·한국어 × 네 방향 × 원형/막대 **16개 계좌 화면**과 **16개 과밀 목록 스크롤**에서 계좌 셀 도달·호버 화면 경계·오류 후 수동 재조회·숨김을 검사했습니다. 모의 시계를 바꾸거나 실패 재시도 상태를 초기화하지 않고 수동 새로고침 복구를 확인했습니다. 추가로 실제 settings.html의 680×640·1024×640 네 가지 계좌 흐름, 기존 설정 24개 배치 검사와 노치 48개 배치 회귀를 통과했습니다. 모든 브라우저 요청은 로컬 파일/모의 IPC에 한정했습니다.
+- 실제 화면 검사에서 Windows 통화 표의 금액 잘림과 한국어 계좌 라벨의 줄바꿈을 발견해 네 개 세로 행과 계좌 라벨의 폭 규칙으로 보완했습니다. 다른 셀의 배치는 바꾸지 않았습니다. Browser 플러그인이 없어 기존 번들 Playwright를 사용했고 새 의존성을 설치하지 않았습니다.
+- Rust: Mac 호스트의 네이티브 주식 검사 **21개 통과, 실패 0**. Windows GNU 대상 `cargo check --locked`와 저장소 CI 방식의 `cargo clippy --all-targets --locked` 종료 코드 0입니다. 각각 기존 경고 4개·17개가 남아 있으며 경고 없는 빌드나 Windows 실기 검사로 표현하지 않습니다. 계좌 목록 재조회 실패가 현재 인증의 기존 발견 집합을 지우지 않는 회귀도 검사했습니다.
+- 로컬 설치: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make install` 종료 코드 0. `/Applications/PenguinNotch.app` **1.24.0/build 64**, arm64·x86_64, `codesign --verify --deep --strict` 및 해당 경로의 실행 프로세스를 확인했습니다. 기존 Apple Development 팀 서명을 유지했습니다. Sparkle 키 접근·업데이트 피드 서명·GitHub 게시를 수행하지 않았습니다.
+- 미검증: 실제 사용자 계좌의 금액/손익률 대조, Windows 실기의 Credential Manager·WebView·설치본, GitHub CI와 정식 배포. 현금 포함 계좌총액이나 자체 환산 합계, 비공개 계좌 이력·CSV·AI 전송은 추가하지 않았습니다.
+- 문서 로컬 링크 142개·누락 0, 기존 문자열 카탈로그 1,501개 항목의 값 보존과 최종 1,537개 항목을 확인했습니다. 두 플랫폼 버전·빌드 번호와 아래 여덟 소스/검사 해시도 최종 파일에 대조했습니다.
+- 소스 SHA-256 `Sources/Widgets/TossAccountPortfolio.swift`: `ea76633a8f7c44176cd84b517a307576c48e24d700ca1579af9a63911b07b4e7`.
+- 소스 SHA-256 `Sources/Settings/TossAccountView.swift`: `f266a27c88a4a92cd2b8270d7d8d986998b1c733be720a843716d26994281c47`.
+- 검사 SHA-256 `Tests/TossAccountTests.swift`: `643cb467d31ca35fb1b313bee1362be8dcb4e4c855e109181b191c96e3ffe378`.
+- 소스 SHA-256 `windows/penguinnotch/src/stocks.rs`: `4b06b871bf3f0df8f61f19ad37726a5284a09937638053de23d57bb5412e7c31`.
+- 소스 SHA-256 `windows/penguinnotch/ui/stocks.js`: `25de25663f1a36f275895ef6f60b2bfe59a368a4e15cdf8417ca478afb765889`.
+- 소스 SHA-256 `windows/penguinnotch/ui/stocks.css`: `13d9d84992771fc31cd9eb7697310811a03c5f203563a137ea23f1f96a6c8826`.
+- 소스 SHA-256 `windows/penguinnotch/ui/notch.html`: `de719f107db823fcb0a94b3b15d92cf0c8aca12605867124eadd35c25de584b8`.
+- 검사 SHA-256 `windows/scripts/test-stocks.cjs`: `63fb448116a4dc50fee75e8e2d3d200f22105fd34b08f18b3a9389b79534b4b2`.
+
+관련 검사는 저장소 루트에서 실행합니다. Windows 교차 검사에는 설치된 GNU 도구 체인이 필요하며, 실제 Windows 실행 검사를 대신하지 않습니다.
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project PenguinNotch.xcodeproj -scheme PenguinNotch -destination 'platform=macOS,arch=arm64' -only-testing:PenguinNotchTests/TossAccountTests test
+node --test windows/scripts/test-stocks.cjs windows/scripts/test-widgets.cjs windows/scripts/test-ko-i18n.cjs windows/scripts/test-claude-auth-ui.cjs windows/scripts/test-usage-display.cjs
+node windows/scripts/check-ui-scripts.mjs
+cargo test --manifest-path windows/Cargo.toml -p penguinnotch --locked --features tauri/macos-private-api stocks::tests::
+cargo check --manifest-path windows/Cargo.toml -p penguinnotch --locked --target x86_64-pc-windows-gnu
+```
+
+## S16
+
+### 2026-10-01 주식 설정의 정보 밀도와 중복 조작 개선
+
+- 기준: `dac45dca5a1d0a7052065032fbfee84cfefb8d6d` 후속 작업 트리, **1.24.1/build 65·Windows r57** 소스입니다. S14·S15의 계산·보관·조회 규칙은 유지하고 설정의 구성과 계좌 선택 조작을 보완합니다. 현재 정식 공개 릴리즈와 이 로컬 설치를 구분합니다.
+- 현재 화면 캡처 근거: 기존 실제 Windows settings.html에 모의 IPC를 연결해 880×700 영어·한국어 화면을 확인했습니다. 주식 입력칸으로 자동 포커스/스크롤되면서 상단 설정이 가려졌고, 계좌·차트·예측·이력이 한 페이지에 이어졌습니다. 과거 캡처나 실제 계좌 자료를 감사 입력으로 사용하지 않았습니다.
+- 개선 흐름: 관심 종목 → 내 계좌 → 분석 → 기록. 첫 탭에서 종목을 추가하고, 계좌는 한곳에서 불러와 직접 선택하며, 차트·분석·예측과 저장 결과는 별도 화면에서 확인합니다. 표시·연결·이동평균·분석 방식·세부 손익·보유 종목은 기본 접힘입니다. Windows는 방향키·Home/End·aria tab 속성과 탭별 스크롤/포커스를 제공하며 같은 계산·기록 API를 재사용합니다.
+- 계좌 선택 경계: 화면 열기·목록 읽기에는 저장된 선택값을 그대로 유지합니다. 계좌 노치와 보유 종목 예측 포함은 각각 명시적으로 켜며 예측 기능 자체는 자동으로 켜지 않습니다. 다른 계좌를 직접 선택하면 이미 켜진 계좌 기능이 그 선택을 따릅니다. 계좌를 다시 읽지 않고 기존 보유 종목 포함을 끌 수 있습니다. 내 계좌에서 떠나는 동작은 개인 뷰어만 지우며 활성화된 노치나 이력을 지우지 않습니다.
+- Grok 읽기 전용 검토: 세대/선택값 보존, 탭 이탈과 명시적 숨김의 차이, 계좌 오류가 분석 화면에서 사라질 위험, 포커스/상세 상태를 확인했습니다. 저장된 선택을 0으로 초기화하거나 탭 변경을 ‘계좌 정보 숨기기’로 처리하지 않습니다. Mac의 예측 계좌 오류는 분석 화면에 남기고 Windows도 액션별 상태 영역을 유지합니다. 기존 API 키·개인 자료를 전달하지 않았습니다.
+- macOS 검증: 계좌·시세·예측·릴리즈 안내·언어 검사 **97개, 실패 0**, 종료 코드 0입니다. 새 네 페이지의 영어·한국어 네이티브 뷰 렌더링과 실제 계좌 선택 핸들러를 실행했습니다. 페이지 렌더링이 계좌 요청을 만들거나 서로 다른 저장 선택을 바꾸지 않는지, 명시적 계좌 변경/해제와 독립 opt-in을 검사합니다.
+- 검사 차이 보존: 초기 계좌 요약 검사는 이전 기본 높이 >500px 단언 두 번이 실패했습니다. 의도적으로 상세를 접은 현재 화면은 436px이므로 기본 요약이 300–500px 범위로 줄었음을 검사하도록 바꾸고 후속 전체 집중 검사를 통과했습니다. 오프스크린 AppKit 캐시 이미지의 상단 segmented control은 빈 흰 영역으로 캡처되어 그 부분을 시각 근거로 채택하지 않았습니다. 실제 `/Applications/PenguinNotch.app` 화면과 접근성 트리에서 네 탐색 항목의 표시·선택 상태 및 관심 종목 화면을 별도로 확인했습니다.
+- Windows 검증: Node **23개 통과**, 인라인 JS 구문 검사 통과. 실제 HTML의 영어·한국어 × 680/1024×700 네 흐름에서 첫 뷰포트·네 탭·키보드·비밀 입력 제거·자동 계좌 접근 없음·명시적 선택·오류 재조회·개인 뷰어 제거·선택 탭/언어 상태를 검사했습니다. 선택한 계좌의 뷰어를 공개 갱신 1,000회에서 다시 만들지 않았습니다. 기존 설정 브라우저도 24개 배치 검사·저장·키보드·표시/순서 회귀를 통과했습니다. 기존 자동 입력칸 포커스 단언은 새 탭 포커스와 상단 탐색 도달 단언으로 교체했습니다.
+- 플랫폼 경계: GNU Windows 대상 `cargo check --locked` 종료 코드 0, 기존 경고 4개. 네이티브 전송/이력 코드는 이 UX 작업에서 바꾸지 않았습니다. 실제 Windows WebView2·설치본·Credential Manager, 실제 계좌 금액/손익률 대조, 모든 보조기술의 접근성 적합성, GitHub CI·정식 배포는 미검증입니다. Codex 분석은 macOS 전용이며 Windows에 동작하지 않는 버튼을 추가하지 않았습니다.
+- 로컬 설치: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make install` 종료 코드 0, `/Applications/PenguinNotch.app` **1.24.1/build 65**, 기존 서명 검증과 해당 경로의 실행 프로세스를 확인했습니다. 새 기능 안내도 해당 버전/한국어로 나타났습니다. 실제 UI 관찰에는 계좌 불러오기·인증 변경·CSV 내보내기를 사용하지 않았고 개인 자료를 문서에 기록하지 않았습니다.
+- 최종 로컬 문서 링크 146개·누락 0, 원래 문자열 카탈로그 1,501개 값 보존과 최종 1,558개를 확인했습니다. 새 Mac EN/KO 키 21개와 두 플랫폼 버전·빌드 번호·아래 해시는 최종 파일에 대조했습니다.
+- 소스 SHA-256 `Sources/Settings/StockSettings.swift`: `83ec9c42064d0a40f99da6e204e610869300712225b78cc2cab0858421fc7878`.
+- 소스 SHA-256 `Sources/Settings/TossAccountView.swift`: `f224dc427ac541b2b84ebe31337503507f8b1669c851f454f616cc87bac3a553`.
+- 검사 SHA-256 `Tests/TossAccountTests.swift`: `b6880c5c4d29ddaf6b1f38f2539396f2e975fb64cd00aa2e5c08d6be63ba4256`.
+- 소스 SHA-256 `windows/penguinnotch/ui/stocks.js`: `1d24bbc801523a75cea76b732efa8bdc976a0ceaacb62da689998a75016c007e`.
+- 소스 SHA-256 `windows/penguinnotch/ui/stocks.css`: `1b1e44656095dd7e5a7347716dbd89df0b55cb4d8a9985f20608a4dc1e93d9bf`.
+- 검사 SHA-256 `windows/scripts/test-stocks.cjs`: `2ea98bfc49488d0a8c7c76f93225cd7ea055d69bf599c17094c2a92bbac2b317`.
+- 검사 SHA-256 `windows/scripts/test-settings-browser.cjs`: `719ec25d0d8e13e1222e26d63dab25aace74818e8012b0be95cc61c43cc80adc`.
+
+현재 UI 회귀 검사는 다음과 같이 실행합니다. 브라우저 검사는 이미 설치된 Playwright를 사용하며 네이티브 Windows 실행과 구분합니다.
+
+```sh
+node --test windows/scripts/test-stocks.cjs windows/scripts/test-widgets.cjs windows/scripts/test-ko-i18n.cjs windows/scripts/test-claude-auth-ui.cjs windows/scripts/test-usage-display.cjs
+node windows/scripts/check-ui-scripts.mjs
+node windows/scripts/test-settings-browser.cjs
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project PenguinNotch.xcodeproj -scheme PenguinNotch -destination 'platform=macOS' -configuration Debug -only-testing:PenguinNotchTests/TossAccountTests -only-testing:PenguinNotchTests/StockForecastTests -only-testing:PenguinNotchTests/StockQuoteTests -only-testing:PenguinNotchTests/ReleaseNotesTests -only-testing:PenguinNotchTests/AppLanguageTests CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO test
+```

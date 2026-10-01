@@ -114,7 +114,9 @@ function mockIPC() {
     await page.keyboard.press('ArrowDown');
     assert.equal(await page.locator('#tab-monitoring').getAttribute('aria-selected'),'true');
     await page.locator('#tab-stocks').click();
-    await page.waitForFunction(()=>document.activeElement&&document.activeElement.id==='stock-symbol');
+    await page.waitForFunction(()=>document.activeElement&&document.activeElement.id==='stock-tab-watchlist');
+    assert.ok((await page.locator('#stock-tab-watchlist').boundingBox()).y >= 0,
+      'Stocks opens at the navigation instead of scrolling to the symbol field');
     await page.locator('#tab-monitoring').click();
     const original=await state();
     assert.equal(await page.locator('#pane-monitoring [data-hide]').count(),7);

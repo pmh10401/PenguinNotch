@@ -99,6 +99,7 @@ final class Preferences: ObservableObject {
 
     func isNotchItemVisible(_ id: String) -> Bool {
         switch id {
+        case "widget-account": return accountNotchEnabled && !hiddenNotchItems.contains(id)
         case "widget-calendar": return showsCalendar
         case "widget-weather": return showsWeather
         case "widget-todo": return showsTodo
@@ -110,6 +111,9 @@ final class Preferences: ObservableObject {
 
     func setNotchItemVisible(_ visible: Bool, id: String) {
         switch id {
+        case "widget-account":
+            accountNotchEnabled = visible && accountNotchSeq > 0
+            hiddenNotchItems.remove(id)
         case "widget-calendar": showsCalendar = visible
         case "widget-weather": showsWeather = visible
         case "widget-todo": showsTodo = visible
@@ -352,6 +356,18 @@ final class Preferences: ObservableObject {
     }
     /// Circles are the notch's ordinary cells. Bars draw the same readings as
     /// filled meters, including every account, system meter and stock.
+    /// Explicit opt-in; the opaque account selector is independent of forecast holdings.
+    @Published var accountNotchEnabled: Bool {
+        didSet { defaults.set(accountNotchEnabled, forKey: "accountNotchEnabled") }
+    }
+    @Published var accountNotchSeq: Int {
+        didSet {
+            let valid = (0...9_007_199_254_740_991).contains(accountNotchSeq) ? accountNotchSeq : 0
+            if valid != accountNotchSeq { accountNotchSeq = valid; return }
+            defaults.set(valid, forKey: "accountNotchSeq")
+        }
+    }
+
     @Published var notchMeterStyle: NotchMeterStyle {
         didSet { defaults.set(notchMeterStyle.rawValue, forKey: "notchMeterStyle") }
     }
@@ -1061,6 +1077,9 @@ final class Preferences: ObservableObject {
             .flatMap { try? JSONDecoder().decode([TodoItem].self, from: $0) } ?? []
         self.showsWeather = defaults.object(forKey: "showsWeather") as? Bool ?? true
         self.showsStocks = defaults.object(forKey: "showsStocks") as? Bool ?? false
+        self.accountNotchEnabled = defaults.bool(forKey: "accountNotchEnabled")
+        let accountSelector = defaults.integer(forKey: "accountNotchSeq")
+        self.accountNotchSeq = (0...9_007_199_254_740_991).contains(accountSelector) ? accountSelector : 0
         self.notchMeterStyle = NotchMeterStyle(rawValue: defaults.string(forKey: "notchMeterStyle") ?? "") ?? .ring
         self.stockSymbols = defaults.stringArray(forKey: "stockSymbols") ?? []
         self.stockQuoteSource = StockQuoteSource(rawValue: defaults.string(forKey: "stockQuoteSource") ?? defaults.string(forKey: "usStockSource") ?? "") ?? .toss

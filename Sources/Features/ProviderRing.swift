@@ -386,7 +386,7 @@ struct ProviderCell: View {
         switch snapshot.bandOverride {
         case .ample: return Palette.ample
         case .critical: return Palette.generationSlow
-        default: return nil
+        default: return snapshot.id == "widget-account" ? Palette.textSecondary : nil
         }
     }
     private var readingText: String { reading.text }
@@ -422,7 +422,7 @@ struct ProviderCell: View {
                     reading
                 } else {
                 Group {
-                    if snapshot.kind == .stocks && snapshot.headlineText != "—" {
+                    if snapshot.id.hasPrefix("widget-stock:") && snapshot.headlineText != "—" {
                         TimelineView(.periodic(from: stockDisplayStartedAt, by: TimeInterval(stockDisplayInterval))) { context in
                             Text(StockBoard.displayText(for: snapshot, at: context.date,
                                                         since: stockDisplayStartedAt, interval: stockDisplayInterval))
@@ -642,13 +642,22 @@ struct ProviderReading: View {
         return ceil((text as NSString).size(withAttributes: [.font: font]).width)
     }
 
+    private var textColor: Color {
+        if snapshot.kind == .stocks {
+            if snapshot.bandOverride == .ample { return Palette.ample }
+            if snapshot.bandOverride == .critical { return Palette.generationSlow }
+            if snapshot.id == "widget-account" { return Palette.textSecondary }
+        }
+        return snapshot.showsLocalPerformance && snapshot.localPerformance == nil
+            ? Palette.textSecondary : Palette.textPrimary
+    }
+
     var body: some View {
         if let width = across {
             Text(text)
                 .font(isPair ? Typography.percentPairAcross : Typography.percentAcross)
                 .monospacedDigit()
-                .foregroundStyle(snapshot.showsLocalPerformance && snapshot.localPerformance == nil
-                                 ? Palette.textSecondary : Palette.textPrimary)
+                .foregroundStyle(textColor)
                 .lineLimit(1)
                 // Never into the side's own curved end: smaller before that.
                 .minimumScaleFactor(0.4)
@@ -663,8 +672,7 @@ struct ProviderReading: View {
     private var underTheRing: some View {
         Text(text)
             .font(snapshot.hasReading && weeklyReading != nil ? Typography.percentPair : Typography.percent)
-            .foregroundStyle(snapshot.showsLocalPerformance && snapshot.localPerformance == nil
-                             ? Palette.textSecondary : Palette.textPrimary)
+            .foregroundStyle(textColor)
             // Keep local speeds inside the ring's column so longer units
             // cannot consume the notch's existing side margins.
             .lineLimit(1)

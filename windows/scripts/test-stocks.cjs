@@ -19,7 +19,509 @@ const dailyRaw=rows=>({result:{candles:rows.map(c=>({timestamp:new Date(c.date).
 const clone=value=>structuredClone(value);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
+// Synthetic accounts only. No credentials, provider traffic or persistent viewer data.
+const accountList=()=>({result:[{accountSeq:7,accountNo:'•••• 5678',accountType:'BROKERAGE'},{accountSeq:8,accountNo:'••••',accountType:'BROKERAGE'}]});
+function overviewFixture(patch={}) {
+  const price=(krw,usd)=>({krw,usd});
+  const item={symbol:'AAPL',name:'Apple',marketCountry:'US',currency:'USD',quantity:'0.125000000000000000000001',lastPrice:'220.00',averagePurchasePrice:'200.00',marketValue:{purchaseAmount:'25.00',amount:'27.50',amountAfterCost:'27.25'},profitLoss:{amount:'2.50',amountAfterCost:'2.25',rate:'0.10',rateAfterCost:'0.09'},dailyProfitLoss:{amount:'-0.50',rate:'-0.017857'},cost:{commission:'0.25',tax:null}};
+  return {result:{totalPurchaseAmount:price('9007199254740993','25.00'),marketValue:{amount:price('9007199254740994','27.50'),amountAfterCost:price('9007199254740994','27.25')},profitLoss:{amount:price('1','2.50'),amountAfterCost:price('1','2.25'),rate:'0.0001',rateAfterCost:'0.00009'},dailyProfitLoss:{amount:price('-100',null),rate:'-0.0125'},items:[item],...patch}};
+}
+async function testAccountViewer(){
+  const parsed=S.decodeAccountOverview(overviewFixture());
+  assert.equal(parsed.items[0].quantity,'0.125000000000000000000001');
+  assert.equal(parsed.dailyProfitLoss.amount.usd,null);assert.equal(parsed.items[0].cost.tax,null);
+  assert.equal(S.accountMoneyText('9007199254740993.25','USD','en'),'9,007,199,254,740,993.25 USD','money strings reach Intl without a Number conversion');
+  assert.equal(S.accountMoneyText('0','KRW','en'),'0 KRW');assert.equal(S.accountMoneyText('-12.25','USD','en'),'-12.25 USD');assert.equal(S.accountMoneyText(null,'USD','ko'),'—');
+  assert.equal(S.accountRateText('-0.0125'),'-1.25%');assert.equal(S.accountRateText('0.10005'),'+10.01%');assert.equal(S.accountRateText('-0.10005'),'-10.01%');assert.equal(S.accountRateText('0.10'),'+10.00%');assert.equal(S.accountRateText('0'),'+0.00%');
+  assert.equal(S.accountRateText('9007199254740993.0001'),'+900719925474099300.01%','ratio is multiplied as a decimal string');
+  assert.deepEqual(S.decodeAccounts({result:[{accountSeq:1,accountNo:'1234',accountType:'BROKERAGE'},{accountSeq:2,accountNo:'12345678',accountType:'BROKERAGE'},{accountSeq:3,accountNo:'•••• 5678',accountType:'BROKERAGE'},{accountSeq:4,accountNo:'5678',accountType:'FUTURE_TYPE'}]}),[{accountSeq:1,label:'••••'},{accountSeq:2,label:'•••• 5678'},{accountSeq:3,label:'•••• 5678'}]);
+  for(const seq of [0,-1,1.5,Number.MAX_SAFE_INTEGER+1,'7',null])assert.throws(()=>S.decodeAccounts({result:[{accountSeq:seq,accountNo:'••••',accountType:'BROKERAGE'}]}));
+  assert.throws(()=>S.decodeAccounts({result:[...accountList().result,accountList().result[0]]}));
+  assert.throws(()=>S.decodeAccounts({result:[{accountSeq:1,accountNo:'',accountType:'BROKERAGE'}]}));
+  for(const value of [null,undefined,12,'',' ','NaN','Infinity','1e3','0x10','1,000','1'.repeat(31),'--1','1\n','1\r','1\r\n','1\u2028','1\u2029']){
+    const bad=overviewFixture();bad.result.items[0].averagePurchasePrice=value;assert.throws(()=>S.decodeAccountOverview(bad),undefined,'bad decimal rejects the whole overview');
+  }
+  const invalidMutations=[
+    r=>r.items.push(clone(r.items[0])),r=>r.items.push({...clone(r.items[0]),symbol:'MSFT',quantity:'NaN'}),
+    r=>r.items[0].currency='KRW',r=>r.items[0].currency='eur',r=>r.items[0].marketCountry='X'.repeat(21),r=>r.items[0].symbol='US:AAPL',
+    r=>r.items[0].quantity='-0.5',r=>r.items[0].profitLoss.rate=null,r=>r.items[0].cost.tax='bogus',
+    r=>r.totalPurchaseAmount.krw=null,r=>r.marketValue.amountAfterCost.usd='NaN',r=>r.profitLoss.rateAfterCost='bogus',
+    r=>r.items=null,r=>delete r.items[0].dailyProfitLoss,r=>r.items[0].name=null
+  ];
+  for(const mutate of invalidMutations){const bad=overviewFixture();mutate(bad.result);assert.throws(()=>S.decodeAccountOverview(bad));}
+  for(const name of ['', '   ']){const blankName=overviewFixture();blankName.result.items[0].name=name;assert.equal(S.decodeAccountOverview(blankName).items[0].name,'AAPL','blank names fall back to the symbol');}
+  for(const ending of ['\n','\r','\r\n','\u2028','\u2029'])for(const field of ['marketCountry','currency','symbol']){
+    const bad=overviewFixture();bad.result.items[0]={...bad.result.items[0],marketCountry:'JP',currency:'JPY',symbol:'7203'};bad.result.items[0][field]+=ending;assert.throws(()=>S.decodeAccountOverview(bad),'private metadata cannot end with a line separator');
+  }
+  const kr=overviewFixture();kr.result.items=[{...kr.result.items[0],symbol:'005930',name:'삼성전자',marketCountry:'KR',currency:'KRW',quantity:'1.5'}];assert.equal(S.decodeAccountOverview(kr).items[0].quantity,'1.5');
+  const optionalNull=overviewFixture();delete optionalNull.result.totalPurchaseAmount.usd;delete optionalNull.result.items[0].cost.tax;assert.equal(S.decodeAccountOverview(optionalNull).totalPurchaseAmount.usd,null);assert.equal(S.decodeAccountOverview(optionalNull).items[0].cost.tax,null);
+  for(const decoder of [S.decodeAccounts,S.decodeAccountOverview])assert.throws(()=>decoder({...decoder===S.decodeAccounts?accountList():overviewFixture(),error:{code:'FAILED'}}),'nonnull envelope.error always rejects');
+  const unknown=overviewFixture();unknown.result.items[0]={...unknown.result.items[0],marketCountry:'JP',currency:'JPY',symbol:'7203',lastPrice:'9007199254740993.012345'};
+  const unknownItem=S.decodeAccountOverview(unknown).items[0];assert.equal(unknownItem.unsupported,true);assert.equal(unknownItem.marketCountry,'JP');assert.equal(S.accountMoneyText(unknownItem.lastPrice,unknownItem.currency,'en'),'9007199254740993.012345 JPY');
+  const unknownCurrency=overviewFixture();unknownCurrency.result.items[0].currency='EUR';assert.equal(S.decodeAccountOverview(unknownCurrency).items[0].unsupported,true,'known market/new currency is safely retained');
+
+  let now=start,reply=overviewFixture(),failure=false;const calls=[];
+  const viewer=new S.Store({now:()=>now,invoke:async(cmd,args)=>{
+    calls.push({cmd,args:clone(args)});
+    if(cmd==='get_stock_credential_status')return {toss:true,finnhub:true};
+    if(cmd==='get_stock_settings')return {...S.DEFAULTS,accountSeq:17};
+    if(cmd==='load_stock_history')return empty();
+    if(cmd==='set_stock_settings')return args.settings;
+    assert.equal(cmd,'stock_request');
+    if(failure)throw Error('Synthetic unavailable');
+    return {data:clone(args.request.kind==='accounts'?accountList():reply),fetchedAt:now};
+  }});
+  await viewer.init();assert.equal(calls.filter(c=>c.cmd==='stock_request').length,0,'no auto discovery or quotes with both flags off');
+  assert.equal(viewer.viewerAvailable(),true);assert.equal(viewer.active(),false);
+  for(const req of [{kind:'prices',symbols:['AAPL']},{kind:'candles',symbol:'AAPL'},{kind:'holdings',accountSeq:17},{kind:'accountOverview',accountSeq:7}])await assert.rejects(viewer.request(req));
+  await viewer.loadViewerAccounts();assert.equal(viewer.viewerAccountSeq,0);assert.equal(viewer.viewerOverview,null);assert.equal(viewer.settings.accountSeq,17);assert.deepEqual(viewer.accounts,[],'viewer discovery does not feed the forecast picker');
+  const privateCount=()=>calls.filter(c=>c.cmd==='stock_request').length;
+  const count=privateCount();await viewer.tick();await viewer.refreshForecasts();assert.equal(privateCount(),count,'timer/forecasts never refresh the private viewer');
+  for(const seq of [-1,1.5,Number.MAX_SAFE_INTEGER+1,'7',9]){await viewer.selectViewerAccount(seq);assert.equal(privateCount(),count,'invalid/undiscovered viewer sequences make no call');}
+  for(const req of [{kind:'accounts',accountSeq:7},{kind:'accountOverview',accountSeq:7,symbol:'AAPL'},{kind:'accountOverview',accountSeq:7,market:'us'}])await assert.rejects(viewer.request(req));
+  await viewer.selectViewerAccount(7);assert.deepEqual(calls.at(-1).args.request,{kind:'accountOverview',accountSeq:7});assert.equal(viewer.viewerOverview.items.length,1);assert.equal(viewer.settings.accountSeq,7);assert.deepEqual(viewer.holdings,[]);assert.deepEqual(viewer.forecastStocks,[]);assert.deepEqual(viewer.candidates,[]);assert.deepEqual(viewer.history,empty());
+  const en=S.accountViewerHTML(viewer,'en'),ko=S.accountViewerHTML(viewer,'ko');
+  assert.match(en,/My Toss account/);assert.match(ko,/내 토스 계좌/);assert.match(ko,/보유 수량/);assert.match(en,/0\.125000000000000000000001/);assert.match(en,/9,007,199,254,740,993 KRW/);assert.match(en,/-1\.25%/);assert.match(en,/API overall rates use KRW conversion/);assert.match(en,/>—<\/td>/);assert.ok(!en.includes('accountSeq')&&!en.includes('Export'));
+  assert.ok(en.indexOf('Overall P&amp;L rate')>en.indexOf('</table>'),'overall ratio is outside currency rows');
+  assert.match(en,/Cash\/bonds\/options excluded\./);assert.match(ko,/현금·채권·옵션은 포함하지 않습니다\./);
+  assert.match(en,/data-stock-disclosure="account-costs:7"/);
+  const positionDetails=en.match(/<details data-stock-disclosure="position-costs:7:us:AAPL">([\s\S]*?)<\/details>/)?.[1];
+  assert.ok(positionDetails);assert.equal((positionDetails.match(/<dt>/g)||[]).length,5);
+  assert.match(positionDetails,/<dt>Investment<\/dt><dd>25\.00 USD<\/dd>/);
+  assert.match(positionDetails,/<dt>Market value after costs<\/dt><dd>27\.25 USD<\/dd>/);
+  assert.match(positionDetails,/<dt>P&amp;L after costs<\/dt><dd>2\.25 USD · \+9\.00%<\/dd>/);
+  assert.match(positionDetails,/<dt>Commission<\/dt><dd>0\.25 USD<\/dd>/);assert.match(positionDetails,/<dt>Tax<\/dt><dd>—<\/dd>/);
+  assert.match(ko,/<dt>비용 공제 후 평가금액<\/dt>/);assert.match(ko,/<dt>비용 공제 후 평가손익<\/dt>/);assert.match(ko,/<dt>세금<\/dt><dd>—<\/dd>/);
+  viewer.viewerOverview=S.decodeAccountOverview(unknown);assert.match(S.accountViewerHTML(viewer,'en'),/JP:7203/);assert.match(S.accountViewerHTML(viewer,'en'),/Unsupported market or currency/);assert.match(S.accountViewerHTML(viewer,'en'),/9007199254740993\.012345 JPY/);assert.deepEqual(viewer.forecastStocks,[]);
+  reply.result.items[0].name='<img src=x onerror=alert(1)>';await viewer.selectViewerAccount(7);assert.match(S.accountViewerHTML(viewer,'en'),/&lt;img/);assert.ok(!S.accountViewerHTML(viewer,'en').includes('<img'));
+  const noCacheCount=privateCount();await viewer.selectViewerAccount(7);assert.equal(privateCount(),noCacheCount+1,'same selection is a fresh explicit read');assert.equal(viewer.cache.size,0,'viewer success never enters shared JS cache');
+  viewer.configure({...viewer.settings,accountSeq:99,chartInterval:'1d'});assert.equal(viewer.viewerAccountSeq,7);assert.ok(viewer.viewerOverview,'forecast selection changes do not alter the viewer');
+  reply=overviewFixture({items:[]});await viewer.selectViewerAccount(8);assert.equal(viewer.viewerOverview.items.length,0);assert.match(S.accountViewerHTML(viewer,'en'),/No stock holdings/);
+  failure=true;await viewer.selectViewerAccount(8);assert.equal(viewer.viewerOverview,null);assert.ok(viewer.viewerError);assert.equal(viewer.cache.size,0,'no private error cache');failure=false;
+  reply=overviewFixture();reply.result.items.push({...reply.result.items[0],symbol:'MSFT',quantity:'invalid'});await viewer.selectViewerAccount(8);assert.equal(viewer.viewerOverview,null);assert.ok(viewer.viewerError,'one malformed position prevents partial financial display');
+  viewer.clearViewer();assert.equal(viewer.viewerAccounts.length,0);assert.equal(viewer.viewerAccountSeq,0);assert.equal(viewer.viewerOverview,null);assert.equal(viewer.viewerFetchedAt,null);assert.ok(!S.accountViewerHTML(viewer,'en').includes('900719'));
+  assert.ok(calls.every(c=>c.cmd!=='save_stock_history'),'viewer never writes private data to history');assert.deepEqual(calls.filter(c=>c.cmd==='set_stock_settings').map(c=>c.args.settings.accountSeq),[7,8],'only explicit choices update already-enabled holdings');viewer.dispose();
+
+  const pending=[];let responseNow=start;
+  const race=new S.Store({now:()=>responseNow,invoke:(cmd,args)=>cmd==='set_stock_settings'?Promise.resolve(args.settings):new Promise((resolve,reject)=>pending.push({request:args.request,resolve,reject}))});
+  race.settingsReady=true;race.credentials={toss:true,finnhub:true};race.settings=S.normalizeSettings({accountSeq:17});
+  const resolvePrivate=(p,data=overviewFixture())=>p.resolve({data,fetchedAt:responseNow});
+  let task=race.loadViewerAccounts();resolvePrivate(pending.at(-1),accountList());await task;
+  let first=race.selectViewerAccount(7);await flush();let firstPending=pending.at(-1),second=race.selectViewerAccount(8);await flush();let secondPending=pending.at(-1);
+  resolvePrivate(secondPending,overviewFixture({items:[]}));await second;resolvePrivate(firstPending);await first;
+  assert.equal(race.viewerAccountSeq,8);assert.equal(race.viewerOverview.items.length,0,'late account7 cannot overwrite account8');
+  first=race.selectViewerAccount(7);await flush();firstPending=pending.at(-1);second=race.selectViewerAccount(8);await flush();secondPending=pending.at(-1);firstPending.reject(Error('late failure'));await first;assert.equal(race.viewerBusy,true);assert.equal(race.viewerError,'');resolvePrivate(secondPending);await second;
+  task=race.selectViewerAccount(7);await flush();const hidden=pending.at(-1);race.clearViewer();resolvePrivate(hidden);await task;assert.equal(race.viewerOverview,null);assert.equal(race.viewerAccountSeq,0);assert.deepEqual(race.viewerAccounts,[]);
+  first=race.loadViewerAccounts();firstPending=pending.at(-1);race.clearViewer();second=race.loadViewerAccounts();secondPending=pending.at(-1);resolvePrivate(firstPending,accountList());await first;assert.equal(race.viewerAccountsBusy,true,'hidden old lookup cannot finish the new lookup');assert.deepEqual(race.viewerAccounts,[]);resolvePrivate(secondPending,accountList());await second;
+  task=race.selectViewerAccount(7);await flush();const toggled=pending.at(-1);race.configure({...race.settings,accountSeq:33,forecastsEnabled:true});resolvePrivate(toggled);await task;assert.ok(race.viewerOverview);assert.equal(race.viewerAccountSeq,7,'viewer is independent of forecast selection and flags');
+  task=race.selectViewerAccount(8);await flush();const switched=pending.at(-1);race.configure({...race.settings,provider:'finnhub'});resolvePrivate(switched);await task;assert.equal(race.viewerOverview,null);assert.deepEqual(race.viewerAccounts,[]);
+  race.configure({...race.settings,provider:'toss'});task=race.loadViewerAccounts();resolvePrivate(pending.at(-1),accountList());await task;
+  task=race.selectViewerAccount(7);await flush();const credentialsPending=pending.at(-1);race.invalidate();resolvePrivate(credentialsPending);await task;assert.equal(race.viewerOverview,null);assert.deepEqual(race.viewerAccounts,[]);
+  task=race.loadViewerAccounts();resolvePrivate(pending.at(-1),accountList());await task;task=race.selectViewerAccount(7);await flush();const closed=pending.at(-1);race.dispose();resolvePrivate(closed);await task;assert.equal(race.viewerOverview,null);assert.deepEqual(race.viewerAccounts,[]);assert.equal(race.viewerAvailable(),false);assert.equal(race.cache.size,0);
+  console.log('PASS explicit Toss viewer gates, no auto selection/private persistence/cache/polling, decimal precision/currency/null validation and switch/hide/close races');
+}
+
+async function testAccountNotch(){
+  assert.equal(S.DEFAULTS.accountNotchEnabled,false);assert.equal(S.DEFAULTS.accountNotchSeq,0);
+  for(const seq of [0,-1,1.5,Number.MAX_SAFE_INTEGER+1,'7',null]){
+    const settings=S.normalizeSettings({accountNotchEnabled:true,accountNotchSeq:seq,accountSeq:17});
+    assert.equal(settings.accountNotchEnabled,false);assert.equal(settings.accountNotchSeq,0);assert.equal(settings.accountSeq,17);
+  }
+  let now=start,reply=overviewFixture(),failure=false,hold=false,held;const calls=[],timers=[],events=new Map();
+  const oldInterval=global.setInterval,oldClear=global.clearInterval;
+  global.setInterval=(fn,ms)=>{const timer={fn,ms};timers.push(timer);return timer;};global.clearInterval=timer=>timer.cleared=true;
+  const owner=new S.Store({owner:true,now:()=>now,listen:async(name,fn)=>{events.set(name,fn);return ()=>events.delete(name);},invoke:async(cmd,args)=>{
+    calls.push({cmd,args:clone(args)});
+    if(cmd==='get_stock_credential_status')return {toss:true,finnhub:true};
+    if(cmd==='get_stock_settings')return {...S.DEFAULTS,accountSeq:17};
+    if(cmd==='load_stock_history')return empty();
+    if(cmd==='set_stock_settings')return args.settings;
+    assert.equal(cmd,'stock_request');
+    if(hold)return new Promise(resolve=>held=resolve);
+    if(failure)throw Error('Synthetic private failure');
+    return {data:clone(args.request.kind==='accounts'?accountList():reply),fetchedAt:now};
+  }});
+  const requests=()=>calls.filter(c=>c.cmd==='stock_request');
+  try{
+    await owner.init();assert.equal(requests().length,0);assert.equal(timers[0].ms,60000);
+    assert.equal(await owner.setAccountNotchEnabled(true),false,'cannot enable from an undiscovered/default account');
+    await owner.loadViewerAccounts();assert.equal(owner.viewerAccountSeq,0,'one lookup never auto selects');
+    assert.equal(await owner.setAccountNotchEnabled(true),false);await owner.selectViewerAccount(7);
+    const beforeEnable=requests().length;
+    assert.equal(await owner.setAccountNotchEnabled(true),true);await owner.tick();
+    assert.equal(owner.active(),false,'account notch works with stock display disabled');
+    assert.equal(requests().length,beforeEnable+2,'owner discovers the saved selection once before its overview');
+    assert.deepEqual(requests().slice(-2).map(c=>c.args.request),[{kind:'accounts'},{kind:'accountOverview',accountSeq:7}]);
+    assert.equal(owner.settings.accountSeq,7);assert.equal(owner.viewerAccountSeq,7);
+    assert.deepEqual(Object.keys(owner.accountNotchSummary),['marketValue','dailyProfitLoss']);assert.ok(!('items' in owner.accountNotchSummary));
+    assert.equal(owner.accountNotchSummary.marketValue.krw,'9007199254740994');assert.equal(owner.accountNotchSummary.dailyProfitLoss.amount.usd,null);
+    const account=S.cells(owner,'en')[0];assert.equal(account.id,'widget-account');assert.equal(account.account,true);assert.ok(!account.stock);assert.equal(account.name,'Account');
+    near(account.meter.fraction,.0125/.30);assert.equal(account.meter.counterclockwise,true);assert.equal(account.meter.color,'#FF453A');assert.equal(account.meter.text,'-1.25%');
+    const card=S.accountCardHTML(owner,'en');assert.match(card,/9,007,199,254,740,994 KRW/);assert.match(card,/27\.50 USD/);assert.match(card,/-100 KRW/);assert.match(card,/>—<\/dd>/);assert.match(card,/Sep 28, 2026/);assert.match(card,/Cash\/bonds\/options excluded/);
+    for(const forbidden of ['Stock chart','forecast','Investment','Exchange rate','Cash balance','9007199254740993','AAPL','0.125000000000000000000001'])assert.ok(!card.includes(forbidden),forbidden);
+    for(const [rate,color,reverse,fraction] of [['0.075','var(--ample)',false,.25],['-0.15','#FF453A',true,.5],['0','var(--ink-dim)',false,0],['.45','var(--ample)',false,1]]){
+      owner.accountNotchSummary.dailyProfitLoss.rate=rate;const meter=S.cells(owner,'en')[0].meter;assert.equal(meter.color,color);assert.equal(meter.counterclockwise,reverse);assert.equal(meter.fraction,fraction);
+    }
+    let count=requests().length;now+=59999;await owner.tick();assert.equal(requests().length,count);now++;timers[0].fn();await owner.tick();assert.equal(requests().length,count+1,'minute poll reuses discovery');
+    const kept=owner.accountNotchSummary;now+=60000;hold=true;
+    const first=owner.refreshAccountNotch(),second=owner.refreshAccountNotch(true);assert.equal(first,second,'clicks deduplicate with polling');
+    count=requests().length;now+=120000;timers[0].fn();await flush();assert.equal(requests().length,count,'slow request cannot overlap');assert.equal(owner.accountNotchSummary,kept,'current rate remains while refreshing');
+    held({data:reply,fetchedAt:now});hold=false;await first;
+    const button={};S.bindAccountCard({querySelector:()=>button},owner);count=requests().length;await button.onclick();assert.equal(requests().length,count+1,'card refresh uses account path');
+    now+=60000;failure=true;await owner.tick();assert.equal(owner.accountNotchSummary,null);assert.equal(owner.accountNotchFetchedAt,null);assert.equal(S.cells(owner,'en')[0].meter.text,'—');assert.match(S.accountCardHTML(owner,'en'),/Account unavailable/);assert.ok(!S.accountCardHTML(owner,'en').includes('9007199'));
+    failure=false;hold=true;count=requests().length;const failedAt=owner.accountNotchAttemptAt,manualRetry=owner.refreshAccountNotch(true),repeatedRetry=owner.refreshAccountNotch(true);
+    assert.equal(now,failedAt,'manual recovery needs no elapsed time or test-only attempt reset');assert.equal(requests().length,count+1,'forced refresh immediately retries after failure');assert.equal(manualRetry,repeatedRetry,'forced recovery still deduplicates pending requests');
+    held({data:reply,fetchedAt:now});hold=false;await manualRetry;assert.ok(owner.accountNotchSummary);assert.equal(owner.accountNotchFetchedAt,now);assert.equal(owner.accountNotchError,'');assert.equal(S.cells(owner,'en')[0].meter.text,'-1.25%');
+    now+=60000;failure=true;await owner.tick();assert.equal(owner.accountNotchSummary,null);
+    count=requests().length;for(let i=0;i<20;i++)await owner.refreshAccountNotch();now+=59999;await owner.tick();assert.equal(requests().length,count,'automatic failure retry remains bounded to 60 seconds');
+    failure=false;now++;await owner.tick();assert.equal(requests().length,count+1);
+    reply=overviewFixture();reply.result.marketValue.amount.usd='not-a-decimal';now+=60000;await owner.tick();assert.equal(owner.accountNotchSummary,null,'malformed private values clear all amounts');reply=overviewFixture();now+=60000;await owner.tick();
+    const summary=owner.accountNotchSummary;events.get('stock-view-state')({payload:{visible:false}});await owner.tick();assert.equal(owner.accountNotchSummary,summary,'closing Settings leaves notch ownership intact');
+    assert.equal(owner.cache.size,0);assert.deepEqual(owner.history,empty());assert.deepEqual(owner.holdings,[]);assert.deepEqual(owner.candidates,[]);
+    assert.ok(!S.csv(owner.history.forecasts,false).includes('9007199'));assert.ok(calls.every(c=>c.cmd!=='save_stock_history'));
+    const privateRecord={...record(),accountNotchSummary:summary};assert.equal(S.validForecast(privateRecord),false);assert.throws(()=>S.validateHistory({version:1,trends:[],forecasts:[privateRecord]}));assert.ok(!S.csv([privateRecord],false).includes('9007199'),'CSV only projects public forecast columns');
+    owner.configure({...owner.settings,forecastsEnabled:true,accountSeq:99});await owner.tick();assert.equal(owner.accountNotchSummary,summary,'forecast flags/selection do not change private epoch');
+    await owner.setAccountNotchEnabled(false);count=requests().length;now+=600000;timers[0].fn();await owner.tick();assert.equal(requests().length,count);assert.equal(owner.accountNotchSummary,null);assert.deepEqual(S.cells(owner,'en'),[]);
+  }finally{owner.dispose();global.setInterval=oldInterval;global.clearInterval=oldClear;}
+
+  // Simulate native's credential-epoch discovery gate and late requests without provider traffic.
+  const pending=[];let credentialEpoch=0,discoveredEpoch=-1;
+  const race=new S.Store({owner:true,now:()=>now,invoke:(cmd,args)=>{
+    if(cmd==='get_stock_credential_status')return Promise.resolve({toss:true,finnhub:true});
+    assert.equal(cmd,'stock_request');
+    if(args.request.kind==='accountOverview')assert.equal(discoveredEpoch,credentialEpoch,'new credentials require fresh discovery');
+    return new Promise((resolve,reject)=>pending.push({request:args.request,resolve:data=>{if(args.request.kind==='accounts')discoveredEpoch=credentialEpoch;resolve({data,fetchedAt:now});},reject}));
+  }});
+  race.settingsReady=true;race.credentials={toss:true,finnhub:true};
+  const enable=seq=>race.configure({...race.settings,provider:'toss',accountNotchEnabled:true,accountNotchSeq:seq});
+  const discover=async()=>{assert.equal(pending.at(-1).request.kind,'accounts');pending.at(-1).resolve(accountList());await flush();assert.equal(pending.at(-1).request.kind,'accountOverview');};
+  enable(7);await discover();let task=race.accountNotchPending,old=pending.at(-1),count=pending.length;
+  race.configure({...race.settings,accountNotchSeq:8});assert.equal(pending.length,count,'account switch waits for old physical request');
+  old.resolve(overviewFixture());await task;await flush();assert.equal(race.accountNotchSummary,null);await discover();pending.at(-1).resolve(overviewFixture({dailyProfitLoss:{amount:{krw:'200',usd:'1.25'},rate:'.075'}}));await race.accountNotchPending;assert.equal(race.accountNotchSummary.dailyProfitLoss.rate,'.075');
+  now+=60000;task=race.refreshAccountNotch();old=pending.at(-1);race.configure({...race.settings,accountNotchEnabled:false});old.resolve(overviewFixture());await task;assert.equal(race.accountNotchSummary,null);
+  enable(7);await discover();task=race.accountNotchPending;old=pending.at(-1);race.configure({...race.settings,provider:'finnhub'});old.resolve(overviewFixture());await task;assert.equal(race.accountNotchSummary,null);count=pending.length;await race.tick();assert.equal(pending.length,count);
+  enable(7);await discover();task=race.accountNotchPending;old=pending.at(-1);credentialEpoch++;discoveredEpoch=-1;count=pending.length;const reload=race.reloadCredentials();await flush();assert.equal(race.credentials.toss,true);assert.equal(race.accountNotchSummary,null);assert.equal(pending.length,count,'credential change cannot overlap old overview');old.resolve(overviewFixture());await task;await flush();await discover();pending.at(-1).resolve(overviewFixture());await race.accountNotchPending;await reload;assert.ok(race.accountNotchSummary);
+  now+=60000;task=race.refreshAccountNotch();old=pending.at(-1);count=pending.length;race.dispose();old.resolve(overviewFixture());await task;assert.equal(race.accountNotchSummary,null);assert.equal(pending.length,count,'dispose cannot restart polling');
+  console.log('PASS account notch opt-in, 60s automatic polls/failure retry, immediate forced failure recovery without clock/reset changes, single pending request, summary-only privacy, Settings independence and account/provider/credential/disable cancellation');
+}
+
+// Parse the actual mounted markup and bind its controls without a browser/dependency.
+function settingsDOM(){
+  const doc={activeElement:null,scrolled:0,addEventListener(){},removeEventListener(){},defaultView:{addEventListener(){},removeEventListener(){}}};
+  const decode=text=>text.replace(/&(amp|lt|gt|quot|#39);/g,(_,key)=>({amp:'&',lt:'<',gt:'>',quot:'"','#39':"'"}[key]));
+  function node(tag='div',attrs={}){
+    const n={tagName:tag.toUpperCase(),ownerDocument:doc,parentElement:null,children:[],dataset:{},attrs:{},writes:0,focusCount:0,scrollTop:0,value:'',selectionStart:0,selectionEnd:0,hidden:false,disabled:false,checked:false,open:false,
+      [Symbol.for('nodejs.util.inspect.custom')](){return `<${this.tagName} id="${this.id||''}">`;},
+      classList:{toggle(){},remove(){}},addEventListener(){},removeEventListener(){},
+      setAttribute(key,value){this.attrs[key]=String(value);if(key.startsWith('data-'))this.dataset[key.slice(5).replace(/-([a-z])/g,(_,c)=>c.toUpperCase())]=String(value);else if(key==='tabindex')this.tabIndex=Number(value);else if(['hidden','disabled','checked','open'].includes(key))this[key]=true;else if(['id','type','value'].includes(key))this[key]=String(value);},
+      getAttribute(key){return this.attrs[key]??null;},
+      appendChild(child){child.parentElement=this;this.children.push(child);return child;},
+      set innerHTML(html){
+        this.writes++;this.html=html;this.children=[];const stack=[this];
+        for(const token of html.match(/<[^>]*>|[^<]+/g)||[]){
+          if(token.startsWith('</')){if(stack.length>1)stack.pop();continue;}
+          if(token.startsWith('<')){
+            const match=token.match(/^<([\w-]+)/);if(!match)continue;
+            const child=node(match[1]);for(const attr of token.slice(match[0].length,-1).matchAll(/([\w-]+)(?:="([^"]*)")?/g))child.setAttribute(attr[1],decode(attr[2]??''));
+            stack.at(-1).appendChild(child);if(!/^(input|br|hr|img|meta|link)$/i.test(match[1])&&!token.endsWith('/>'))stack.push(child);
+          }else stack.at(-1).children.push(decode(token));
+        }
+        for(const select of this.querySelectorAll('select')){const options=select.querySelectorAll('option');select.value=(options.find(o=>o.attrs.selected!==undefined)||options[0])?.value||'';}
+      },
+      get innerHTML(){return this.html||'';},
+      set textContent(text){this.children=[String(text)];this.html=String(text);},
+      get textContent(){return this.children.map(child=>typeof child==='string'?child:child.textContent).join('');},
+      matches(selector){
+        return selector.split(',').some(part=>{
+          part=part.trim();const id=part.match(/#([\w-]+)/)?.[1],tag=part.match(/^[\w-]+/)?.[0],cls=part.match(/\.([\w-]+)/)?.[1];
+          if(id&&this.id!==id||tag&&this.tagName!==tag.toUpperCase()||cls&&!String(this.attrs.class||'').split(' ').includes(cls)||part.endsWith(':checked')&&!this.checked)return false;
+          return [...part.matchAll(/\[([\w-]+)(?:="?([^"\]]+)"?)?\]/g)].every(([,key,value])=>this.attrs[key]!==undefined&&(value===undefined||this.attrs[key]===value));
+        });
+      },
+      querySelectorAll(selector){return this.children.flatMap(child=>typeof child==='string'?[]:[...(child.matches(selector)?[child]:[]),...child.querySelectorAll(selector)]);},
+      querySelector(selector){return this.querySelectorAll(selector)[0]||null;},
+      contains(other){return other===this||this.children.some(child=>typeof child!=='string'&&child.contains(other));},
+      closest(selector){return this.matches(selector)?this:this.parentElement?.closest(selector)||null;},
+      focus(options){this.focusCount++;this.focusOptions=options;doc.activeElement=this;if(!options?.preventScroll)doc.scrolled++;},
+      setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;},
+      reportValidity(){return this.querySelectorAll('input[required]').every(input=>input.value.trim());},
+      checkValidity(){return this.type!=='number'||Number.isFinite(Number(this.value))&&Number(this.value)>=Number(this.attrs.min)&&Number(this.value)<=Number(this.attrs.max);},
+      get details(){return this.querySelectorAll('details[data-stock-disclosure]');}
+    };
+    for(const [key,value] of Object.entries(attrs))n.setAttribute(key,value);
+    return n;
+  }
+  doc.createElement=tag=>node(tag);
+  return {doc,element:node()};
+}
+async function testViewerMemo(){
+  const {doc,element}=settingsDOM();let lang='en',privateCalls=0,saves=0,overviewFails=false;
+  const oldDocument=global.document,oldFetch=global.fetch,oldRAF=global.requestAnimationFrame;
+  global.document=doc;global.fetch=async()=>({ok:true,text:async()=>''});global.requestAnimationFrame=fn=>fn();
+  const store=new S.Store({now:()=>start,invoke:async(cmd,args)=>{if(cmd==='set_stock_settings'){saves++;return args.settings;}assert.equal(cmd,'stock_request');privateCalls++;if(overviewFails&&args.request.kind==='accountOverview')throw Error('Synthetic viewer failure');return {data:args.request.kind==='accounts'?accountList():overviewFixture(),fetchedAt:start};}});
+  store.settingsReady=true;store.credentials={toss:true,finnhub:true};
+  try{
+    const settings=S.mountSettings({element,store,language:()=>lang});store.onChange=()=>settings.render();
+    element.querySelector('#stock-tab-account').onclick();
+    assert.match(S.accountViewerHTML(store,'en'),/id="stock-account-notch" type="checkbox"\s+disabled/);
+    await store.loadViewerAccounts();assert.equal(store.viewerAccountSeq,0);assert.equal(await store.setAccountNotchEnabled(true),false);assert.equal(saves,0);
+    overviewFails=true;await store.selectViewerAccount(7);assert.equal(store.viewerOverview,null);assert.match(S.accountViewerHTML(store,'en'),/id="stock-account-notch" type="checkbox"\s+disabled/);assert.equal(await store.setAccountNotchEnabled(true),false);assert.equal(saves,0);overviewFails=false;
+    await store.selectViewerAccount(7);let host=element.querySelector('#stock-account-viewer'),select=host.querySelector('#stock-viewer-account');select.focus();host.details[0].open=true;
+    const writes=host.writes,focusCount=select.focusCount,started=performance.now();
+    for(let i=0;i<1000;i++){store.quotes.set('us:AAPL',{price:i,fetchedAt:i});store.changed();}
+    const elapsed=performance.now()-started;assert.equal(host.writes,writes,'1000 public quote updates cause zero private HTML rebuilds');assert.equal(select.focusCount,focusCount);assert.equal(doc.activeElement,select);assert.equal(host.details[0].open,true);
+    store.viewerError='Could not load account information.';store.changed();assert.equal(host.writes,writes+1,'private change invalidates memo');assert.equal(host.details[0].open,true);assert.equal(doc.activeElement.id,'stock-viewer-account');
+    assert.equal(await store.setAccountNotchEnabled(true),false,'failed viewer cannot enable the notch');store.viewerError='';store.changed();
+    const calls=privateCalls;
+    host.querySelector('#stock-account-notch').focus();host.details[0].open=true;
+    host.querySelector('#stock-account-notch').checked=true;await host.querySelector('#stock-account-notch').onchange();assert.equal(store.settings.accountNotchEnabled,true);assert.equal(store.settings.accountNotchSeq,7);assert.equal(privateCalls,calls,'nonowner enable never polls');
+    host=element.querySelector('#stock-account-viewer');assert.equal(host.writes,1,'outer host replacement resets viewer memo');
+    assert.equal(doc.activeElement,host.querySelector('#stock-account-notch'),'focus survives outer host replacement');assert.equal(host.details[0].open,true,'disclosure survives outer host replacement');
+    settings.show(false,false);assert.equal(store.viewerOverview,null);assert.equal(store.settings.accountNotchEnabled,true);assert.equal(store.accountNotchSummary,null);assert.equal(privateCalls,calls);assert.match(S.accountViewerHTML(store,'en'),/Saved account selection/);
+    lang='ko';settings.show(true,false);host=element.querySelector('#stock-account-viewer');assert.equal(host.writes,1);assert.match(host.innerHTML,/내 토스 계좌/);
+    store.configure({...store.settings,provider:'finnhub'});host=element.querySelector('#stock-account-viewer');assert.ok(host,'saved account state remains available for disabling after provider switch');
+    host.querySelector('#stock-account-notch').checked=false;await host.querySelector('#stock-account-notch').onchange();assert.equal(store.settings.accountNotchEnabled,false);assert.equal(privateCalls,calls,'can disable without loading');
+    console.log(`PASS Settings viewer memo: 1000 public updates, 0 private innerHTML writes (${elapsed.toFixed(1)}ms); focus/disclosures, host/language invalidation, manual selection and disable without loading`);
+  }finally{store.dispose();global.document=oldDocument;global.fetch=oldFetch;global.requestAnimationFrame=oldRAF;}
+}
+
+function testAccountCardLayout(){
+  const store=new S.Store({owner:true,now:()=>start,invoke:()=>assert.fail('no private request for account card rendering')});store.settingsReady=true;store.credentials.toss=true;store.settings=S.normalizeSettings({accountNotchEnabled:true,accountNotchSeq:7});
+  const overview=S.decodeAccountOverview(overviewFixture());store.accountNotchSummary={marketValue:overview.marketValue.amount,dailyProfitLoss:overview.dailyProfitLoss};store.accountNotchFetchedAt=start;
+  for(const [lang,title,label,market,daily,scope,updated,api] of [['en','Stock assets','Account','Market value','Daily P&amp;L','Cash/bonds/options excluded.','Updated','API overall rates use KRW conversion.'],['ko','주식 자산','계좌','평가금액','일간 손익','현금·채권·옵션은 포함하지 않습니다.','갱신','전체 손익률은 API의 원화 환산 기준입니다.']]){
+    assert.equal(S.cells(store,lang)[0].name,label);assert.equal(S.cells(store,lang)[0].glyph,label);
+    const html=S.accountCardHTML(store,lang);assert.ok(html.includes(`<h3>${title}</h3>`));assert.ok(!/<table|stock-table-wrap|tabindex="0"/.test(html),'narrow account hover has no table or horizontal scroll region');
+    const rows=[...html.matchAll(/<dt>(.*?)<\/dt><dd>(.*?)<\/dd>/g)].map(row=>row.slice(1));
+    assert.deepEqual(rows,[[market+' · KRW','9,007,199,254,740,994 KRW'],[market+' · USD','27.50 USD'],[daily+' · KRW','-100 KRW'],[daily+' · USD','—']]);
+    for(const text of [scope,updated,api,'-1.25%'])assert.ok(html.includes(text));
+  }
+  store.accountNotchSummary.marketValue.krw='123456789012345678901234567.12';store.accountNotchSummary.marketValue.usd='9007199254740993.012345';store.accountNotchSummary.dailyProfitLoss.amount.usd='-9007199254740993.012345';store.accountNotchSummary.dailyProfitLoss.rate='0.075';
+  for(const lang of ['en','ko']){const html=S.accountCardHTML(store,lang);assert.match(html,/123,456,789,012,345,678,901,234,567 KRW/);assert.match(html,/>9,007,199,254,740,993\.01 USD<\/dd>/);assert.match(html,/>-9,007,199,254,740,993\.01 USD<\/dd>/);assert.match(html,/\+7\.50%/);}
+  const css=fs.readFileSync(path.join(__dirname,'../penguinnotch/ui/stocks.css'),'utf8');
+  const bar=css.match(/\.cell\.account-cell\.meter-bar \.bar-name\{([^}]+)\}/)?.[1];assert.ok(bar);assert.match(bar,/font-size:11px/);assert.match(bar,/white-space:nowrap/);assert.match(bar,/display:block/);
+  assert.match(css,/\.account-card \.stock-kv\{grid-template-columns:minmax\(0,1fr\) minmax\(0,1\.25fr\)\}/);assert.match(css,/\.account-card \.stock-kv dd\{min-width:0;overflow-wrap:anywhere\}/);assert.match(css,/\.account-card \.stock-kv dd\{[^}]*white-space:normal/);assert.ok(!css.includes('.account-card .stock-table'));
+  store.dispose();console.log('PASS account card EN/KO titles/cell labels, four currency metric rows, exact money/null/rate formatting and scoped narrow-card/bar wrapping rules');
+}
+
+function testAccountNotchRendering(){
+  const source=fs.readFileSync(path.join(__dirname,'../penguinnotch/ui/notch.html'),'utf8');
+  const {element:card,doc}=settingsDOM();card.style={};card.scrollTop=0;card.getBoundingClientRect=()=>({width:270,height:220});
+  const classes=()=>{const values=new Set();return {contains:key=>values.has(key),add:key=>values.add(key),remove:key=>values.delete(key),toggle:(key,on)=>on?values.add(key):values.delete(key)};};
+  card.classList=classes();card.classList.add('show');
+  const children=Object.fromEntries(['svg.ring','svg.reading','svg.activity','.pct','.glyph','.ringwrap'].map(key=>[key,{innerHTML:'',style:{},classList:classes(),getBoundingClientRect:()=>({left:context.cellRect.left,top:context.cellRect.top,width:56,height:56})}]));
+  const cell={dataset:{},classList:classes(),querySelector:key=>children[key],getBoundingClientRect:()=>context.cellRect};
+  const pill={dataset:{cells:'widget-account:-'},querySelector:()=>cell,getBoundingClientRect:()=>context.pillRect};
+  doc.getElementById=()=>card;doc.documentElement={style:{zoom:'1'}};
+  const store=new S.Store({owner:true,now:()=>start,invoke:()=>assert.fail('no native call from account hover')});store.settingsReady=true;store.credentials={toss:true,finnhub:true};store.settings=S.normalizeSettings({accountNotchEnabled:true,accountNotchSeq:7});
+  const overview=S.decodeAccountOverview(overviewFixture());store.accountNotchSummary={marketValue:overview.marketValue.amount,dailyProfitLoss:overview.dailyProfitLoss};store.accountNotchFetchedAt=start;
+  let refreshes=0,stockCalls=0,hidden=0;store.tick=()=>stockCalls++;store.loadChart=()=>stockCalls++;store.refreshAccountNotch=()=>{refreshes++;return Promise.resolve();};
+  const context={PenguinNotchStocks:{...S,cardHTML:()=>assert.fail('account is not a stock card'),bindCard:()=>assert.fail('account is not a stock card')},stockStore:store,providers:()=>S.cells(store,context.uiLang),pill,cells:{},card,document:doc,uiLang:'en',hoverId:'widget-account',lastStockCardHTML:'',glyphs:{},glyphHtml:p=>S.esc(p.glyph),esc:S.esc,meterStyle:'ring',TRACK:'#222',HOLE:'#000',tail:{style:{}},insets:[0,0,0,0],hoverTextScale:1,innerWidth:1280,innerHeight:900,notchEdge:'right',syncScrollHover(){},reportHot(){},armWatchdog(){},hideCard(){hidden++;card.classList.remove('show');},edgeIsVertical:()=>['left','right'].includes(context.notchEdge)};
+  vm.createContext(context);
+  const pick=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
+  vm.runInContext(pick('function svgArc(','function applyMeterStyle(')+pick('function renderRing(){','function resetCopy(')+pick('function renderCard(){','function renderMeterCard(')+pick('function refreshRing(id){','// The reading has a layer'),context);
+  const ownerStart=source.indexOf('owner:true,onChange:')+'owner:true,onChange:'.length;
+  vm.runInContext('var ownerChanged='+source.slice(ownerStart,source.indexOf('\n}});',ownerStart)+2),context);
+  for(const lang of ['en','ko'])for(const edge of ['left','right','top','bottom']){
+    context.uiLang=lang;
+    context.notchEdge=edge;
+    context.pillRect=edge==='left'?{left:8,right:88,top:300,bottom:500}:edge==='right'?{left:1192,right:1272,top:300,bottom:500}:edge==='top'?{left:500,right:780,top:8,bottom:88}:{left:500,right:780,top:812,bottom:892};
+    context.cellRect={left:context.pillRect.left,top:context.pillRect.top,width:80,height:80};
+    for(const shape of ['ring','bar'])for(const rate of ['0.075','-0.075','0']){
+      context.meterStyle=shape;store.accountNotchSummary.dailyProfitLoss.rate=rate;context.renderRing();
+      assert.equal(cell.classList.contains('stock-cell'),false);assert.equal(cell.classList.contains('account-cell'),true);assert.equal(cell.dataset.stockDrag,undefined);
+      assert.equal(children['.glyph'].innerHTML,shape==='bar'?`<span class="bar-name">${S.t(lang,'Account')}</span>`:S.t(lang,'Account'));
+      assert.equal(children['.pct'].textContent,S.accountRateText(rate));
+      const reading=children['svg.reading'].innerHTML;
+      if(rate==='0')assert.equal(reading,'');else if(shape==='ring')assert.equal(reading.includes('scale(-1 1)'),rate.startsWith('-'));else assert.match(reading,/width="12.5"/);
+      assert.equal(children['.pct'].style.color,rate==='0'?'var(--ink-dim)':rate.startsWith('-')?'#FF453A':'var(--ample)');
+      store.activeStock={symbol:'AAPL',market:'us'};context.renderCard();assert.equal(store.activeStock,null);assert.equal(stockCalls,0);
+      const left=parseFloat(card.style.left),top=parseFloat(card.style.top);assert.ok(left>=8&&left+270<=1272,edge+' horizontal bounds');assert.ok(top>=8&&top+220<=892,edge+' vertical bounds');
+      if(edge==='left')assert.ok(left>=context.pillRect.right+30);if(edge==='right')assert.ok(left+270<=context.pillRect.left-30);if(edge==='top')assert.ok(top>=context.pillRect.bottom+30);if(edge==='bottom')assert.ok(top+220<=context.pillRect.top-30);
+      assert.equal(card.dataset.stock,'widget-account');assert.match(card.innerHTML,/account-card/);assert.ok(card.innerHTML.includes(`<h3>${S.t(lang,'Stock assets')}</h3>`));assert.equal((card.innerHTML.match(/<dt>/g)||[]).length,4);card.querySelector('#account-notch-refresh').onclick();
+    }
+  }
+  assert.equal(refreshes,48);context.refreshRing('widget-account');assert.equal(refreshes,49,'ring click routes directly to account refresh');
+  card.classList.remove('show');store.accountNotchSummary=null;context.ownerChanged();assert.equal(card.innerHTML,'','failure clears hidden private card markup');assert.equal(context.lastStockCardHTML,'','failure clears memoized private amounts');
+  card.classList.add('show');store.settings.provider='finnhub';context.ownerChanged();assert.equal(hidden,1,'provider switch hides removed account card');assert.deepEqual(S.cells(store,'en'),[]);
+  card.classList.add('show');store.settings.provider='toss';store.settings.accountNotchEnabled=false;context.ownerChanged();assert.equal(hidden,2,'disable hides removed account card');assert.equal(stockCalls,0);
+  console.log('PASS actual notch account render/card/bind/click mock paths: EN/KO ring + bar, signed/zero API rates, all four edges (48 states), no stock drag/chart/forecast and hidden failure cleanup');
+}
+
+async function testAccountReviewFixes(){
+  let now=start,calls=0,failure=false;
+  const clock=new S.Store({owner:true,now:()=>now,invoke:async(cmd,args)=>{assert.equal(cmd,'stock_request');assert.equal(args.request.kind,'accountOverview');calls++;if(failure)throw Error('Synthetic unavailable');return {data:overviewFixture(),fetchedAt:now};}});
+  clock.settingsReady=true;clock.credentials={toss:true,finnhub:false};clock.settings=S.normalizeSettings({accountNotchEnabled:true,accountNotchSeq:7});clock.accountNotchDiscovered=true;clock.accountNotchAttemptAt=now;
+  await clock.tick();assert.equal(calls,0);now--;await clock.tick();assert.equal(calls,1,'clock rollback bypasses a future successful-attempt timestamp');assert.equal(clock.accountNotchFetchedAt,now);
+  failure=true;now+=60000;await clock.tick();assert.equal(clock.accountNotchSummary,null);failure=false;now-=60000;await clock.tick();assert.equal(calls,3,'clock rollback also recovers from failed-attempt cooldown');assert.equal(clock.accountNotchFetchedAt,now);
+  clock.configure({...clock.settings,provider:'finnhub'});await clock.tick();assert.equal(calls,3);assert.deepEqual(S.cells(clock,'en'),[],'saved account selection is hidden for another provider');assert.equal(clock.accountNotchSummary,null);clock.dispose();
+
+  let privateCalls=0,reply;
+  const unavailable=new S.Store({owner:true,now:()=>start,invoke:async(cmd)=>{if(cmd==='get_stock_credential_status')return {toss:false,finnhub:false};assert.equal(cmd,'stock_request');privateCalls++;return new Promise(resolve=>reply=resolve);}});
+  unavailable.settingsReady=true;unavailable.settings=S.normalizeSettings({accountNotchEnabled:true,accountNotchSeq:7});
+  await unavailable.tick();assert.equal(privateCalls,0,'saved-enabled account without credentials makes no private request');
+  for(const lang of ['en','ko']){const html=S.accountCardHTML(unavailable,lang);assert.ok(html.includes(S.t(lang,'Account unavailable.')));assert.ok(!html.includes(S.t(lang,'Loading account information…')));}
+  unavailable.credentials.toss=true;unavailable.accountNotchDiscovered=true;const pending=unavailable.refreshAccountNotch();await unavailable.reloadCredentials();assert.ok(unavailable.accountNotchPending,'old physical request is still pending after credential removal');
+  for(const lang of ['en','ko']){const html=S.accountCardHTML(unavailable,lang);assert.ok(html.includes(S.t(lang,'Account unavailable.')));assert.ok(!html.includes(S.t(lang,'Loading account information…')));assert.ok(!html.includes('9007199'));}
+  reply({data:overviewFixture(),fetchedAt:start});await pending;assert.equal(unavailable.accountNotchSummary,null);assert.equal(unavailable.accountNotchFetchedAt,null);assert.equal(privateCalls,1);unavailable.dispose();
+
+  const {doc,element}=settingsDOM(),oldDocument=global.document,oldFetch=global.fetch,oldRAF=global.requestAnimationFrame;
+  global.document=doc;global.fetch=async()=>({ok:true,text:async()=>''});global.requestAnimationFrame=fn=>fn();
+  const owner=new S.Store({owner:true,now:()=>start,invoke:()=>assert.fail('Hide must not read the owner account')});
+  owner.settingsReady=true;owner.credentials.toss=true;owner.settings=S.normalizeSettings({accountNotchEnabled:true,accountNotchSeq:7});owner.accountNotchAttemptAt=start;
+  const overview=S.decodeAccountOverview(overviewFixture());owner.accountNotchSummary={marketValue:overview.marketValue.amount,dailyProfitLoss:overview.dailyProfitLoss};owner.accountNotchFetchedAt=start;
+  let save,saves=0;
+  const viewer=new S.Store({now:()=>start,invoke:async(cmd,args)=>{
+    if(cmd==='set_stock_settings'){saves++;return new Promise((resolve,reject)=>save={args,resolve:()=>{owner.configure(args.settings);resolve(args.settings);},reject});}
+    assert.equal(cmd,'stock_request');return {data:args.request.kind==='accounts'?accountList():overviewFixture(),fetchedAt:start};
+  }});
+  viewer.settingsReady=true;viewer.credentials.toss=true;viewer.settings=S.normalizeSettings({accountNotchEnabled:true,accountNotchSeq:7});
+  try{
+    const view=S.mountSettings({element,store:viewer});viewer.onChange=()=>view.render();
+    element.querySelector('#stock-tab-account').onclick();
+    await viewer.loadViewerAccounts();await viewer.selectViewerAccount(7);const original=viewer.viewerOverview,ownerSummary=owner.accountNotchSummary;
+    const hide=()=>element.querySelector('#stock-account-viewer').querySelector('#stock-viewer-hide').onclick();
+    let task=hide();assert.equal(save.args.settings.accountNotchEnabled,false);assert.equal(viewer.busy,true);assert.match(S.accountViewerHTML(viewer,'en'),/id="stock-viewer-hide" disabled/);assert.equal(viewer.viewerOverview,original,'viewer is retained until disable save succeeds');assert.equal(owner.accountNotchSummary,ownerSummary);
+    assert.equal(await viewer.hideAccountInformation(),false);assert.equal(saves,1,'busy Hide cannot overlap a settings save');save.reject(Error('Synthetic private save detail'));assert.equal(await task,false);
+    assert.equal(viewer.settings.accountNotchEnabled,true);assert.equal(owner.settings.accountNotchEnabled,true);assert.equal(viewer.viewerOverview,original);assert.match(S.accountViewerHTML(viewer,'en'),/Could not save stock settings/);assert.ok(!S.accountViewerHTML(viewer,'en').includes('Synthetic private save detail'));
+    task=hide();save.resolve();assert.equal(await task,true);assert.equal(viewer.settings.accountNotchEnabled,false);assert.equal(viewer.viewerOverview,null);assert.deepEqual(viewer.viewerAccounts,[]);assert.equal(owner.accountNotchSummary,null);assert.equal(owner.accountNotchFetchedAt,null);assert.deepEqual(S.cells(owner,'en'),[]);
+    // Hide also disables a saved notch when the manual viewer is already closed.
+    viewer.settings={...viewer.settings,accountNotchEnabled:true};viewer.changed();assert.ok(!S.accountViewerHTML(viewer,'en').match(/id="stock-viewer-hide" disabled/));task=hide();save.reject(Error('Synthetic failure'));assert.equal(await task,false);assert.match(S.accountViewerHTML(viewer,'en'),/Could not save stock settings/);assert.equal(viewer.viewerOpen,false);
+    task=hide();save.resolve();assert.equal(await task,true);assert.equal(viewer.settings.accountNotchEnabled,false);
+    // When the notch is already off, Hide cancels the manual read without a redundant settings write.
+    viewer.viewerOpen=true;viewer.viewerAccounts=S.decodeAccounts(accountList());let late;viewer.invoke=async(cmd)=>{assert.equal(cmd,'stock_request');return new Promise(resolve=>late=resolve);};task=viewer.selectViewerAccount(7);const saved=saves;assert.equal(await hide(),true);late({data:overviewFixture(),fetchedAt:start});await task;assert.equal(viewer.viewerOverview,null);assert.equal(viewer.viewerAccountSeq,0);assert.equal(saves,saved);
+  }finally{viewer.dispose();owner.dispose();global.document=oldDocument;global.fetch=oldFetch;global.requestAnimationFrame=oldRAF;}
+  console.log('PASS parent review: Toss-only cell, Hide disables before clearing with busy/failure/late-read handling, backward-clock polling and unavailable credentials including stale pending replies');
+}
+
+async function testNotchViewerSelection(){
+  const {doc,element}=settingsDOM(),oldDocument=global.document,oldFetch=global.fetch,oldRAF=global.requestAnimationFrame;
+  global.document=doc;global.fetch=async()=>({ok:true,text:async()=>''});global.requestAnimationFrame=fn=>fn();
+  const requests=[];let save,saves=0;
+  const store=new S.Store({now:()=>start,invoke:async(cmd,args)=>{
+    if(cmd==='set_stock_settings'){saves++;return new Promise((resolve,reject)=>save={settings:args.settings,resolve:()=>resolve(args.settings),reject});}
+    assert.equal(cmd,'stock_request');requests.push(args.request);return {data:args.request.kind==='accounts'?accountList():overviewFixture(),fetchedAt:start};
+  }});
+  store.settingsReady=true;store.credentials.toss=true;store.settings=S.normalizeSettings({accountSeq:17,accountNotchEnabled:true,accountNotchSeq:7});
+  try{
+    const view=S.mountSettings({element,store});store.onChange=()=>view.render();
+    element.querySelector('#stock-tab-account').onclick();
+    await store.loadViewerAccounts();assert.equal(store.viewerAccountSeq,0);assert.equal(saves,0,'discovery never changes the notch selection');let initial=store.selectViewerAccount(7);assert.equal(save.settings.accountSeq,7);assert.equal(store.settings.accountSeq,17,'saved mismatch changes only on explicit selection/save');save.resolve();await initial;assert.equal(saves,1);assert.equal(store.settings.forecastsEnabled,false);
+    const select=seq=>{const input=element.querySelector('#stock-account-viewer').querySelector('#stock-viewer-account');input.value=String(seq);return input.onchange();};
+    let count=requests.length,task=select(8);assert.equal(save.settings.accountNotchSeq,8);assert.equal(save.settings.accountNotchEnabled,true);assert.equal(save.settings.accountSeq,8);assert.equal(requests.length,count,'changed account is saved before its overview request');assert.match(S.accountViewerHTML(store,'en'),/id="stock-viewer-account"[^>]*disabled/);
+    save.resolve();await task;assert.equal(store.settings.accountNotchSeq,8);assert.equal(store.viewerAccountSeq,8);assert.deepEqual(requests.at(-1),{kind:'accountOverview',accountSeq:8});assert.ok(store.viewerOverview);assert.equal(store.settings.accountSeq,8);
+    count=requests.length;task=select(0);assert.equal(save.settings.accountNotchSeq,0);assert.equal(save.settings.accountNotchEnabled,false);assert.equal(save.settings.accountSeq,0);save.resolve();await task;assert.equal(store.settings.accountNotchEnabled,false);assert.equal(store.settings.accountNotchSeq,0);assert.equal(store.viewerAccountSeq,0);assert.equal(store.viewerOverview,null);assert.equal(store.viewerFetchedAt,null);assert.equal(requests.length,count,'zero selection disables without a private request');
+    const saved=saves;await select(7);assert.equal(saves,saved,'manual viewer selection with notch off is unchanged');assert.equal(store.settings.accountNotchSeq,0);assert.equal(store.settings.accountSeq,0);
+    store.configure({...store.settings,accountSeq:17,accountNotchEnabled:true,accountNotchSeq:7});count=requests.length;task=select(8);save.reject(Error('Synthetic private save detail'));await task;assert.equal(requests.length,count,'failed selection save blocks private fetch');assert.equal(store.settings.accountNotchSeq,7);assert.equal(store.viewerAccountSeq,0);assert.equal(store.viewerOverview,null);assert.match(S.accountViewerHTML(store,'en'),/Could not save stock settings/);assert.ok(!S.accountViewerHTML(store,'en').includes('Synthetic private save detail'));
+    task=select(8);store.clearViewer();save.resolve();await task;assert.equal(requests.length,count,'generation change while saving prevents a late overview request');assert.equal(store.viewerAccountSeq,0);assert.equal(store.viewerOverview,null);assert.equal(store.viewerOpen,false);
+    await store.loadViewerAccounts();count=requests.length;task=select(0);save.reject(Error('Synthetic save rejected'));await task;assert.equal(store.settings.accountNotchEnabled,true);assert.equal(store.settings.accountNotchSeq,8);assert.equal(requests.length,count);assert.match(S.accountViewerHTML(store,'en'),/Could not save stock settings/);
+    const beforeInvalid=saves;for(const seq of [-1,1.5,Number.MAX_SAFE_INTEGER+1,'8',9])await store.selectViewerAccount(seq);assert.equal(saves,beforeInvalid);assert.equal(requests.length,count,'invalid/undiscovered selection never saves or reads');assert.equal(store.settings.accountSeq,8);
+  }finally{store.dispose();global.document=oldDocument;global.fetch=oldFetch;global.requestAnimationFrame=oldRAF;}
+  console.log('PASS notch viewer picker onchange: selected account saved before fetch, zero disables/clears, enabled holdings follow, independent forecasts, manual-off unchanged and save-failure/generation gates');
+}
+
+async function testStockSettingsTabs(){
+  const {doc,element}=settingsDOM(),oldDocument=global.document,oldFetch=global.fetch,oldRAF=global.requestAnimationFrame,oldURL=global.URL;
+  global.document=doc;global.fetch=async()=>({ok:true,text:async()=>''});global.requestAnimationFrame=fn=>fn();
+  const exports=[],downloads=[],calls=[],events=new Map();let lang='en',failOverview=false,failCredentials=false,failSnapshot=false,noAccounts=false;
+  doc.createElement=(create=>tag=>{const node=create(tag);if(tag==='a')node.click=()=>downloads.push(node.download);return node;})(doc.createElement);
+  global.URL={createObjectURL:blob=>{exports.push(blob);return 'blob:stock-test';},revokeObjectURL(){}};
+  const store=new S.Store({now:()=>start,listen:async(name,fn)=>{events.set(name,fn);return ()=>events.delete(name);},emit:async(name,payload)=>{
+    if(name==='stock-history-action'){if(failSnapshot)throw Error('Synthetic service error');events.get('stock-history-updated')({payload:{requestID:payload.requestID,count:1}});}
+  },invoke:async(cmd,args)=>{
+    calls.push({cmd,args:clone(args)});
+    if(cmd==='set_stock_settings')return args.settings;
+    if(cmd==='load_stock_history')return clone(archive);
+    if(cmd==='save_stock_credentials'){if(failCredentials)throw Error('Synthetic credential error');return {toss:true,finnhub:false};}
+    assert.equal(cmd,'stock_request');
+    if(args.request.kind==='accountOverview'&&failOverview)throw Error('Synthetic private error');
+    assert.ok(['accounts','accountOverview'].includes(args.request.kind));
+    return {data:args.request.kind==='accounts'?(noAccounts?{result:[]}:accountList()):overviewFixture(),fetchedAt:start};
+  }});
+  const saved=S.normalizeSettings({accountSeq:17,accountNotchSeq:8,accountNotchEnabled:true,forecastsEnabled:false,symbols:[{market:'us',symbol:'AAPL',visible:true}]}),archive={version:1,trends:[Object.fromEntries(S.TREND_KEYS.map(key=>[key,record()[key]]))],forecasts:[record()]};
+  store.settingsReady=true;store.credentials={toss:true,finnhub:false};store.settings=clone(saved);store.history=clone(archive);
+  const privateCount=()=>calls.filter(c=>c.cmd==='stock_request').length,writes=()=>calls.filter(c=>c.cmd==='set_stock_settings').length;
+  const tab=key=>element.querySelector('#stock-tab-'+key),panel=key=>element.querySelector('#stock-panel-'+key),clickTab=key=>tab(key).onclick();
+  const selected=key=>{assert.equal(tab(key).getAttribute('aria-selected'),'true');assert.equal(tab(key).tabIndex,0);for(const other of ['watchlist','account','analysis','history'])assert.equal(panel(other).hidden,other!==key);};
+  try{
+    const view=S.mountSettings({element,store,language:()=>lang});store.onChange=()=>view.render();await flush();
+    const tabs=element.querySelectorAll('[data-stock-tab]');assert.deepEqual(tabs.map(node=>node.textContent),['Watchlist','My account','Analysis','History']);assert.equal(tabs.length,4);
+    for(const button of tabs){assert.equal(button.getAttribute('role'),'tab');const controlled=element.querySelector('#'+button.getAttribute('aria-controls'));assert.equal(controlled.getAttribute('role'),'tabpanel');assert.equal(controlled.getAttribute('aria-labelledby'),button.id);}
+    selected('watchlist');assert.equal(element.querySelector('#stock-account-viewer').innerHTML,'');assert.equal(element.querySelector('#stock-history').innerHTML,'');
+    assert.ok(panel('watchlist').contains(element.querySelector('#stock-setting-enabled')));assert.ok(!panel('watchlist').querySelectorAll('h2').some(node=>node.textContent==='Stocks'));assert.ok(panel('watchlist').contains(element.querySelector('#stock-add-form')));assert.ok(panel('watchlist').contains(element.querySelector('#stock-provider')));
+    assert.ok(panel('analysis').contains(element.querySelector('#stock-setting-forecastsEnabled')));assert.ok(panel('analysis').contains(element.querySelector('#stock-chart-interval')));
+    assert.equal(element.querySelector('#stock-load-accounts'),null);assert.equal(element.querySelector('#stock-account'),null);
+    assert.ok(element.details.every(details=>!details.open));assert.ok(element.innerHTML.indexOf('stock-add-form')<element.innerHTML.indexOf('stock-connection'));
+    const averages=element.querySelector('[data-stock-disclosure="moving-averages"]');assert.ok(panel('analysis').contains(averages));assert.equal(averages.open,false);assert.equal(averages.querySelector('summary').textContent,'Moving averages');assert.equal(averages.querySelectorAll('[data-sma]').length,4);
+    view.show(true);assert.equal(doc.activeElement,tab('watchlist'));assert.equal(doc.scrolled,0,'initial entry never scrolls to the add-symbol form');
+    panel('watchlist').scrollTop=140;element.querySelector('#stock-connection').open=true;
+    const secret=element.querySelector('#stock-client-secret');secret.value='synthetic-secret';element.querySelector('#stock-client-id').value='synthetic-id';secret.focus({preventScroll:true});
+    clickTab('analysis');selected('analysis');assert.equal(secret.value,'');assert.equal(element.querySelector('#stock-client-id').value,'');assert.equal(element.querySelector('#stock-account-viewer').innerHTML,'');
+    panel('analysis').scrollTop=35;
+    element.querySelector('#stock-manage-accounts').onclick();selected('account');assert.equal(privateCount(),0);assert.equal(writes(),0);assert.deepEqual(store.settings,saved);
+    assert.match(element.querySelector('#stock-account-viewer').innerHTML,/Saved selections differ/);assert.ok(!element.querySelector('#stock-account-viewer').textContent.includes('17'));
+    assert.equal(element.querySelector('#stock-account-holdings').disabled,false,'positive saved holdings can be disabled without discovery');
+    for(const key of ['history','watchlist','account','analysis'])clickTab(key);
+    assert.equal(privateCount(),0,'local tabs make zero accounts/holdings/overview requests');assert.equal(writes(),0);assert.deepEqual(store.settings,saved);assert.deepEqual(store.history,archive);
+    assert.equal(panel('analysis').scrollTop,35);clickTab('watchlist');assert.equal(panel('watchlist').scrollTop,140);assert.equal(element.querySelector('#stock-connection').open,true);
+    let prevented=0;const keydown=(button,key)=>button.onkeydown({key,preventDefault(){prevented++;}});
+    keydown(tab('watchlist'),'ArrowLeft');selected('history');keydown(tab('history'),'Home');selected('watchlist');keydown(tab('watchlist'),'End');selected('history');keydown(tab('history'),'ArrowRight');selected('watchlist');keydown(tab('watchlist'),'ArrowDown');selected('account');assert.equal(prevented,5);assert.equal(doc.activeElement,tab('account'));assert.equal(doc.scrolled,0);
+    const disable=element.querySelector('#stock-account-holdings');disable.checked=false;await disable.onchange();assert.equal(store.settings.accountSeq,0);assert.equal(store.settings.accountNotchSeq,8);assert.equal(store.settings.accountNotchEnabled,true);assert.equal(store.settings.forecastsEnabled,false);assert.equal(privateCount(),0);
+    store.configure(saved);const beforeDiscovery=writes();noAccounts=true;await element.querySelector('#stock-viewer-load').onclick();assert.equal(store.viewerAccountSeq,0);assert.deepEqual(store.settings,saved);assert.equal(writes(),beforeDiscovery);assert.match(element.querySelector('#stock-account-viewer').textContent,/No supported Toss account/);
+    noAccounts=false;await element.querySelector('#stock-viewer-load').onclick();assert.equal(store.viewerAccountSeq,0);assert.deepEqual(store.settings,saved);assert.equal(writes(),beforeDiscovery);
+    let picker=element.querySelector('#stock-viewer-account');picker.value='7';await picker.onchange();assert.equal(store.settings.accountSeq,7);assert.equal(store.settings.accountNotchSeq,7);assert.equal(store.settings.forecastsEnabled,false);
+    let host=element.querySelector('#stock-account-viewer');assert.equal(host.querySelectorAll('details[data-stock-disclosure]').every(node=>!node.open),true);
+    const investment=host.querySelectorAll('th').find(node=>node.textContent==='Investment');assert.ok(investment.closest('details'));assert.equal(investment.closest('details').open,false);
+    assert.ok(host.querySelectorAll('table').every(table=>table.closest('details')),'both summary details and holdings tables are collapsed');
+    assert.match(host.innerHTML,/9,007,199,254,740,994 KRW/);assert.match(host.innerHTML,/\-1\.25%/);
+    let notch=element.querySelector('#stock-account-notch');notch.checked=false;await notch.onchange();let holdings=element.querySelector('#stock-account-holdings');holdings.checked=false;await holdings.onchange();
+    holdings=element.querySelector('#stock-account-holdings');holdings.checked=true;await holdings.onchange();assert.equal(store.settings.accountSeq,7);assert.equal(store.settings.accountNotchEnabled,false);assert.equal(store.settings.forecastsEnabled,false);
+    notch=element.querySelector('#stock-account-notch');notch.checked=true;await notch.onchange();assert.equal(store.settings.forecastsEnabled,false);assert.equal(store.settings.accountSeq,7);
+    picker=element.querySelector('#stock-viewer-account');picker.value='0';const beforeZero=privateCount();await picker.onchange();assert.equal(privateCount(),beforeZero);assert.equal(store.settings.accountSeq,0);assert.equal(store.settings.accountNotchSeq,0);assert.equal(store.settings.accountNotchEnabled,false);
+    picker=element.querySelector('#stock-viewer-account');picker.value='8';const beforeManual=writes();await picker.onchange();assert.equal(writes(),beforeManual);assert.equal(store.settings.accountSeq,0);assert.equal(store.settings.accountNotchEnabled,false);assert.equal(store.settings.forecastsEnabled,false);
+    failOverview=true;await element.querySelector('#stock-viewer-refresh').onclick();assert.equal(store.viewerOverview,null);assert.match(element.querySelector('#stock-account-viewer').textContent,/Could not load account information/);assert.ok(!element.querySelector('#stock-account-viewer').textContent.includes('Synthetic private error'));
+    failOverview=false;await element.querySelector('#stock-viewer-refresh').onclick();assert.ok(store.viewerOverview);notch=element.querySelector('#stock-account-notch');notch.checked=true;await notch.onchange();
+    const persisted=clone(store.settings),beforeLeaving=privateCount();clickTab('analysis');assert.equal(store.viewerOverview,null);assert.equal(store.viewerAccountSeq,0);assert.deepEqual(store.viewerAccounts,[]);assert.equal(element.querySelector('#stock-account-viewer').innerHTML,'');assert.deepEqual(store.settings,persisted);assert.equal(privateCount(),beforeLeaving);
+    // UI fixtures retain the actual handlers while avoiding public provider work in this settings-only check.
+    store.tick=async()=>{};
+    let forecasts=element.querySelector('#stock-setting-forecastsEnabled');forecasts.checked=true;await forecasts.onchange();assert.equal(store.settings.accountSeq,0);assert.equal(store.settings.accountNotchEnabled,true);
+    store.accountError='Could not load holdings. Watchlist forecasts remain available.';store.forecastError='Could not load estimates. Check saved keys, market data access and allowed IP.';store.historyError='Could not save history. Existing records are retained; check disk space and permissions.';store.changed();
+    for(const id of ['stock-account-message','stock-forecast-status','stock-analysis-history-status']){const node=element.querySelector('#'+id);assert.ok(node.textContent);assert.equal(node.closest('details'),null,'action failures remain outside disclosures');}
+    store.accountError='';store.forecastError='';store.historyError='';store.candidates=[record()];store.settings={...store.settings,enabled:true};store.changed();
+    failSnapshot=true;await element.querySelector('#stock-snapshot').onclick();assert.match(element.querySelector('#stock-snapshot-status').textContent,/did not respond/);assert.equal(element.querySelector('#stock-snapshot-status').closest('details'),null);
+    failSnapshot=false;await element.querySelector('#stock-snapshot').onclick();assert.equal(element.querySelector('#stock-snapshot-status').textContent,'Snapshots saved');
+    clickTab('history');let history=element.querySelector('#stock-history');history.details.find(node=>node.dataset.stockDisclosure==='comparison').open=true;
+    const filter=element.querySelector('#stock-history-filter-capture');filter.value='scheduled';filter.focus({preventScroll:true});filter.onchange();assert.equal(doc.activeElement.id,'stock-history-filter-capture');assert.equal(doc.activeElement.value,'scheduled');assert.match(history.innerHTML,/No saved forecasts/);
+    const writesBefore=history.writes;clickTab('analysis');for(let i=0;i<10;i++)store.changed();assert.equal(history.writes,writesBefore,'inactive history skips rendering');clickTab('history');assert.equal(history.writes,writesBefore,'unchanged cached history survives tab switches');assert.equal(history.details.find(node=>node.dataset.stockDisclosure==='comparison').open,true);
+    lang='ko';view.render();selected('history');assert.deepEqual(element.querySelectorAll('[data-stock-tab]').map(node=>node.textContent),['관심 종목','내 계좌','분석','기록']);assert.equal(element.querySelector('#stock-history-filter-capture').value,'scheduled');
+    const allCapture=element.querySelector('#stock-history-filter-capture');allCapture.value='';allCapture.onchange();element.querySelector('#stock-export-forecasts').onclick();element.querySelector('#stock-export-traces').onclick();element.querySelector('#stock-export-comparison').onclick();
+    assert.deepEqual(downloads,['penguinnotch-stock-forecasts.csv','penguinnotch-stock-traces.csv','penguinnotch-stock-forecasts.csv']);assert.equal(exports.length,3);assert.ok((await exports[0].text()).includes(S.MODEL));assert.ok(!(await exports[0].text()).includes('9007199'));assert.deepEqual(store.history,archive);
+    store.historyError='History could not be read. Original records are preserved; writes are blocked.';store.changed();assert.match(element.querySelector('#stock-history').textContent,/원본을 보존/);await element.querySelector('#stock-history-refresh').onclick();assert.deepEqual(store.history,archive);
+    clickTab('account');assert.match(element.querySelector('#stock-account-viewer').textContent,/노치에 계좌 표시/);assert.match(element.querySelector('#stock-account-viewer').textContent,/노치 계좌/);assert.ok(!element.querySelector('#stock-account-viewer').textContent.includes('Show account in notch'));
+    store.configure({...store.settings,provider:'finnhub'});assert.ok(element.querySelector('#stock-viewer-load').disabled);element.querySelector('#stock-manage-connection').onclick();selected('watchlist');assert.equal(element.querySelector('#stock-connection').open,true);assert.equal(element.querySelector('#stock-provider').disabled,false);assert.ok(element.querySelector('#stock-api-key'));assert.equal(element.querySelector('#stock-client-secret'),null);
+    const apiKey=element.querySelector('#stock-api-key');apiKey.value='synthetic-key';clickTab('account');assert.equal(apiKey.value,'');clickTab('watchlist');view.show(false,false);assert.equal(element.querySelector('#stock-api-key').value,'');
+    view.show(true,false);store.configure({...store.settings,provider:'toss'});failCredentials=true;let form=element.querySelector('#stock-credentials');form.querySelector('#stock-client-id').value='synthetic-id';form.querySelector('#stock-client-secret').value='synthetic-secret';await form.onsubmit({preventDefault(){},currentTarget:form});
+    assert.match(element.querySelector('#stock-credential-message').textContent,/입력값은 지웠습니다/);assert.equal(element.querySelector('#stock-credential-message').closest('details'),null);assert.equal(element.querySelector('#stock-client-secret').value,'');
+    clickTab('analysis');const priorAverages=clone(store.settings),beforeAverages=privateCount();
+    element.querySelector('[data-stock-disclosure="moving-averages"]').open=true;
+    const sma=element.querySelector('#stock-sma-60');sma.checked=true;sma.focus({preventScroll:true});await sma.onchange();
+    assert.deepEqual(store.settings,{...priorAverages,movingAverages:[5,20,60]});assert.equal(privateCount(),beforeAverages);
+    assert.equal(element.querySelector('[data-stock-disclosure="moving-averages"]').open,true);assert.equal(doc.activeElement.id,'stock-sma-60');
+    lang='en';view.render();assert.equal(element.querySelector('[data-stock-disclosure="moving-averages"]').querySelector('summary').textContent,'Moving averages');
+    lang='ko';view.render();assert.equal(element.querySelector('[data-stock-disclosure="moving-averages"]').querySelector('summary').textContent,'이동평균');assert.equal(element.querySelector('[data-stock-disclosure="moving-averages"]').open,true);
+    element.querySelector('[data-stock-disclosure="moving-averages"]').open=false;store.changed();assert.equal(element.querySelector('[data-stock-disclosure="moving-averages"]').open,false);
+    console.log('PASS actual Settings mount/handlers: four EN/KO tabs/default/grouping, migration/no discovery/selection, independent opt-ins, explicit selector follows, private clearing/errors, collapsed details, preventScroll/focus, panel scroll/disclosures/language persistence, cached History/filters/CSV and snapshot/credential failures');
+  }finally{store.dispose();global.document=oldDocument;global.fetch=oldFetch;global.requestAnimationFrame=oldRAF;global.URL=oldURL;}
+}
+
 async function main(){
+  await testAccountViewer();
+  await testAccountNotch();
+  await testViewerMemo();
+  testAccountCardLayout();
+  testAccountNotchRendering();
+  await testAccountReviewFixes();
+  await testNotchViewerSelection();
+  await testStockSettingsTabs();
   const meterStock={symbol:'AAPL',market:'us',visible:true,color:'b026ff'};
   const meterStore={settings:S.normalizeSettings({enabled:true,symbols:[meterStock]}),quotes:new Map(),names:new Map(),now:()=>12000};
   for(const [price,close,fraction,color,reverse] of [[107.5,100,.25,'var(--ample)',false],[92.5,100,.25,'#FF453A',true],[115,100,.5,'var(--ample)',false],[85,100,.5,'#FF453A',true],[150,100,1,'var(--ample)',false],[50,100,1,'#FF453A',true],[100,100,0,'var(--ink-dim)',false],[100,null,null,'var(--ink-dim)',false],[Infinity,100,null,'var(--ink-dim)',false],[1e308,1e-308,null,'var(--ink-dim)',false]]){
@@ -201,13 +703,13 @@ async function main(){
   // innerHTML setter destroys disclosure nodes, just as the WebView does.
   const disclosureHost=()=>{
     let html='',nodes=[];
-    return {dataset:{},get innerHTML(){return html;},set innerHTML(value){html=value;nodes=[...value.matchAll(/<details\b([^>]*)>/g)].map(([,attrs])=>({open:false,dataset:{stockDisclosure:attrs.match(/data-stock-disclosure="([^"]*)"/)?.[1]}}));},querySelectorAll(selector){return selector==='details[data-stock-disclosure]'?nodes.filter(node=>node.dataset.stockDisclosure):[];},querySelector(){return {};}};
+    return {dataset:{},contains(){return false;},get innerHTML(){return html;},set innerHTML(value){html=value;nodes=[...value.matchAll(/<details\b([^>]*)>/g)].map(([,attrs])=>({open:false,dataset:{stockDisclosure:attrs.match(/data-stock-disclosure="([^"]*)"/)?.[1]}}));},querySelectorAll(selector){return selector==='details[data-stock-disclosure]'?nodes.filter(node=>node.dataset.stockDisclosure):[];},querySelector(){return {};}};
   };
   const disclosureHosts={'#stock-holdings':disclosureHost(),'#stock-history':disclosureHost()},disclosureElement={querySelector:selector=>disclosureHosts[selector]||null,querySelectorAll:selector=>Object.values(disclosureHosts).flatMap(host=>host.querySelectorAll(selector))};
   const disclosureStore={forecastStocks:[{symbol:'AAPL',market:'us',name:'Apple'},{symbol:'MSFT',market:'us',name:'Microsoft'}],candidates:[r,unpaired],forecastError:'',accountError:'',historyError:'',reasons:new Map(),history:clone(filterSource)};
   const uiSource=fs.readFileSync(path.join(__dirname,'../penguinnotch/ui/stocks.js'),'utf8'),sectionCode=uiSource.slice(uiSource.indexOf('  function renderPortfolio(){'),uiSource.indexOf("  store.listen?.('stock-history-updated'"));
-  const disclosureContext=vm.createContext({...S,element:disclosureElement,store:disclosureStore,language:()=> 'en',tr:key=>S.esc(key),historyFilter:{stockID:'',day:'',model:'',capture:''}});
-  vm.runInContext(sectionCode+';renderPortfolio();renderHistory();',disclosureContext);
+  const disclosureContext=vm.createContext({...S,element:disclosureElement,store:disclosureStore,language:()=> 'en',tr:key=>S.esc(key),document:{activeElement:null},activeTab:'analysis',settingsHidden:false,captureFocus:()=>null,restoreFocus(){},historyFilter:{stockID:'',day:'',model:'',capture:''}});
+  vm.runInContext(sectionCode+";const portfolioPanel=renderPortfolio,historyPanel=renderHistory;renderPortfolio=()=>{activeTab='analysis';portfolioPanel();};renderHistory=()=>{activeTab='history';historyPanel();};renderPortfolio();renderHistory();",disclosureContext);
   const details=()=>disclosureElement.querySelectorAll('details[data-stock-disclosure]'),detail=key=>details().find(node=>node.dataset.stockDisclosure===key);
   const currentEvidence='current-evidence:'+r.stockID+'|'+r.sessionStart+'|'+r.model,savedEvidence='saved-evidence:'+S.forecastID(resolved),historyGroup=details().find(node=>node.dataset.stockDisclosure.startsWith('history:')).dataset.stockDisclosure;
   const keptOpen=['current:us:AAPL',currentEvidence,currentEvidence+'|closes',historyGroup,'record:'+S.forecastID(resolved),savedEvidence,savedEvidence+'|closes','comparison','probability','trace:'+r.stockID+'|'+r.sessionStart+'|'+r.model];

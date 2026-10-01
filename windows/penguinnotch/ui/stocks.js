@@ -2,7 +2,7 @@
    Native IPC owns credentials, HTTP, token/rate limits and atomic history storage. */
 (function(root) {
 'use strict';
-const DEFAULTS={enabled:false,provider:'toss',symbols:[],displayInterval:3,chartInterval:'1m',candleCount:20,movingAverages:[5,20],showTechnical:true,forecastsEnabled:false,recordForecasts:false,accountSeq:0};
+const DEFAULTS={enabled:false,provider:'toss',symbols:[],displayInterval:3,chartInterval:'1m',candleCount:20,movingAverages:[5,20],showTechnical:true,forecastsEnabled:false,recordForecasts:false,accountSeq:0,accountNotchEnabled:false,accountNotchSeq:0};
 const TTL={'1m':60000,'10m':600000,'1d':86400000};
 const MODEL='GBM zero drift v1';
 const TREND_KEYS=['stockID','name','market','currency','model','createdAt','quoteAt','sessionStart','sessionEnd','inputPrice','expectedClose'];
@@ -56,7 +56,8 @@ function normalizeSettings(s={}) {
     return [{...stock,...(typeof row.name==='string'&&row.name.trim()?{name:row.name.trim().normalize('NFC').slice(0,200)}:{}),visible:row.visible!==false,...(/^[a-f\d]{6}$/i.test(color)?{color}: {})}];
   }).slice(0,30);
   const integer=(v,min,max,fallback)=>Number.isInteger(v)?Math.max(min,Math.min(max,v)):fallback;
-  return {enabled:s.enabled===true,provider:s.provider==='finnhub'?'finnhub':'toss',symbols,displayInterval:integer(s.displayInterval,1,10,3),chartInterval:TTL[s.chartInterval]?s.chartInterval:'1m',candleCount:integer(s.candleCount,1,20,20),movingAverages:[5,20,60,120].filter(n=>(s.movingAverages||[5,20]).includes(n)),showTechnical:s.showTechnical!==false,forecastsEnabled:s.forecastsEnabled===true,recordForecasts:s.recordForecasts===true,accountSeq:integer(s.accountSeq,0,Number.MAX_SAFE_INTEGER,0)};
+  const accountNotchSeq=Number.isSafeInteger(s.accountNotchSeq)&&s.accountNotchSeq>0?s.accountNotchSeq:0;
+  return {enabled:s.enabled===true,provider:s.provider==='finnhub'?'finnhub':'toss',symbols,displayInterval:integer(s.displayInterval,1,10,3),chartInterval:TTL[s.chartInterval]?s.chartInterval:'1m',candleCount:integer(s.candleCount,1,20,20),movingAverages:[5,20,60,120].filter(n=>(s.movingAverages||[5,20]).includes(n)),showTechnical:s.showTechnical!==false,forecastsEnabled:s.forecastsEnabled===true,recordForecasts:s.recordForecasts===true,accountSeq:integer(s.accountSeq,0,Number.MAX_SAFE_INTEGER,0),accountNotchEnabled:s.accountNotchEnabled===true&&accountNotchSeq>0,accountNotchSeq};
 }
 function decodeQuotes(data) {
   if(!Array.isArray(data?.result)) throw Error('Invalid quote response');
@@ -71,6 +72,42 @@ function decodeFinnhub(data) {
   const price=numeric(data?.c),previousClose=numeric(data?.pc),seconds=numeric(data?.t);
   if(!positive(price)||!positive(seconds)) throw Error('Invalid quote response');
   return {price,previousClose:positive(previousClose)?previousClose:null,quoteAt:seconds*1000,currency:'USD'};
+}
+const accountSequence=seq=>Number.isSafeInteger(seq)&&seq>0;
+const maskedAccountNumber=number=>/^••••(?: .{1,4})?(?![\s\S])/u.test(number)?number:Array.from(number).length>4?'•••• '+Array.from(number).slice(-4).join(''):'••••';
+function decodeAccounts(data) {
+  if(data?.error!=null||!Array.isArray(data?.result))throw Error('Invalid account response');
+  const seen=new Set(),accounts=[];
+  for(const row of data.result) {
+    if(!row||!accountSequence(row.accountSeq)||seen.has(row.accountSeq)||!publicText(row.accountNo,100)||!publicText(row.accountType,100))throw Error('Invalid account response');
+    seen.add(row.accountSeq);
+    if(row.accountType==='BROKERAGE')accounts.push({accountSeq:row.accountSeq,label:maskedAccountNumber(row.accountNo)});
+  }
+  return accounts;
+}
+function accountDecimal(value,nullable=false) {
+  if(value===null&&nullable)return null;
+  if(typeof value!=='string'||value.length>30||!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?![\s\S])/.test(value)||!Number.isFinite(Number(value)))throw Error('Invalid account overview');
+  return value;
+}
+function decodeAccountOverview(data) {
+  const r=data?.result,decimal=accountDecimal;
+  const price=p=>({krw:decimal(p?.krw),usd:decimal(p?.usd===undefined?null:p.usd,true)});
+  const pnl=(p,overview=false)=>({amount:overview?price(p?.amount):decimal(p?.amount),amountAfterCost:overview?price(p?.amountAfterCost):decimal(p?.amountAfterCost),rate:decimal(p?.rate),rateAfterCost:decimal(p?.rateAfterCost)});
+  const daily=(p,overview=false)=>({amount:overview?price(p?.amount):decimal(p?.amount),rate:decimal(p?.rate)});
+  if(data?.error!=null||!Array.isArray(r?.items))throw Error('Invalid account overview');
+  const seen=new Set();
+  const overview={totalPurchaseAmount:price(r.totalPurchaseAmount),marketValue:{amount:price(r.marketValue?.amount),amountAfterCost:price(r.marketValue?.amountAfterCost)},profitLoss:pnl(r.profitLoss,true),dailyProfitLoss:daily(r.dailyProfitLoss,true),items:r.items.map(h=>{
+    const knownMarket=['KR','US'].includes(h?.marketCountry),knownCurrency=['KRW','USD'].includes(h?.currency),enumText=v=>typeof v==='string'&&/^[A-Z][A-Z0-9_-]{0,19}(?![\s\S])/.test(v);
+    const stock=knownMarket&&typeof h.symbol==='string'?parseStock(h.marketCountry+':'+h.symbol):null,id=h?.marketCountry+':'+h?.symbol;
+    if(!h||!enumText(h.marketCountry)||!enumText(h.currency)||typeof h.symbol!=='string'||(knownMarket?(!stock||stock.symbol!==h.symbol):!/^[A-Z0-9][A-Z0-9.\-]{0,19}(?![\s\S])/.test(h.symbol))||seen.has(id)||knownMarket&&knownCurrency&&h.currency!==(h.marketCountry==='KR'?'KRW':'USD')||typeof h.name!=='string'||Array.from(h.name).length>200||/[\x00-\x1f\x7f]/.test(h.name))throw Error('Invalid account overview');
+    seen.add(id);
+    const row={symbol:h.symbol,market:stock?.market||h.marketCountry,marketCountry:h.marketCountry,unsupported:!knownMarket||!knownCurrency,name:h.name.trim()?h.name:h.symbol,currency:h.currency,quantity:decimal(h.quantity),lastPrice:decimal(h.lastPrice),averagePurchasePrice:decimal(h.averagePurchasePrice),marketValue:{purchaseAmount:decimal(h.marketValue?.purchaseAmount),amount:decimal(h.marketValue?.amount),amountAfterCost:decimal(h.marketValue?.amountAfterCost)},profitLoss:pnl(h.profitLoss),dailyProfitLoss:daily(h.dailyProfitLoss),cost:{commission:decimal(h.cost?.commission),tax:decimal(h.cost?.tax===undefined?null:h.cost.tax,true)}};
+    if([row.quantity,row.lastPrice,row.averagePurchasePrice,row.marketValue.purchaseAmount,row.marketValue.amount,row.cost.commission,row.cost.tax].some(v=>v!==null&&Number(v)<0))throw Error('Invalid account overview');
+    return row;
+  })};
+  if([overview.totalPurchaseAmount,overview.marketValue.amount].some(p=>Object.values(p).some(v=>v!==null&&Number(v)<0)))throw Error('Invalid account overview');
+  return overview;
 }
 function dailyCloses(data,market) {
   if(!Array.isArray(data?.result?.candles)) throw Error('Invalid candle response');
@@ -281,6 +318,8 @@ class Store {
   constructor({invoke,listen,emit=async()=>{},now=Date.now,owner=false,onChange=()=>{}}) {
     Object.assign(this,{invoke,listen,emit,now,owner,onChange,settings:normalizeSettings(),credentials:{toss:false,finnhub:false},quotes:new Map(),names:new Map(),charts:new Map(),cache:new Map(),accounts:[],holdings:[],forecastStocks:[],candidates:[],reasons:new Map(),history:null,historyError:'',error:'',forecastError:'',accountError:'',accountsBusy:false,revision:0,settingsReady:false,busy:false,activeStock:null,visible:false});
     this.writes=Promise.resolve();this.reconcileAttempts=new Map();this.quoteTimes=new Map();this.unlisten=[];
+    this.viewerGeneration=0;this.clearViewer(false);
+    this.credentialGeneration=0;this.accountNotchGeneration=0;this.accountNotchPending=null;this.clearAccountNotch();
   }
   changed(){this.onChange(this);}
   async init() {
@@ -299,19 +338,90 @@ class Store {
     this.timer=setInterval(()=>{if(!this.owner&&this.visible)void this.emit('stock-view-state',{visible:true}).catch(()=>{});void this.tick();},60000);
     await this.tick();
   }
-  async reloadCredentials(){try{this.credentials=await this.invoke('get_stock_credential_status');this.invalidate();this.changed();await this.tick();}catch(_){this.error='Credential status unavailable';this.changed();}}
-  invalidate(){this.revision++;this.cache.clear();this.quotes.clear();this.quoteTimes.clear();this.charts.clear();this.accounts=[];this.holdings=[];this.forecastStocks=[];this.candidates=[];this.reasons.clear();this.forecastError='';this.accountError='';this.reconciliationError='';}
+  async reloadCredentials(){const generation=++this.credentialGeneration;this.credentials={toss:false,finnhub:false};this.invalidate();this.changed();try{const credentials=await this.invoke('get_stock_credential_status');if(this.disposed||generation!==this.credentialGeneration)return;this.credentials=credentials;this.changed();await this.tick();}catch(_){if(this.disposed||generation!==this.credentialGeneration)return;this.error='Credential status unavailable';this.changed();}}
+  invalidate(clearViewer=true){this.revision++;if(clearViewer){this.clearViewer(false);this.clearAccountNotch();}this.cache.clear();this.quotes.clear();this.quoteTimes.clear();this.charts.clear();this.accounts=[];this.holdings=[];this.forecastStocks=[];this.candidates=[];this.reasons.clear();this.forecastError='';this.accountError='';this.reconciliationError='';}
+  viewerAvailable(){return !this.disposed&&this.settingsReady&&this.settings.provider==='toss'&&this.credentials.toss===true;}
+  accountNotchAvailable(){return this.owner&&this.viewerAvailable()&&this.settings.accountNotchEnabled&&accountSequence(this.settings.accountNotchSeq);}
+  clearAccountNotch(){this.accountNotchGeneration++;this.accountNotchSummary=null;this.accountNotchFetchedAt=null;this.accountNotchError='';this.accountNotchDiscovered=false;this.accountNotchAttemptAt=null;}
+  async setAccountNotchEnabled(enabled){
+    if(enabled&&(!this.viewerAvailable()||!this.viewerOverview||this.viewerBusy||this.viewerAccountsBusy||this.viewerError||!accountSequence(this.viewerAccountSeq)||!this.viewerAccounts.some(a=>a.accountSeq===this.viewerAccountSeq)))return false;
+    return this.saveSettings({...this.settings,accountNotchEnabled:enabled===true,accountNotchSeq:enabled?this.viewerAccountSeq:this.settings.accountNotchSeq});
+  }
+  async setAccountHoldingsEnabled(enabled){
+    if(enabled&&(!this.viewerAvailable()||!this.viewerOverview||this.viewerBusy||this.viewerAccountsBusy||this.viewerError||!accountSequence(this.viewerAccountSeq)||!this.viewerAccounts.some(a=>a.accountSeq===this.viewerAccountSeq)))return false;
+    return this.saveSettings({...this.settings,accountSeq:enabled?this.viewerAccountSeq:0});
+  }
+  async hideAccountInformation(){
+    if(this.busy)return false;
+    if(this.settings.accountNotchEnabled&&!await this.setAccountNotchEnabled(false)){this.viewerError='Could not save stock settings';this.changed();return false;}
+    this.clearViewer();return true;
+  }
+  refreshAccountNotch(force=false){
+    if(!this.accountNotchAvailable())return Promise.resolve();
+    if(this.accountNotchPending)return this.accountNotchPending;
+    const now=this.now(),age=now-this.accountNotchAttemptAt;
+    if(!force&&this.accountNotchAttemptAt!==null&&age>=0&&age<60000)return Promise.resolve();
+    const generation=this.accountNotchGeneration,seq=this.settings.accountNotchSeq;
+    this.accountNotchAttemptAt=now;this.accountNotchError='';
+    this.accountNotchPending=(async()=>{
+      try{
+        if(!this.accountNotchDiscovered){
+          const accounts=await this.request({kind:'accounts'},60000,'account-notch');
+          if(generation!==this.accountNotchGeneration)return;
+          if(!decodeAccounts(accounts.data).some(a=>a.accountSeq===seq))throw Error('Selected account unavailable');
+          this.accountNotchDiscovered=true;
+        }
+        const reply=await this.request({kind:'accountOverview',accountSeq:seq},60000,'account-notch');
+        if(generation!==this.accountNotchGeneration)return;
+        const overview=decodeAccountOverview(reply.data);
+        // Keep only these private summary fields in owner memory, never holdings or public history.
+        this.accountNotchSummary={marketValue:overview.marketValue.amount,dailyProfitLoss:overview.dailyProfitLoss};
+        this.accountNotchFetchedAt=reply.fetchedAt;
+      }catch(_){if(generation===this.accountNotchGeneration){this.accountNotchSummary=null;this.accountNotchFetchedAt=null;this.accountNotchError='Account unavailable.';this.accountNotchAttemptAt=this.now();}}
+      finally{this.accountNotchPending=null;this.changed();if(generation!==this.accountNotchGeneration)void this.refreshAccountNotch();}
+    })();
+    this.changed();return this.accountNotchPending;
+  }
+  clearViewer(notify=true){this.viewerGeneration++;this.viewerOpen=false;this.viewerAccounts=[];this.viewerAccountSeq=0;this.viewerOverview=null;this.viewerFetchedAt=null;this.viewerError='';this.viewerAccountsBusy=false;this.viewerBusy=false;if(notify)this.changed();}
+  async loadViewerAccounts(){
+    if(!this.viewerAvailable()||this.viewerAccountsBusy)return;
+    this.clearViewer(false);this.viewerOpen=true;this.viewerAccountsBusy=true;const generation=this.viewerGeneration;this.changed();
+    try{const reply=await this.request({kind:'accounts'});if(generation!==this.viewerGeneration)return;this.viewerAccounts=decodeAccounts(reply.data);if(!this.viewerAccounts.length)this.viewerError='No supported Toss account was found.';}
+    catch(_){if(generation===this.viewerGeneration)this.viewerError='Could not load account information.';}
+    finally{if(generation===this.viewerGeneration){this.viewerAccountsBusy=false;this.changed();}}
+  }
+  async selectViewerAccount(seq){
+    if(!this.viewerAvailable()||!this.viewerOpen||this.viewerAccountsBusy||this.busy)return;
+    this.viewerGeneration++;const generation=this.viewerGeneration;
+    this.viewerAccountSeq=0;this.viewerOverview=null;this.viewerFetchedAt=null;this.viewerError='';this.viewerBusy=false;
+    if(seq!==0&&(!accountSequence(seq)||!this.viewerAccounts.some(a=>a.accountSeq===seq))){this.viewerError='Load accounts and select an account.';this.changed();return;}
+    this.viewerAccountSeq=seq;this.viewerBusy=seq>0;this.changed();
+    try{
+      const notchFollows=this.settings.accountNotchEnabled&&(seq===0||seq!==this.settings.accountNotchSeq),holdingsFollow=this.settings.accountSeq>0&&seq!==this.settings.accountSeq;
+      if(notchFollows||holdingsFollow){
+        const saved=await this.saveSettings({...this.settings,...(notchFollows?{accountNotchEnabled:seq>0,accountNotchSeq:seq}:{}),...(holdingsFollow?{accountSeq:seq}:{})});
+        if(generation!==this.viewerGeneration||!this.viewerAvailable())return;
+        if(!saved){this.viewerAccountSeq=0;this.viewerError='Could not save stock settings';return;}
+      }
+      if(seq===0)return;
+      const reply=await this.request({kind:'accountOverview',accountSeq:seq});if(generation!==this.viewerGeneration)return;this.viewerOverview=decodeAccountOverview(reply.data);this.viewerFetchedAt=reply.fetchedAt;
+    }
+    catch(_){if(generation===this.viewerGeneration)this.viewerError='Could not load account information.';}
+    finally{if(generation===this.viewerGeneration){this.viewerBusy=false;this.changed();}}
+  }
   configure(value) {
     const next=normalizeSettings(value),prior=this.settings;
     this.settingsReady=true;
     if(JSON.stringify(prior)===JSON.stringify(next)){this.changed();return;}
     this.revision++;
-    if(prior.provider!==next.provider||prior.enabled!==next.enabled||prior.forecastsEnabled!==next.forecastsEnabled||prior.accountSeq!==next.accountSeq){this.invalidate();}
+    if(prior.accountNotchEnabled!==next.accountNotchEnabled||prior.accountNotchSeq!==next.accountNotchSeq)this.clearAccountNotch();
+    if(prior.provider!==next.provider||prior.enabled!==next.enabled||prior.forecastsEnabled!==next.forecastsEnabled||prior.accountSeq!==next.accountSeq){this.invalidate(prior.provider!==next.provider);}
     for(const [key,entry] of this.charts) if(entry.loading)this.charts.delete(key);
     this.settings=next;this.error='';this.changed();void this.tick();
   }
   async saveSettings(next){
     if(this.busy) return false;
+    if(next.provider!==this.settings.provider){this.clearViewer(false);this.clearAccountNotch();}
     this.busy=true;this.changed();
     try{this.configure(await this.invoke('set_stock_settings',{settings:normalizeSettings(next)}));return true;}
     catch(_){this.error='Could not save stock settings';return false;}
@@ -328,7 +438,15 @@ class Store {
   }
   async request(request,ttl=60000,scope='') {
     const s=this.settings;
-    if(!this.active()||s.provider==='finnhub'&&request.kind!=='finnhubQuote'||s.provider==='toss'&&request.kind==='finnhubQuote'||['accounts','holdings'].includes(request.kind)&&!s.forecastsEnabled||request.kind==='holdings'&&(!(s.accountSeq>0)||(request.accountSeq??s.accountSeq)!==s.accountSeq)) throw Error('Stock requests are disabled');
+    if(['accounts','accountOverview'].includes(request.kind)) {
+      const notch=scope==='account-notch',available=()=>notch?this.accountNotchAvailable():this.viewerAvailable();
+      if(!available()||Object.keys(request).some(k=>!['kind',...(request.kind==='accountOverview'?['accountSeq']:[])].includes(k))||request.kind==='accountOverview'&&(!accountSequence(request.accountSeq)||(notch?!this.accountNotchDiscovered||request.accountSeq!==s.accountNotchSeq:!this.viewerOpen||!this.viewerAccounts.some(a=>a.accountSeq===request.accountSeq))))throw Error('Account requests are disabled');
+      const generation=notch?this.accountNotchGeneration:this.viewerGeneration,result=await this.invoke('stock_request',{request}),now=this.now();
+      if(generation!==(notch?this.accountNotchGeneration:this.viewerGeneration)||!available())throw Error('Stale account request');
+      if(!result||!historyTime(result.fetchedAt)||result.fetchedAt>now||now-result.fetchedAt>=300000)throw Error('Invalid account response');
+      return result; // Explicit private reads have no response or error cache.
+    }
+    if(!this.active()||s.provider==='finnhub'&&request.kind!=='finnhubQuote'||s.provider==='toss'&&request.kind==='finnhubQuote'||request.kind==='holdings'&&(!s.forecastsEnabled||!accountSequence(s.accountSeq)||(request.accountSeq??s.accountSeq)!==s.accountSeq)) throw Error('Stock requests are disabled');
     const key=JSON.stringify(request)+'|'+scope,now=this.now(),cached=this.cache.get(key);
     if(cached&&(cached.value||cached.revision===this.revision)&&(cached.pending||now>=cached.at&&now-cached.at<(cached.error?Math.min(ttl,600000):ttl))){if(cached.error)throw cached.error;return cached.value||cached.promise;}
     const revision=this.revision,entry={at:now,revision,pending:true};
@@ -437,8 +555,7 @@ class Store {
     const revision=this.revision;this.accountsBusy=true;this.accountError='';this.changed();
     try {
       const response=await this.request({kind:'accounts'},300000);if(revision!==this.revision)return;
-      if(!Array.isArray(response.data?.result))throw Error('Invalid accounts');
-      this.accounts=response.data.result.filter(a=>a.accountType==='BROKERAGE'&&Number.isInteger(a.accountSeq)&&a.accountSeq>0).map(a=>({accountSeq:a.accountSeq,label:'•••• '+String(a.accountNo||'').slice(-4)}));
+      this.accounts=decodeAccounts(response.data);
       if(!this.accounts.length)this.accountError='No supported Toss account was found.';
     }catch(_){if(revision===this.revision)this.accountError='Could not load accounts. Watchlist forecasts remain available.';}
     finally{this.accountsBusy=false;this.changed();}
@@ -486,15 +603,26 @@ class Store {
     this.changed();
   }
   async tick(){
-    if(!this.active())return;
-    if(this.ticking){this.tickAgain=true;return;}
+    const accountRefresh=this.refreshAccountNotch();
+    if(!this.active())return accountRefresh;
+    if(this.ticking){this.tickAgain=true;return accountRefresh;}
     this.ticking=true;
     try{await this.refreshQuotes();if(this.activeStock)await this.loadChart(this.activeStock);if(this.settings.forecastsEnabled&&(this.visible||this.activeStock||this.owner&&this.settings.recordForecasts))await this.refreshForecasts();}
-    finally{this.ticking=false;if(this.tickAgain){this.tickAgain=false;void this.tick();}}
+    finally{this.ticking=false;if(this.tickAgain){this.tickAgain=false;void this.tick();}await accountRefresh;}
   }
-  dispose(){if(!this.owner)void this.emit('stock-view-state',{visible:false}).catch(()=>{});clearInterval(this.timer);this.revision++;this.unlisten.forEach(f=>f());}
+  dispose(){this.disposed=true;this.clearAccountNotch();this.clearViewer();if(!this.owner)void this.emit('stock-view-state',{visible:false}).catch(()=>{});clearInterval(this.timer);this.revision++;this.unlisten.forEach(f=>f());}
 }
 const KO={
+ 'My account':'내 계좌','Analysis':'분석','History':'기록','Display options':'표시 옵션','Connection':'연결',
+ 'Show account in notch':'노치에 계좌 표시','Account in notch':'노치 계좌','Include account holdings in estimates':'추정치에 계좌 보유 종목 포함',
+ 'Watchlist and account holdings':'관심 종목과 계좌 보유 종목','Manage accounts':'계좌 관리','Manage connection':'연결 관리',
+ 'The enabled account features follow your selection. Watchlist estimates work without an account.':'활성화한 계좌 기능은 선택한 계좌를 따릅니다. 관심 종목 추정치는 계좌 없이 사용할 수 있습니다.',
+ 'Saved selections differ. Choose an account to update enabled uses.':'저장된 계좌 선택이 서로 다릅니다. 계좌를 직접 선택하면 활성화한 기능에 반영합니다.',
+ 'Stock settings':'주식 설정','How estimates work':'추정치 계산 방식','How analysis works':'분석 방식','Current estimates':'현재 추정치','Recording options':'기록 옵션','Return details':'수익 상세','Holdings (%d)':'보유 종목 (%d)',
+ 'Accounts require Toss Securities.':'계좌 조회에는 토스증권이 필요합니다.','Estimates use a saved account. Select an account to change it, or turn off holdings.':'추정치에 저장된 계좌를 사용합니다. 계좌를 직접 선택해 변경하거나 보유 종목 포함을 끄세요.',
+ 'Account':'계좌','Stock assets':'주식 자산',
+ 'Cash/bonds/options excluded.':'현금·채권·옵션은 포함하지 않습니다.','Market value after costs':'비용 공제 후 평가금액','P&L after costs':'비용 공제 후 평가손익',
+ 'Currency':'통화','Unsupported market or currency · API values':'지원하지 않는 시장 또는 통화 · API 원문 값','My Toss account':'내 토스 계좌','Load accounts':'계좌 불러오기','Hide account information':'계좌 정보 숨기기','Load accounts and select an account.':'계좌를 불러온 뒤 직접 선택하세요.','Could not load account information.':'계좌 정보를 불러오지 못했습니다. 다시 계좌를 불러오거나 선택하세요.','Loading account information…':'계좌 정보를 불러오는 중…','Account information is shown only on request and cleared when hidden.':'계좌 정보는 요청할 때만 조회하며 숨기면 지웁니다.','Investment':'투자원금','Market value':'평가금액','P&L':'평가손익','Daily P&L':'일간 손익','Quantity':'보유 수량','Average purchase price':'평균 매수가','Holdings':'보유 종목','No stock holdings.':'보유 주식이 없습니다.','Amounts are separated by trading currency.':'금액은 거래 통화별로 구분합니다.','API overall rates use KRW conversion.':'전체 손익률은 API의 원화 환산 기준입니다.','Overall P&L rate':'전체 손익률','Overall daily P&L rate':'전체 일간 손익률','After costs':'비용 공제 후','Commission':'수수료','Tax':'세금',
  'Quote session':'거래 시간대','Day market':'데이마켓','Pre-market':'프리마켓','Regular market':'정규장','After-market':'애프터마켓','Session unavailable':'거래 시간대 확인 불가','Trading day':'거래일','Change vs prior regular close':'직전 거래일 정규장 종가 대비','Change vs regular close':'당일 정규장 종가 대비','Prior regular close':'직전 거래일 정규장 종가','Regular close':'당일 정규장 종가','Quote basis unavailable':'등락률 기준 종가를 확인할 수 없습니다',
  'Stock forecasts':'주식 예측','Show forecasts for watched stocks':'관심 종목의 예측 표시','Watched stocks use public quotes and candles. Loading accounts is optional; select an account only to include its holdings.':'관심 종목은 공개 시세와 캔들로 예측합니다. 계좌 조회는 선택 사항이며, 계좌를 선택하면 해당 보유 종목도 포함합니다.','Load accounts (optional)':'계좌 불러오기(선택)','Watchlist only · no account access':'관심 종목만 · 계좌 조회 안 함','Saved account selection':'이전에 선택한 계좌','Add a watched stock to see forecasts.':'관심 종목을 추가하면 예측을 확인할 수 있습니다.','Could not load accounts. Watchlist forecasts remain available.':'계좌를 불러오지 못했습니다. 관심 종목은 계속 예측합니다.','Could not load holdings. Watchlist forecasts remain available.':'보유 종목을 불러오지 못했습니다. 관심 종목은 계속 예측합니다.','Could not load daily prediction inputs. They will be retried.':'예측에 필요한 일봉을 불러오지 못했습니다. 다시 시도합니다.','Could not load estimates. Check saved keys, market data access and allowed IP.':'추정치를 불러오지 못했습니다. 저장한 키, 시세 접근 권한, 허용 IP를 확인하세요.',
  'Stock':'종목','Prediction evidence':'예측 근거','Input price':'입력 가격','Quote time':'체결 시각','Prediction time':'예측 시각','Target regular close':'대상 정규장 마감','Source: Toss Securities · completed, adjusted daily closes':'출처: 토스증권 · 완료된 수정 일별 종가','Daily volatility':'일별 변동성','Past 5-session return':'최근 5거래일 수익률','Past 20-session return':'최근 20거래일 수익률','Completed daily closes':'완료된 일별 종가','Date':'날짜','Close':'종가','GBM assumes zero expected return from the input price to the close. Daily volatility sizes the price range; historical returns are context, not a trend prediction. No news or AI API is used.':'GBM은 입력 가격부터 마감까지 기대 수익률을 0으로 가정합니다. 일별 변동성으로 가격 구간을 계산하며, 과거 수익률은 추세 예측이 아닌 참고 정보입니다. 뉴스나 AI API는 사용하지 않습니다.','Evidence for the daily GBM model, independent of the selected chart interval.':'선택한 차트 간격과 별개인 일봉 GBM 모델의 근거입니다.',
@@ -522,12 +650,16 @@ function quotePercentText(quote,provider) {
 }
 const dateText=(time,market,lang,clock=true)=>Number.isFinite(time)?new Intl.DateTimeFormat(lang==='ko'?'ko-KR':'en-US',{timeZone:zone(market),month:'2-digit',day:'2-digit',...(clock?{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}:{})}).format(time):'—';
 function cells(store,lang,now=store.now()) {
-  if(!store.settings.enabled)return [];
-  return store.settings.symbols.filter(s=>s.visible).map(stock=>{
+  const list=(store.settings.enabled?store.settings.symbols:[]).filter(s=>s.visible).map(stock=>{
     const id=stockID(stock),q=store.quotes.get(id),rate=changeRate(q),col=rate>0?'var(--ample)':rate<0?'#FF453A':'var(--ink-dim)';
     const text=rate!==null&&Math.floor(now/(store.settings.displayInterval*1000))%2===0?quotePercentText(q,store.settings.provider):priceText(q?.price,q?.currency,lang);
     return {id:'widget-stock:'+id,base:'stocks',stock,name:stock.name||store.names.get(id)||stock.symbol,glyph:stock.market==='us'?stock.symbol:stock.name||store.names.get(id)||stock.symbol,meter:{kind:'stock',fraction:rate===null?null:Math.min(1,Math.abs(rate)/0.3),counterclockwise:rate<0,color:col,text,stale:!!store.error||!!q&&(!Number.isFinite(q.quoteAt)||q.quoteAt>now||now-q.quoteAt>120000)}};
   });
+  if(store.settings.accountNotchEnabled&&store.settings.provider==='toss'){
+    const value=store.accountNotchSummary?.dailyProfitLoss.rate,rate=value==null?null:Number(value);
+    list.push({id:'widget-account',base:'account',account:true,name:t(lang,'Account'),glyph:t(lang,'Account'),meter:{kind:'account',fraction:rate===null?null:Math.min(1,Math.abs(rate)/0.30),counterclockwise:rate<0,color:rate>0?'var(--ample)':rate<0?'#FF453A':'var(--ink-dim)',text:accountRateText(value??null),stale:!store.accountNotchSummary}});
+  }
+  return list;
 }
 function domain(values){const lo=Math.min(...values),hi=Math.max(...values),pad=hi>lo?Math.max((hi-lo)*0.08,hi*Number.EPSILON*8):Math.max(hi*0.0005,1e-8);return [Math.max(0,lo-pad),hi+pad];}
 function candleSVG(raw,stock,settings,lang) {
@@ -690,32 +822,120 @@ function downloadCSV(records,trace) {
   const url=URL.createObjectURL(new Blob(['\ufeff'+csv(records,trace)],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
   a.href=url;a.download=trace?'penguinnotch-stock-traces.csv':'penguinnotch-stock-forecasts.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+const accountMoneyText=(value,currency,lang)=>value===null?'—':(['KRW','USD'].includes(currency)?esc(new Intl.NumberFormat(lang==='ko'?'ko-KR':'en-US',{minimumFractionDigits:currency==='USD'?2:0,maximumFractionDigits:currency==='USD'?2:0}).format(value)):esc(value))+' '+esc(currency);
+function accountRateText(value) {
+  if(value===null)return '—';
+  // Shift the decimal string exactly; converting to Number would lose API precision.
+  const sign=value.startsWith('-')?'-':'',parts=value.replace(/^[-+]/,'').split('.'),fraction=parts[1]||'';
+  const scaled=sign+(parts[0]||'0')+fraction.slice(0,2).padEnd(2,'0')+'.'+(fraction.slice(2)||'0');
+  return new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false,signDisplay:'always'}).format(scaled)+'%';
+}
+function accountCardHTML(store,lang) {
+  const tr=key=>esc(t(lang,key)),available=store.accountNotchAvailable(),summary=available?store.accountNotchSummary:null;
+  let html=`<div class="stock-card account-card"><h3>${tr('Stock assets')}</h3><p class="stock-small">${tr('Cash/bonds/options excluded.')}</p><div class="stock-actions"><button id="account-notch-refresh" ${!available||store.accountNotchPending?'disabled':''}>${tr('Refresh')}</button></div>`;
+  if(!summary)return html+`<p role="status" class="stock-error">${tr(!available?'Account unavailable.':store.accountNotchError||(store.accountNotchPending?'Loading account information…':'Account unavailable.'))} —</p></div>`;
+  const rows=[['Market value',summary.marketValue],['Daily P&L',summary.dailyProfitLoss.amount]].map(([label,amount])=>['KRW','USD'].map(currency=>`<dt>${tr(label)} · ${currency}</dt><dd>${accountMoneyText(amount[currency.toLowerCase()],currency,lang)}</dd>`).join('')).join('');
+  return html+`<dl class="stock-metrics stock-kv">${rows}</dl><p>${tr('Overall daily P&L rate')}: ${accountRateText(summary.dailyProfitLoss.rate)}</p><p class="stock-small">${tr('API overall rates use KRW conversion.')}</p><p class="stock-small">${tr('Updated')} ${esc(new Intl.DateTimeFormat(lang==='ko'?'ko-KR':'en-US',{dateStyle:'medium',timeStyle:'medium'}).format(store.accountNotchFetchedAt))}</p></div>`;
+}
+function bindAccountCard(element,store){const refresh=element.querySelector('#account-notch-refresh');if(refresh)refresh.onclick=()=>store.refreshAccountNotch(true);}
+function accountViewerHTML(store,lang) {
+  const tr=key=>esc(t(lang,key)),available=store.viewerAvailable(),seq=store.viewerAccountSeq;
+  let html=`<h2>${tr('My Toss account')}</h2><p class="stock-small">${tr('Read-only account access is opt-in. Account numbers, quantities and balances are never saved in history.')}</p><p class="stock-small">${tr('Account information is shown only on request and cleared when hidden.')}</p><p class="stock-small">${tr('Cash/bonds/options excluded.')}</p>${!available?`<p class="stock-small">${tr(store.settings.provider==='toss'?'Not saved':'Accounts require Toss Securities.')}</p><button id="stock-manage-connection">${tr('Manage connection')}</button>`:''}<div class="stock-actions"><button id="stock-viewer-load" ${!available||store.viewerAccountsBusy?'disabled':''}>${tr('Load accounts')}</button><button id="stock-viewer-hide" ${store.busy||!store.viewerOpen&&!store.settings.accountNotchEnabled?'disabled':''}>${tr('Hide account information')}</button></div>`;
+  const chosen=store.settings.accountNotchSeq,canEnable=available&&!!store.viewerOverview&&!store.viewerBusy&&!store.viewerAccountsBusy&&!store.viewerError&&accountSequence(seq)&&store.viewerAccounts.some(a=>a.accountSeq===seq);
+  html+=`<label class="stock-row"><span>${tr('Show account in notch')}</span><input id="stock-account-notch" type="checkbox" ${store.settings.accountNotchEnabled?'checked':''} ${store.busy||!store.settings.accountNotchEnabled&&!canEnable?'disabled':''}></label><p class="stock-small">${tr('Account in notch')}: ${chosen?esc(store.viewerAccounts.find(a=>a.accountSeq===chosen)?.label||t(lang,'Saved account selection')):'—'}</p>`;
+  html+=`<label class="stock-row"><span>${tr('Include account holdings in estimates')}</span><input id="stock-account-holdings" type="checkbox" ${store.settings.accountSeq>0?'checked':''} ${store.busy||store.settings.accountSeq===0&&!canEnable?'disabled':''}></label><p class="stock-small">${tr(store.settings.accountSeq>0?'Watchlist and account holdings':'Watchlist only · no account access')}${store.settings.accountSeq>0?' · '+esc(store.viewerAccounts.find(a=>a.accountSeq===store.settings.accountSeq)?.label||t(lang,'Saved account selection')):''}</p><p class="stock-small">${tr(chosen>0&&store.settings.accountSeq>0&&chosen!==store.settings.accountSeq?'Saved selections differ. Choose an account to update enabled uses.':'The enabled account features follow your selection. Watchlist estimates work without an account.')}</p>`;
+  if(!store.viewerOpen)return html+`<p role="status" class="${store.viewerError?'stock-error':'stock-small'}">${tr(store.viewerError||'Load accounts and select an account.')}</p>`;
+  html+=`<label class="stock-row">${tr('Select an account')}<select id="stock-viewer-account" aria-label="${tr('Select an account')}" ${store.busy||store.viewerAccountsBusy||!available?'disabled':''}><option value="0" ${seq===0?'selected':''}>${tr('Select an account')}</option>${store.viewerAccounts.map(a=>`<option value="${a.accountSeq}" ${seq===a.accountSeq?'selected':''}>${esc(a.label)}</option>`).join('')}</select></label><div class="stock-actions"><button id="stock-viewer-refresh" ${!available||!seq||store.viewerBusy||store.viewerAccountsBusy?'disabled':''}>${tr('Refresh')}</button></div>`;
+  html+=`<p role="status" class="${store.viewerError?'stock-error':'stock-small'}">${tr(store.viewerError||(store.viewerBusy||store.viewerAccountsBusy?'Loading account information…':!seq?'Load accounts and select an account.':''))}</p>`;
+  const r=store.viewerOverview;if(!r)return html;
+  const money=(v,currency)=>accountMoneyText(v,currency,lang),rate=accountRateText;
+  const summaryRows=after=>['KRW','USD'].map(currency=>{const key=currency.toLowerCase();return `<tr><th scope="row">${currency}</th><td>${money(r.totalPurchaseAmount[key],currency)}</td><td>${money(r.marketValue[after?'amountAfterCost':'amount'][key],currency)}</td><td>${money(r.profitLoss[after?'amountAfterCost':'amount'][key],currency)}</td>${after?'':`<td>${money(r.dailyProfitLoss.amount[key],currency)}</td>`}</tr>`;}).join('');
+  const headers=['Investment','Market value','P&L','Daily P&L'];
+  const table=(rows,after=false)=>`<div class="stock-table-wrap" tabindex="0" role="region" aria-label="${tr('My Toss account')}"><table class="stock-table"><thead><tr><th scope="col">${tr('Currency')}</th>${(after?headers.slice(0,3):headers).map(key=>`<th scope="col">${tr(key)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  const summary=[['Market value',r.marketValue.amount],['Daily P&L',r.dailyProfitLoss.amount]].map(([label,amount])=>['KRW','USD'].map(currency=>`<dt>${tr(label)} · ${currency}</dt><dd>${money(amount[currency.toLowerCase()],currency)}</dd>`).join('')).join('');
+  html+=`<p class="stock-small">${tr('Amounts are separated by trading currency.')}</p><dl class="stock-metrics">${summary}</dl><p>${tr('Overall daily P&L rate')}: ${rate(r.dailyProfitLoss.rate)}</p><p class="stock-small">${tr('API overall rates use KRW conversion.')}</p><details data-stock-disclosure="account-details:${seq}"><summary>${tr('Return details')}</summary>${table(summaryRows(false))}<p>${tr('Overall P&L rate')}: ${rate(r.profitLoss.rate)}</p>`;
+  html+=`<details data-stock-disclosure="account-costs:${seq}"><summary>${tr('After costs')}</summary>${table(summaryRows(true),true)}<p>${tr('Overall P&L rate')}: ${rate(r.profitLoss.rateAfterCost)}</p></details></details><details data-stock-disclosure="account-holdings:${seq}"><summary>${tr('Holdings (%d)').replace('%d',r.items.length)}</summary>`;
+  if(!r.items.length)return html+`<p>${tr('No stock holdings.')}</p></details>`;
+  html+=`<div class="stock-table-wrap" tabindex="0" role="region" aria-label="${tr('Holdings')}"><table class="stock-table"><thead><tr>${['Stock','Currency','Quantity','Average purchase price','Last price','Market value','P&L','Daily P&L'].map(key=>`<th scope="col">${tr(key)}</th>`).join('')}</tr></thead><tbody>${r.items.map(h=>`<tr><th scope="row">${esc(h.name)}<small>${esc(stockID(h))}</small>${h.unsupported?`<small>${tr('Unsupported market or currency · API values')}</small>`:''}</th><td>${esc(h.currency)}</td><td>${esc(h.quantity)}</td><td>${money(h.averagePurchasePrice,h.currency)}</td><td>${money(h.lastPrice,h.currency)}</td><td>${money(h.marketValue.amount,h.currency)}</td><td>${money(h.profitLoss.amount,h.currency)}<small>${rate(h.profitLoss.rate)}</small></td><td>${money(h.dailyProfitLoss.amount,h.currency)}<small>${rate(h.dailyProfitLoss.rate)}</small></td></tr>`).join('')}</tbody></table></div>`;
+  html+=r.items.map(h=>`<details data-stock-disclosure="position-costs:${seq}:${esc(stockID(h))}"><summary>${esc(h.name)} · ${esc(stockID(h))} · ${tr('After costs')}</summary><dl class="stock-metrics"><dt>${tr('Investment')}</dt><dd>${money(h.marketValue.purchaseAmount,h.currency)}</dd><dt>${tr('Market value after costs')}</dt><dd>${money(h.marketValue.amountAfterCost,h.currency)}</dd><dt>${tr('P&L after costs')}</dt><dd>${money(h.profitLoss.amountAfterCost,h.currency)} · ${rate(h.profitLoss.rateAfterCost)}</dd><dt>${tr('Commission')}</dt><dd>${money(h.cost.commission,h.currency)}</dd><dt>${tr('Tax')}</dt><dd>${money(h.cost.tax,h.currency)}</dd></dl></details>`).join('');
+  return html+'</details>';
+}
 function mountSettings({element,store,language=()=> 'en'}) {
   let directory=[],message='',credentialMessage='',credentialError=false,snapshotMessage='',snapshotError=false,pendingSnapshot='',credentialBusy=false,snapshotBusy=false,historyFilter={stockID:'',day:'',model:'',capture:''},lastMarkup='',snapshotTimer;
+  let lastViewerHost=null,lastViewerState=[];
   const tr=key=>esc(t(language(),key));
   const save=patch=>store.saveSettings({...store.settings,...patch});
   const status=()=>{const e=element.querySelector('#stock-message');if(e)e.textContent=t(language(),message);const service=element.querySelector('#stock-service-message');if(service)service.textContent=t(language(),store.error);const credentials=element.querySelector('#stock-credential-message');if(credentials){credentials.textContent=t(language(),credentialMessage);credentials.classList.toggle('stock-error',credentialError);}};
-  function toggle(label,key,value,disabled=false){return `<label class="stock-row"><span>${tr(label)}</span><input type="checkbox" data-setting="${key}" ${value?'checked':''} ${disabled||store.busy?'disabled':''}></label>`;}
+  function toggle(label,key,value,disabled=false){return `<label class="stock-row"><span>${tr(label)}</span><input id="stock-setting-${key}" type="checkbox" data-setting="${key}" ${value?'checked':''} ${disabled||store.busy?'disabled':''}></label>`;}
+  const tabs=[['watchlist','Watchlist'],['account','My account'],['analysis','Analysis'],['history','History']];
+  let activeTab='watchlist',settingsHidden=false,pendingFocus=null;
+  const panelScroll={};
+  function clearCredentialInputs(){element.querySelector('#stock-credentials')?.querySelectorAll('input').forEach(input=>input.value='');}
+  function captureFocus(){
+    const active=document.activeElement;if(!active||!element.contains(active))return null;
+    if(active.id)return {id:active.id,value:active.value,start:active.selectionStart,end:active.selectionEnd};
+    return active.tagName==='SUMMARY'?{disclosure:active.parentElement.dataset.stockDisclosure}:null;
+  }
+  function restoreFocus(focused){
+    if(settingsHidden){pendingFocus=null;return;}
+    if(!focused)return;
+    const next=focused.id?element.querySelector('#'+focused.id):[...element.querySelectorAll('details[data-stock-disclosure]')].find(node=>node.dataset.stockDisclosure===focused.disclosure)?.querySelector('summary');
+    if(next&&!next.disabled){next.focus({preventScroll:true});pendingFocus=null;}else pendingFocus=focused;
+  }
+  function selectTab(key,focus=true){
+    if(!tabs.some(([id])=>id===key))return;
+    pendingFocus=null;
+    if(key!==activeTab){clearCredentialInputs();if(activeTab==='account')store.clearViewer(false);activeTab=key;}
+    // Moving focus before rendering also ends any focused password edit without retaining its value.
+    if(focus)element.querySelector('#stock-tab-'+key)?.focus({preventScroll:true});
+    render();
+  }
+  function openConnection(){selectTab('watchlist');const details=element.querySelector('#stock-connection');details.open=true;details.querySelector('summary')?.focus({preventScroll:true});}
   function render() {
-    const lang=language(),s=store.settings,active=document.activeElement,restoreDisclosures=rememberDisclosures(element);
-    const focused=active&&element.contains(active)&&active.id?{id:active.id,value:active.value,start:active.selectionStart,end:active.selectionEnd}:null;
-    // Quote ticks must not replace focused controls or retain credentials in JS.
-    const sig=JSON.stringify([s,store.busy,store.credentials,store.accounts,store.accountsBusy,lang,credentialBusy]);
+    const lang=language(),s=store.settings,focused=captureFocus()||pendingFocus,restoreDisclosures=rememberDisclosures(element);
+    element.querySelectorAll('[data-stock-panel]').forEach(panel=>{if(!panel.hidden)panelScroll[panel.dataset.stockPanel]=panel.scrollTop;});
+    let rebuilt=false;
+    // Public quote ticks leave the static controls and credential inputs in place.
+    const sig=JSON.stringify([s,store.busy,store.credentials,lang,credentialBusy]);
     if(sig!==lastMarkup){
-      if(active?.type==='password'&&element.contains(active)&&!credentialBusy)return;
-      lastMarkup=sig;
-      element.innerHTML=`<div class="stock-settings"><section><h2>${tr('Stocks')}</h2><p id="stock-service-message" class="stock-error" role="status"></p>${toggle('Show stocks in notch','enabled',s.enabled)}<p class="stock-small">${tr('Keep up to 30 Korean or US stocks. Turning this off keeps your list and keys.')}</p><label class="stock-row">${tr('Quote provider')}<select id="stock-provider" aria-label="${tr('Quote provider')}" ${store.busy?'disabled':''}><option value="toss" ${s.provider==='toss'?'selected':''}>${tr('Toss Securities')}</option><option value="finnhub" ${s.provider==='finnhub'?'selected':''}>Finnhub</option></select></label><p class="stock-small">${tr('Only the selected provider is used.')}</p>${s.provider==='finnhub'?`<p class="stock-small">${tr('Finnhub supports US quotes only. Candles and holdings are unavailable.')}</p>`:''}</section>
-      <section><h2>${tr('API credentials')} · ${tr(store.credentials[s.provider]?'Saved':'Not saved')}</h2><form id="stock-credentials" autocomplete="off"><fieldset ${credentialBusy?'disabled':''}>${s.provider==='toss'?`<label>${tr('Client ID')}<input id="stock-client-id" type="password" autocomplete="new-password" required></label><label>${tr('Client secret')}<input id="stock-client-secret" type="password" autocomplete="new-password" required></label>`:`<label>${tr('Finnhub API key')}<input id="stock-api-key" type="password" autocomplete="new-password" required></label>`}<div class="stock-actions"><button type="submit">${tr('Save keys')}</button><button id="stock-remove-keys" type="button">${tr('Remove keys')}</button></div></fieldset></form><p id="stock-credential-message" role="status"></p><p class="stock-small">${tr(s.provider==='toss'?'Credentials stay in native secure storage. Register this PC’s public IP in Toss WTS → Settings → Open API → Allowed IPs.':'Finnhub API keys stay in Windows Credential Manager.')}</p></section>
-      <section><h2>${tr('Watchlist')} (${s.symbols.length}/30)</h2><form id="stock-add-form" class="stock-add"><label for="stock-symbol">${tr('Add symbol')}</label><div class="stock-actions"><input id="stock-symbol" placeholder="${tr('Company name or symbol · 삼성전자, 005930, AAPL')}" autocomplete="off" maxlength="100"><button type="submit" ${store.busy?'disabled':''}>${tr('Add symbol')}</button></div><div id="stock-matches"></div></form><p id="stock-message" role="status" class="stock-error"></p><div class="stock-watchlist">${s.symbols.length?s.symbols.map((stock,i)=>`<div class="stock-watch-row" ${stock.visible?`data-stock-drag="${esc(stockID(stock))}"`: ''}><span>${stock.visible?`<span class="stock-drag-handle" title="${tr('Drag to reorder')}" aria-hidden="true">⠿</span> `:''}<b>${esc(stock.name||store.names.get(stockID(stock))||stock.symbol)}</b><small>${esc(stockID(stock))}${s.provider==='finnhub'&&stock.market==='kr'?' · '+tr('Not supported by Finnhub'):''}</small></span><div class="stock-actions"><label title="${tr('Show')}"><input type="checkbox" data-visible="${i}" aria-label="${tr('Show')} ${esc(stock.symbol)}" ${stock.visible?'checked':''} ${store.busy?'disabled':''}>${tr('Show')}</label><input type="color" data-color="${i}" value="#${stock.color||'36a8eb'}" aria-label="${tr('Color')} ${esc(stock.symbol)}" ${store.busy?'disabled':''}><button data-auto="${i}" ${store.busy?'disabled':''}>${tr('Automatic color')}</button><button data-move="${i}" data-dir="-1" aria-label="${tr('Up')} ${esc(stock.symbol)}" ${!i||store.busy?'disabled':''}>↑</button><button data-move="${i}" data-dir="1" aria-label="${tr('Down')} ${esc(stock.symbol)}" ${i===s.symbols.length-1||store.busy?'disabled':''}>↓</button><button data-remove="${i}" aria-label="${tr('Remove')} ${esc(stock.symbol)}" ${store.busy?'disabled':''}>${tr('Remove')}</button></div></div>`).join(''):`<p>${tr('No stocks yet. Add a name, Korean code or US ticker.')}</p>`}</div></section>
-      <section><h2>${tr('Notch quote display')}</h2><label class="stock-row">${tr('Switch interval (seconds)')}<input type="number" id="stock-display-interval" aria-label="${tr('Switch interval (seconds)')}" min="1" max="10" value="${s.displayInterval}" ${store.busy?'disabled':''}></label></section>
-      ${s.provider==='toss'?`<section><h2>${tr('Hover chart')}</h2><label class="stock-row">${tr('Chart interval')}<select id="stock-chart-interval" aria-label="${tr('Chart interval')}" ${store.busy?'disabled':''}>${Object.keys(TTL).map(k=>`<option ${s.chartInterval===k?'selected':''}>${k}</option>`).join('')}</select></label><label class="stock-row">${tr('Candles (1–20)')}<input type="number" id="stock-candle-count" aria-label="${tr('Candles (1–20)')}" min="1" max="20" value="${s.candleCount}" ${store.busy?'disabled':''}></label><p>${tr('Moving averages')}</p><div class="stock-actions">${[5,20,60,120].map(n=>`<label><input type="checkbox" data-sma="${n}" ${s.movingAverages.includes(n)?'checked':''} ${store.busy?'disabled':''}> SMA ${n}</label>`).join('')}</div><p class="stock-small">${tr('1m refreshes each minute; 10m every 10 minutes; 1d daily. SMA includes history before the visible candles.')}</p>${toggle('Show technical analysis','showTechnical',s.showTechnical)}<p class="stock-small">${tr('20 completed bars across trading days; volume ≥1.5× prior 10 bars, SMA5/20 and breakout must agree. No account access needed.')}</p></section>
-      <section><h2>${tr('Stock forecasts')}</h2>${toggle('Show forecasts for watched stocks','forecastsEnabled',s.forecastsEnabled)}<p class="stock-small">${tr('Watched stocks use public quotes and candles. Loading accounts is optional; select an account only to include its holdings.')}</p>${s.forecastsEnabled?`<div class="stock-actions"><button id="stock-load-accounts" ${!store.active()||store.accountsBusy||store.busy?'disabled':''}>${tr('Load accounts (optional)')}</button><label>${tr('Select an account')} <select id="stock-account" aria-label="${tr('Select an account')}" ${store.busy||store.accountsBusy?'disabled':''}><option value="0">${tr('Watchlist only · no account access')}</option>${s.accountSeq>0&&!store.accounts.some(a=>a.accountSeq===s.accountSeq)?`<option value="${s.accountSeq}" selected>${tr('Saved account selection')}</option>`:''}${store.accounts.map(a=>`<option value="${a.accountSeq}" ${a.accountSeq===s.accountSeq?'selected':''}>${esc(a.label)}</option>`).join('')}</select></label></div><p id="stock-account-message" role="status" class="stock-error"></p><p class="stock-small">${tr('Read-only account access is opt-in. Account numbers, quantities and balances are never saved in history.')}</p>${toggle('Automatically record forecasts','recordForecasts',s.recordForecasts)}<p class="stock-small">${tr('One prediction per stock 55–60 minutes before regular close while this app is running. Missed predictions are not backfilled.')}</p><div class="stock-actions"><button id="stock-snapshot">${tr('Save current predictions')}</button><button id="stock-refresh-holdings">${tr('Refresh')}</button></div><p id="stock-snapshot-status" role="status"></p><div id="stock-holdings"></div>`:''}</section>`:''}
-      <section><h2>${tr('Forecast history')}</h2><p class="stock-small">${tr('Saved snapshots and minute traces are separate. Scoring starts on the next market-local calendar day using unadjusted closes.')}</p><div id="stock-history"></div></section></div>`;
+      lastMarkup=sig;rebuilt=true;
+      element.innerHTML=`<div class="stock-settings"><div class="stock-tabs" role="tablist" aria-label="${tr('Stock settings')}">${tabs.map(([key,label])=>`<button id="stock-tab-${key}" data-stock-tab="${key}" role="tab" aria-selected="${activeTab===key}" aria-controls="stock-panel-${key}" tabindex="${activeTab===key?0:-1}">${tr(label)}</button>`).join('')}</div><p id="stock-service-message" class="stock-error" role="status"></p>
+      <div id="stock-panel-watchlist" class="stock-panel" data-stock-panel="watchlist" role="tabpanel" aria-labelledby="stock-tab-watchlist" tabindex="0"><section>${toggle('Show stocks in notch','enabled',s.enabled)}<p class="stock-small">${tr('Keep up to 30 Korean or US stocks. Turning this off keeps your list and keys.')}</p></section>
+      <section><h2>${tr('Watchlist')} (${s.symbols.length}/30)</h2><form id="stock-add-form" class="stock-add"><label for="stock-symbol">${tr('Add symbol')}</label><div class="stock-actions"><input id="stock-symbol" placeholder="${tr('Company name or symbol · 삼성전자, 005930, AAPL')}" autocomplete="off" maxlength="100"><button type="submit" ${store.busy?'disabled':''}>${tr('Add symbol')}</button></div><div id="stock-matches"></div></form><p id="stock-message" role="status" class="stock-error"></p><div class="stock-watchlist">${s.symbols.length?s.symbols.map((stock,i)=>`<div class="stock-watch-row" ${stock.visible?`data-stock-drag="${esc(stockID(stock))}"`: ''}><span>${stock.visible?`<span class="stock-drag-handle" title="${tr('Drag to reorder')}" aria-hidden="true">⠿</span> `:''}<b>${esc(stock.name||store.names.get(stockID(stock))||stock.symbol)}</b><small>${esc(stockID(stock))}${s.provider==='finnhub'&&stock.market==='kr'?' · '+tr('Not supported by Finnhub'):''}</small></span><div class="stock-actions"><label title="${tr('Show')}"><input id="stock-visible-${i}" type="checkbox" data-visible="${i}" aria-label="${tr('Show')} ${esc(stock.symbol)}" ${stock.visible?'checked':''} ${store.busy?'disabled':''}>${tr('Show')}</label><input id="stock-color-${i}" type="color" data-color="${i}" value="#${stock.color||'36a8eb'}" aria-label="${tr('Color')} ${esc(stock.symbol)}" ${store.busy?'disabled':''}><button id="stock-auto-${i}" data-auto="${i}" ${store.busy?'disabled':''}>${tr('Automatic color')}</button><button id="stock-up-${i}" data-move="${i}" data-dir="-1" aria-label="${tr('Up')} ${esc(stock.symbol)}" ${!i||store.busy?'disabled':''}>↑</button><button id="stock-down-${i}" data-move="${i}" data-dir="1" aria-label="${tr('Down')} ${esc(stock.symbol)}" ${i===s.symbols.length-1||store.busy?'disabled':''}>↓</button><button id="stock-remove-${i}" data-remove="${i}" aria-label="${tr('Remove')} ${esc(stock.symbol)}" ${store.busy?'disabled':''}>${tr('Remove')}</button></div></div>`).join(''):`<p>${tr('No stocks yet. Add a name, Korean code or US ticker.')}</p>`}</div></section>
+      <section><details data-stock-disclosure="display-options"><summary>${tr('Display options')}</summary><label class="stock-row">${tr('Switch interval (seconds)')}<input type="number" id="stock-display-interval" aria-label="${tr('Switch interval (seconds)')}" min="1" max="10" value="${s.displayInterval}" ${store.busy?'disabled':''}></label></details></section>
+      <section><details id="stock-connection" data-stock-disclosure="connection"><summary>${tr('Connection')} · ${tr(store.credentials[s.provider]?'Saved':'Not saved')}</summary><label class="stock-row">${tr('Quote provider')}<select id="stock-provider" aria-label="${tr('Quote provider')}" ${store.busy?'disabled':''}><option value="toss" ${s.provider==='toss'?'selected':''}>${tr('Toss Securities')}</option><option value="finnhub" ${s.provider==='finnhub'?'selected':''}>Finnhub</option></select></label><p class="stock-small">${tr('Only the selected provider is used.')}</p>${s.provider==='finnhub'?`<p class="stock-small">${tr('Finnhub supports US quotes only. Candles and holdings are unavailable.')}</p>`:''}<h3>${tr('API credentials')} · ${tr(store.credentials[s.provider]?'Saved':'Not saved')}</h3><form id="stock-credentials" autocomplete="off"><fieldset ${credentialBusy?'disabled':''}>${s.provider==='toss'?`<label>${tr('Client ID')}<input id="stock-client-id" type="password" autocomplete="new-password" required></label><label>${tr('Client secret')}<input id="stock-client-secret" type="password" autocomplete="new-password" required></label>`:`<label>${tr('Finnhub API key')}<input id="stock-api-key" type="password" autocomplete="new-password" required></label>`}<div class="stock-actions"><button type="submit">${tr('Save keys')}</button><button id="stock-remove-keys" type="button">${tr('Remove keys')}</button></div></fieldset></form><p class="stock-small">${tr(s.provider==='toss'?'Credentials stay in native secure storage. Register this PC’s public IP in Toss WTS → Settings → Open API → Allowed IPs.':'Finnhub API keys stay in Windows Credential Manager.')}</p></details><p id="stock-credential-message" role="status"></p></section></div>
+      <div id="stock-panel-account" class="stock-panel" data-stock-panel="account" role="tabpanel" aria-labelledby="stock-tab-account" tabindex="0" hidden><section id="stock-account-viewer" class="stock-account-viewer"></section></div>
+      <div id="stock-panel-analysis" class="stock-panel" data-stock-panel="analysis" role="tabpanel" aria-labelledby="stock-tab-analysis" tabindex="0" hidden>
+      ${s.provider==='toss'?`<section><h2>${tr('Hover chart')}</h2><label class="stock-row">${tr('Chart interval')}<select id="stock-chart-interval" aria-label="${tr('Chart interval')}" ${store.busy?'disabled':''}>${Object.keys(TTL).map(k=>`<option ${s.chartInterval===k?'selected':''}>${k}</option>`).join('')}</select></label><label class="stock-row">${tr('Candles (1–20)')}<input type="number" id="stock-candle-count" aria-label="${tr('Candles (1–20)')}" min="1" max="20" value="${s.candleCount}" ${store.busy?'disabled':''}></label><details data-stock-disclosure="moving-averages"><summary>${tr('Moving averages')}</summary><div class="stock-actions">${[5,20,60,120].map(n=>`<label><input id="stock-sma-${n}" type="checkbox" data-sma="${n}" ${s.movingAverages.includes(n)?'checked':''} ${store.busy?'disabled':''}> SMA ${n}</label>`).join('')}</div></details>${toggle('Show technical analysis','showTechnical',s.showTechnical)}<details data-stock-disclosure="technical-methodology"><summary>${tr('How analysis works')}</summary><p class="stock-small">${tr('1m refreshes each minute; 10m every 10 minutes; 1d daily. SMA includes history before the visible candles.')}</p><p class="stock-small">${tr('20 completed bars across trading days; volume ≥1.5× prior 10 bars, SMA5/20 and breakout must agree. No account access needed.')}</p></details></section>`:`<section><p class="stock-small">${tr('Finnhub supports US quotes only. Candles and holdings are unavailable.')}</p><button id="stock-analysis-connection">${tr('Manage connection')}</button></section>`}
+      <section><h2>${tr('Stock forecasts')}</h2>${s.provider==='toss'?toggle('Show forecasts for watched stocks','forecastsEnabled',s.forecastsEnabled):''}<p class="stock-small">${tr(s.accountSeq>0?'Watchlist and account holdings':'Watchlist only · no account access')}${s.accountSeq>0?' · '+tr('Saved account selection'):''}</p>${s.accountSeq>0?`<p class="stock-small">${tr('Estimates use a saved account. Select an account to change it, or turn off holdings.')}</p>`:''}<button id="stock-manage-accounts">${tr('Manage accounts')}</button><p id="stock-account-message" role="status" class="stock-error"></p>
+      ${s.provider==='toss'?`<details data-stock-disclosure="forecast-methodology"><summary>${tr('How estimates work')}</summary><p class="stock-small">${tr('Read-only account access is opt-in. Account numbers, quantities and balances are never saved in history.')}</p><p class="stock-small">${tr('Uncalibrated GBM: expected close equals the current quote; odds are versus the previous close.')}</p></details>${s.forecastsEnabled?`<details data-stock-disclosure="current-estimates"><summary>${tr('Current estimates')}</summary><button id="stock-refresh-holdings">${tr('Refresh')}</button><div id="stock-holdings"></div></details><details data-stock-disclosure="recording-options"><summary>${tr('Recording options')}</summary>${toggle('Automatically record forecasts','recordForecasts',s.recordForecasts)}<p class="stock-small">${tr('One prediction per stock 55–60 minutes before regular close while this app is running. Missed predictions are not backfilled.')}</p><button id="stock-snapshot">${tr('Save current predictions')}</button></details>`:''}`:''}<p id="stock-forecast-status" class="stock-error" role="status"></p><p id="stock-snapshot-status" role="status"></p><p id="stock-analysis-history-status" class="stock-error" role="status"></p></section></div>
+      <div id="stock-panel-history" class="stock-panel" data-stock-panel="history" role="tabpanel" aria-labelledby="stock-tab-history" tabindex="0" hidden><section><h2>${tr('Forecast history')}</h2><p class="stock-small">${tr('Saved snapshots and minute traces are separate. Scoring starts on the next market-local calendar day using unadjusted closes.')}</p><div id="stock-history"></div></section></div></div>`;
       bind();
-      if(focused&&focused.id==='stock-symbol'){const next=element.querySelector('#stock-symbol');next.value=focused.value;next.focus();next.setSelectionRange(focused.start,focused.end);search();}
-      else if(focused&&active?.type!=='password'){element.querySelector('#'+focused.id)?.focus();}
+      if(focused?.id==='stock-symbol'){const next=element.querySelector('#stock-symbol');next.value=focused.value;next.setSelectionRange(focused.start,focused.end);search();}
     }
-    status();renderPortfolio();renderHistory();restoreDisclosures();
+    element.querySelectorAll('[data-stock-tab]').forEach(tab=>{tab.setAttribute('aria-selected',String(tab.dataset.stockTab===activeTab));tab.tabIndex=tab.dataset.stockTab===activeTab?0:-1;});
+    element.querySelectorAll('[data-stock-panel]').forEach(panel=>{panel.hidden=panel.dataset.stockPanel!==activeTab;if(!panel.hidden)panel.scrollTop=panelScroll[panel.dataset.stockPanel]||0;});
+    status();renderViewer();renderPortfolio();renderHistory();restoreDisclosures();
+    if(rebuilt)restoreFocus(focused);
+  }
+  function renderViewer(){
+    const host=element.querySelector('#stock-account-viewer');if(!host){lastViewerHost=null;lastViewerState=[];return;}
+    if(activeTab!=='account'||settingsHidden){if(host.innerHTML)host.innerHTML='';lastViewerHost=null;lastViewerState=[];return;}
+    const state=[language(),store.viewerAvailable(),store.viewerOpen,store.viewerAccounts,store.viewerAccountSeq,store.viewerOverview,store.viewerFetchedAt,store.viewerError,store.viewerAccountsBusy,store.viewerBusy,store.busy,store.settings.accountNotchEnabled,store.settings.accountNotchSeq,store.settings.accountSeq];
+    if(host===lastViewerHost&&state.every((value,i)=>value===lastViewerState[i]))return;
+    lastViewerHost=host;lastViewerState=state;
+    const restoreDisclosures=rememberDisclosures(host);
+    const focused=host.contains(document.activeElement)?captureFocus():null;
+    host.innerHTML=accountViewerHTML(store,language());
+    host.querySelector('#stock-viewer-load').onclick=()=>store.loadViewerAccounts();
+    host.querySelector('#stock-viewer-hide').onclick=()=>store.hideAccountInformation();
+    const select=host.querySelector('#stock-viewer-account');if(select)select.onchange=()=>store.selectViewerAccount(Number(select.value));
+    const refresh=host.querySelector('#stock-viewer-refresh');if(refresh)refresh.onclick=()=>store.selectViewerAccount(store.viewerAccountSeq);
+    const notch=host.querySelector('#stock-account-notch');if(notch)notch.onchange=()=>store.setAccountNotchEnabled(notch.checked);
+    const holdings=host.querySelector('#stock-account-holdings');if(holdings)holdings.onchange=()=>store.setAccountHoldingsEnabled(holdings.checked);
+    const connection=host.querySelector('#stock-manage-connection');if(connection)connection.onclick=openConnection;
+    restoreDisclosures();
+    restoreFocus(focused);
   }
   function search(){const input=element.querySelector('#stock-symbol'),host=element.querySelector('#stock-matches');if(!input||!host)return;host.innerHTML='';if(store.settings.provider!=='toss')return;for(const c of findCompanies(directory,input.value)){const b=document.createElement('button');b.type='button';b.textContent=`${c.name} · ${c.code} (${c.market})`;b.onclick=()=>add(c.code);host.appendChild(b);}}
   async function add(raw) {
@@ -723,16 +943,24 @@ function mountSettings({element,store,language=()=> 'en'}) {
     const stock=company?parseStock('KR:'+company.code):parseStock(value);
     message=!stock?'Company not found. Select a Korean match or enter a US ticker.':stock.market==='kr'&&store.settings.provider==='finnhub'?'Korean stocks require Toss Securities.':store.settings.symbols.some(s=>stockID(s)===stockID(stock))?'This stock is already in your watchlist.':store.settings.symbols.length>=30?'The watchlist holds 30 symbols.':'';
     if(!message){const ok=await save({symbols:[...store.settings.symbols,{...stock,name:company?.name||'',visible:true}]});if(ok){const field=element.querySelector('#stock-symbol');if(field)field.value='';search();}}
-    status();element.querySelector('#stock-symbol')?.focus();
+    status();element.querySelector('#stock-symbol')?.focus({preventScroll:true});
   }
   function bind() {
+    element.querySelectorAll('[data-stock-tab]').forEach(tab=>{
+      tab.onclick=()=>selectTab(tab.dataset.stockTab);
+      tab.onkeydown=e=>{
+        const index=tabs.findIndex(([key])=>key===tab.dataset.stockTab),offset={ArrowLeft:-1,ArrowRight:1,ArrowUp:-1,ArrowDown:1}[e.key];
+        if(offset===undefined&&!['Home','End'].includes(e.key))return;
+        e.preventDefault();selectTab(tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+offset+tabs.length)%tabs.length][0]);
+      };
+    });
+    element.querySelector('#stock-manage-accounts').onclick=()=>selectTab('account');
+    const connection=element.querySelector('#stock-analysis-connection');if(connection)connection.onclick=openConnection;
     element.querySelectorAll('[data-setting]').forEach(e=>e.onchange=()=>save({[e.dataset.setting]:e.checked}));
     element.querySelector('#stock-provider').onchange=e=>save({provider:e.target.value});
     const number=(id,key)=>{const input=element.querySelector('#'+id);if(input)input.onchange=()=>{if(input.checkValidity())save({[key]:Number(input.value)});};};
     number('stock-display-interval','displayInterval');number('stock-candle-count','candleCount');
     const chart=element.querySelector('#stock-chart-interval');if(chart)chart.onchange=()=>save({chartInterval:chart.value});
-    const loadAccounts=element.querySelector('#stock-load-accounts');if(loadAccounts)loadAccounts.onclick=()=>store.loadAccounts();
-    const account=element.querySelector('#stock-account');if(account)account.onchange=()=>save({accountSeq:+account.value});
     element.querySelectorAll('[data-sma]').forEach(e=>e.onchange=()=>save({movingAverages:[...element.querySelectorAll('[data-sma]:checked')].map(n=>+n.dataset.sma)}));
     const mutate=(index,patch)=>save({symbols:store.settings.symbols.map((s,i)=>i===index?{...s,...patch}:s)});
     element.querySelectorAll('[data-visible]').forEach(e=>e.onchange=()=>mutate(+e.dataset.visible,{visible:e.checked}));
@@ -745,13 +973,14 @@ function mountSettings({element,store,language=()=> 'en'}) {
       e.preventDefault();if(credentialBusy)return;
       const provider=store.settings.provider,form=e.currentTarget;
       if(!form.reportValidity())return;
+      store.clearViewer();
       credentialBusy=true;form.querySelector('fieldset').disabled=true;
       // Secrets exist only in the password inputs and this transient IPC argument.
       let args=provider==='toss'?{provider,clientId:form.querySelector('#stock-client-id').value.trim(),clientSecret:form.querySelector('#stock-client-secret').value.trim()}:{provider,apiKey:form.querySelector('#stock-api-key').value.trim()};
       form.querySelectorAll('input').forEach(input=>input.value='');
       try{store.credentials=await store.invoke('save_stock_credentials',args);credentialMessage='Keys saved';credentialError=false;store.invalidate();await store.emit('stock-credentials',{});void store.tick();}catch(_){credentialMessage='Could not save credentials. Inputs have been cleared.';credentialError=true;}finally{args=null;credentialBusy=false;lastMarkup='';render();}
     };
-    element.querySelector('#stock-remove-keys').onclick=async()=>{if(credentialBusy)return;const provider=store.settings.provider;credentialBusy=true;render();try{store.credentials=await store.invoke('delete_stock_credentials',{provider});credentialMessage='Keys removed';credentialError=false;store.invalidate();await store.emit('stock-credentials',{});}catch(_){credentialMessage='Could not remove credentials.';credentialError=true;}finally{credentialBusy=false;lastMarkup='';render();}};
+    element.querySelector('#stock-remove-keys').onclick=async()=>{if(credentialBusy)return;store.clearViewer();const provider=store.settings.provider;credentialBusy=true;render();try{store.credentials=await store.invoke('delete_stock_credentials',{provider});credentialMessage='Keys removed';credentialError=false;store.invalidate();await store.emit('stock-credentials',{});}catch(_){credentialMessage='Could not remove credentials.';credentialError=true;}finally{credentialBusy=false;lastMarkup='';render();}};
     const snapshot=element.querySelector('#stock-snapshot');if(snapshot)snapshot.onclick=async()=>{
       if(snapshotBusy)return;snapshotBusy=true;snapshotMessage='';snapshotError=false;pendingSnapshot=String(Date.now());renderPortfolio();
       const failed=()=>{snapshotBusy=false;snapshotMessage='Stock recording service did not respond. Open the notch and try again.';snapshotError=true;renderPortfolio();};
@@ -761,27 +990,30 @@ function mountSettings({element,store,language=()=> 'en'}) {
     const refresh=element.querySelector('#stock-refresh-holdings');if(refresh)refresh.onclick=async()=>{refresh.disabled=true;try{await store.tick();}finally{refresh.disabled=false;}};
   }
   function renderPortfolio(){
-    const host=element.querySelector('#stock-holdings');if(!host)return;const restoreDisclosures=rememberDisclosures(host);
-    host.innerHTML=store.forecastError?`<p>${tr(store.forecastError)}</p>`:'';
+    if(activeTab!=='analysis'||settingsHidden)return;
+    const host=element.querySelector('#stock-holdings'),restoreDisclosures=host?rememberDisclosures(host):()=>{};
     const accountMessage=element.querySelector('#stock-account-message');if(accountMessage)accountMessage.textContent=t(language(),store.accountError);
-    for(const h of store.forecastStocks){const record=store.candidates.find(r=>r.stockID===stockID(h));host.innerHTML+=`<details data-stock-disclosure="current:${esc(stockID(h))}"><summary>${esc(h.name)} · ${esc(stockID(h))}</summary>${record?forecastHTML(record,record,language())+evidenceHTML(record,language(),'current-evidence:'+groupID(record)):`<p>${tr(store.reasons.get(stockID(h))||'No recent trade price is available.')}</p>`}</details>`;}
+    const forecastStatus=element.querySelector('#stock-forecast-status');if(forecastStatus)forecastStatus.textContent=t(language(),store.forecastError);
+    const historyStatus=element.querySelector('#stock-analysis-history-status');if(historyStatus)historyStatus.textContent=t(language(),store.historyError);
+    if(host)host.innerHTML=store.forecastStocks.map(h=>{const record=store.candidates.find(r=>r.stockID===stockID(h));return `<details data-stock-disclosure="current:${esc(stockID(h))}"><summary>${esc(h.name)} · ${esc(stockID(h))}</summary>${record?forecastHTML(record,record,language())+evidenceHTML(record,language(),'current-evidence:'+groupID(record)):`<p>${tr(store.reasons.get(stockID(h))||'No recent trade price is available.')}</p>`}</details>`;}).join('');
     restoreDisclosures();
     const b=element.querySelector('#stock-snapshot');if(b)b.disabled=snapshotBusy||!store.active()||!store.candidates.length||!!store.historyError;
     const messageHost=element.querySelector('#stock-snapshot-status');if(messageHost){messageHost.textContent=t(language(),snapshotMessage);messageHost.classList.toggle('stock-error',snapshotError);}
   }
   let historyRenderSignature='';
   function renderHistory() {
+    if(activeTab!=='history'||settingsHidden)return;
     const host=element.querySelector('#stock-history');if(!host)return;
     const h=store.history;
     const signature=JSON.stringify([language(),historyFilter,h?.trends.length,h?.forecasts.map(r=>r.actualClose),store.historyError,store.reconciliationError]);
     if(host.dataset.rendered==='true'&&signature===historyRenderSignature)return;
-    const restoreDisclosures=rememberDisclosures(host);
+    const restoreDisclosures=rememberDisclosures(host),focused=host.contains(document.activeElement)?captureFocus():null;
     historyRenderSignature=signature;host.dataset.rendered='true';
-    if(store.historyError){host.innerHTML=`<p class="stock-error" role="alert">${tr(store.historyError)}</p>`;return;}
+    if(store.historyError){host.innerHTML=`<p class="stock-error" role="alert">${tr(store.historyError)}</p><button id="stock-history-refresh">${tr('Refresh')}</button>`;host.querySelector('#stock-history-refresh').onclick=()=>store.loadHistory();restoreFocus(focused);return;}
     if(!h){host.textContent='…';return;}
     const all=[...h.forecasts,...h.trends],days=[...new Set(all.map(r=>dayKey(r.sessionStart,r.market)))].sort().reverse(),models=[...new Set(all.map(r=>r.model))],stocks=[...new Map(all.map(r=>[r.stockID,r.name])).entries()].sort(([a],[b])=>a.localeCompare(b));
     const option=(v,label,selected)=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(label)}</option>`;
-    const select=(key,label,values)=>`<label>${tr(label)} <select data-history-filter="${key}" aria-label="${tr(label)}">${option('',t(language(),'All'),historyFilter[key])}${values.map(([value,name])=>option(value,name,historyFilter[key])).join('')}</select></label>`;
+    const select=(key,label,values)=>`<label>${tr(label)} <select id="stock-history-filter-${key}" data-history-filter="${key}" aria-label="${tr(label)}">${option('',t(language(),'All'),historyFilter[key])}${values.map(([value,name])=>option(value,name,historyFilter[key])).join('')}</select></label>`;
     host.innerHTML=`<div class="stock-actions">${select('stockID','Stock',stocks.map(([id,name])=>[id,`${name} · ${id}`]))}${select('day','Target day',days.map(d=>[d,d]))}${select('model','Model',models.map(m=>[m,m]))}${select('capture','Capture',[['manual',t(language(),'Manual')],['scheduled',t(language(),'Scheduled')]])}</div>`;
     const {records,traces,cohort}=filterHistory(h,historyFilter),groups=new Map();
     // Separate capture, model, currency and target day. Never pool daily traces into scores.
@@ -802,14 +1034,15 @@ function mountSettings({element,store,language=()=> 'en'}) {
     host.querySelectorAll('[data-history-filter]').forEach(e=>e.onchange=()=>{historyFilter[e.dataset.historyFilter]=e.value;renderHistory();});
     host.querySelector('#stock-export-forecasts').onclick=()=>downloadCSV(records,false);host.querySelector('#stock-export-traces').onclick=()=>downloadCSV(traces,true);host.querySelector('#stock-history-refresh').onclick=()=>store.loadHistory();
     host.querySelector('#stock-export-comparison').onclick=()=>downloadCSV(cohort,false);
+    restoreFocus(focused);
   }
   store.listen?.('stock-history-updated',e=>{if(e.payload?.requestID&&e.payload.requestID===pendingSnapshot){clearTimeout(snapshotTimer);snapshotBusy=false;snapshotMessage=e.payload.error||(+e.payload.count>0?'Snapshots saved':'No new snapshots: already saved or no fresh estimate.');snapshotError=!!e.payload.error;renderPortfolio();}}).then(f=>store.unlisten.push(f)).catch(()=>{});
   fetch('krx-listed-companies.tsv').then(r=>{if(!r.ok)throw Error();return r.text();}).then(text=>{directory=parseDirectory(text);search();}).catch(()=>{message='KRX lookup unavailable; codes and US tickers still work.';status();});
   store.unlisten.push(bindStockDrag(element,store));
   render();
-  return {render,show(visible,focusInput=true){store.visible=visible;void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();if(focusInput)requestAnimationFrame(()=>element.querySelector('#stock-symbol')?.focus());void store.tick();}}};
+  return {render,show(visible,moveFocus=true){store.visible=visible;settingsHidden=!visible;if(!visible){clearCredentialInputs();store.clearViewer(false);renderViewer();}void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();if(moveFocus)requestAnimationFrame(()=>element.querySelector('#stock-tab-'+activeTab)?.focus({preventScroll:true}));void store.tick();}}};
 }
-const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
+const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 else root.PenguinNotchStocks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

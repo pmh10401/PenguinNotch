@@ -31,6 +31,15 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.24.1", headline: L10n.t("Simpler stock settings"),
+                        changes: [.init(title: L10n.t("Find watchlists, accounts, analysis and history in separate tabs.")),
+                                  .init(title: L10n.t("Load accounts once and keep detailed information collapsed until needed."))]),
+            ReleaseNote(version: "1.24.0", headline: L10n.t("Account daily change in the notch"),
+                        changes: [.init(title: L10n.t("Opt in to a 60-second stock-asset summary without saving private balances.")),
+                                  .init(title: L10n.t("Reuse account snapshots and avoid unnecessary viewer updates."))]),
+            ReleaseNote(version: "1.23.0", headline: L10n.t("View your Toss Securities stock assets"),
+                        changes: [.init(title: L10n.t("View masked accounts, stock values and position details on macOS and Windows.")),
+                                  .init(title: L10n.t("Account viewing is optional and independent of stock forecasts. Private data is not saved or sent to AI."))]),
             ReleaseNote(version: "1.22.1", headline: L10n.t("Keep stock changes visible during temporary outages"),
                         changes: [.init(title: L10n.t("Validated same-session closing prices survive temporary request failures on macOS and Windows.")),
                                   .init(title: L10n.t("Stock hover bars follow green gains and red losses."))]),

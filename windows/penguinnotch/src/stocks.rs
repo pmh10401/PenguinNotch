@@ -21,6 +21,7 @@ const FINNHUB: &str = "https://finnhub.io";
 const MAX_BODY: u64 = 2 * 1024 * 1024;
 const MAX_CACHE: usize = 512;
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+static VIEWER_GENERATION: AtomicU64 = AtomicU64::new(0);
 static HISTORY_LOCK: Mutex<()> = Mutex::new(());
 type Result<T> = std::result::Result<T, String>;
 
@@ -79,6 +80,8 @@ pub struct StockSettings {
     pub forecasts_enabled: bool,
     pub record_forecasts: bool,
     pub account_seq: u64,
+    pub account_notch_enabled: bool,
+    pub account_notch_seq: u64,
 }
 
 impl Default for StockSettings {
@@ -95,6 +98,8 @@ impl Default for StockSettings {
             forecasts_enabled: false,
             record_forecasts: false,
             account_seq: 0,
+            account_notch_enabled: false,
+            account_notch_seq: 0,
         }
     }
 }
@@ -150,6 +155,8 @@ impl StockSettings {
             || !(1..=10).contains(&self.display_interval)
             || !(1..=20).contains(&self.candle_count)
             || self.account_seq > 9_007_199_254_740_991
+            || self.account_notch_seq > 9_007_199_254_740_991
+            || (self.account_notch_enabled && self.account_notch_seq == 0)
             || self.moving_averages.len() > 4
             || self
                 .moving_averages
@@ -192,6 +199,7 @@ pub enum Kind {
     Names,
     Candles,
     Accounts,
+    AccountOverview,
     Holdings,
     Calendar,
     FinnhubQuote,
@@ -229,14 +237,14 @@ impl StockRequest {
             Provider::Toss
         }
     }
-    fn private(&self) -> bool {
-        matches!(self.kind, Kind::Accounts | Kind::Holdings)
+    fn viewer(&self) -> bool {
+        matches!(self.kind, Kind::Accounts | Kind::AccountOverview)
     }
     fn validated(mut self, settings: &StockSettings) -> Result<Self> {
-        if !settings.enabled || settings.provider != self.provider() {
+        if (!self.viewer() && !settings.enabled) || settings.provider != self.provider() {
             return Err("Stock provider is disabled or has changed".into());
         }
-        if self.private() && !settings.forecasts_enabled {
+        if self.kind == Kind::Holdings && !settings.forecasts_enabled {
             return Err("Enable forecasts before requesting account data".into());
         }
         let batch = matches!(self.kind, Kind::Prices | Kind::Names);
@@ -251,8 +259,10 @@ impl StockRequest {
                     || self.before.is_some()
                     || self.adjusted.is_some()
                     || self.count.is_some()))
-            || (self.kind != Kind::Holdings && self.account_seq.is_some())
+            || (!matches!(self.kind, Kind::Holdings | Kind::AccountOverview)
+                && self.account_seq.is_some())
             || (self.kind != Kind::Calendar && self.date.is_some())
+            || (self.viewer() && self.market.is_some())
         {
             return Err("Unexpected stock request fields".into());
         }
@@ -305,6 +315,13 @@ impl StockRequest {
             }
             self.account_seq = Some(seq);
         }
+        if self.kind == Kind::AccountOverview
+            && !self
+                .account_seq
+                .is_some_and(|seq| (1..=9_007_199_254_740_991).contains(&seq))
+        {
+            return Err("Select a valid account from the explicit account lookup".into());
+        }
         if self.kind == Kind::Calendar {
             if self.market.is_none() {
                 return Err("market is required for calendar".into());
@@ -324,7 +341,7 @@ impl StockRequest {
     fn ttl(&self) -> Duration {
         Duration::from_secs(match self.kind {
             Kind::Names => 86400,
-            Kind::Accounts | Kind::Holdings => 300,
+            Kind::Accounts | Kind::AccountOverview | Kind::Holdings => 300,
             Kind::Candles => match self.interval {
                 Some(Interval::TenMinutes) => 600,
                 // Quote baselines must pick up the official close after the bell.
@@ -364,7 +381,7 @@ impl StockRequest {
             Kind::Names => "/api/v1/stocks",
             Kind::Candles => "/api/v1/candles",
             Kind::Accounts => "/api/v1/accounts",
-            Kind::Holdings => "/api/v1/holdings",
+            Kind::Holdings | Kind::AccountOverview => "/api/v1/holdings",
             Kind::FinnhubQuote => "/api/v1/quote",
             Kind::Calendar => {
                 if self.market == Some(Market::Kr) {
@@ -705,6 +722,9 @@ struct Transport {
     token: Option<Token>,
     cache: Cache,
     generation: u64,
+    viewer_generation: u64,
+    // Only discovery keys are retained; viewer replies never enter the response cache.
+    discovered_accounts: HashSet<u64>,
     next_request: [Option<Instant>; 2],
     #[cfg(test)]
     test_base: Option<String>,
@@ -729,6 +749,8 @@ fn transport() -> Result<&'static Mutex<Transport>> {
                 token: None,
                 cache: Cache::default(),
                 generation: 0,
+                viewer_generation: 0,
+                discovered_accounts: HashSet::new(),
                 next_request: [None, None],
                 #[cfg(test)]
                 test_base: None,
@@ -743,9 +765,48 @@ struct Context<'a> {
     generation: u64,
     request: &'a StockRequest,
 }
+
+fn discovered_accounts(data: &Value) -> Result<HashSet<u64>> {
+    let rows = data["result"]
+        .as_array()
+        .ok_or("Invalid account response")?;
+    let mut seen = HashSet::new();
+    let mut supported = HashSet::new();
+    for row in rows {
+        let seq = row["accountSeq"]
+            .as_u64()
+            .filter(|seq| (1..=9_007_199_254_740_991).contains(seq))
+            .ok_or("Invalid account response")?;
+        let number = row["accountNo"]
+            .as_str()
+            .ok_or("Invalid account response")?;
+        let kind = row["accountType"]
+            .as_str()
+            .ok_or("Invalid account response")?;
+        if number.trim().is_empty()
+            || number.len() > 100
+            || number.chars().any(char::is_control)
+            || kind.trim().is_empty()
+            || kind.len() > 100
+            || kind.chars().any(char::is_control)
+            || !seen.insert(seq)
+        {
+            return Err("Invalid account response".into());
+        }
+        if kind == "BROKERAGE" {
+            supported.insert(seq);
+        }
+    }
+    Ok(supported)
+}
 impl Context<'_> {
     fn check(&self) -> Result<()> {
-        if GENERATION.load(Ordering::SeqCst) != self.generation {
+        let generation = if self.request.viewer() {
+            &VIEWER_GENERATION
+        } else {
+            &GENERATION
+        };
+        if generation.load(Ordering::SeqCst) != self.generation {
             return Err(
                 "Stock settings or credentials changed; retry with current settings".into(),
             );
@@ -753,13 +814,7 @@ impl Context<'_> {
         let state = self.app.state::<crate::AppState>();
         let cfg = state.cfg.lock().map_err(|_| "Stock settings lock failed")?;
         let s = &cfg.stock_settings;
-        if !s.enabled
-            || s.provider != self.request.provider()
-            || (self.request.private() && !s.forecasts_enabled)
-        {
-            return Err("Stock provider is disabled or has changed".into());
-        }
-        Ok(())
+        self.request.clone().validated(s).map(|_| ())
     }
 }
 
@@ -884,6 +939,41 @@ impl Transport {
     ) -> Result<StockReply> {
         check()?;
         let wall = Utc::now().timestamp_millis() as f64;
+        if request.viewer() {
+            if request.kind == Kind::AccountOverview && !request
+                .account_seq
+                .is_some_and(|seq| self.discovered_accounts.contains(&seq))
+            {
+                return Err("Load accounts explicitly before viewing this account".into());
+            }
+            let mut data = self.fetch(request, &credentials()?, check)?;
+            check()?;
+            if request.kind == Kind::Accounts {
+                self.discovered_accounts = discovered_accounts(&data)?;
+                for row in data["result"]
+                    .as_array_mut()
+                    .ok_or("Invalid account response")?
+                {
+                    let number = row["accountNo"]
+                        .as_str()
+                        .ok_or("Invalid account response")?;
+                    let masked = if number.chars().count() > 4 {
+                        let tail = number
+                            .chars()
+                            .skip(number.chars().count() - 4)
+                            .collect::<String>();
+                        format!("•••• {tail}")
+                    } else {
+                        "••••".into()
+                    };
+                    row["accountNo"] = Value::String(masked);
+                }
+            }
+            return Ok(StockReply {
+                data,
+                fetched_at: wall as i64,
+            });
+        }
         if let Some(reply) = self.cache.lookup(request, Instant::now(), wall)? {
             return Ok(reply);
         }
@@ -1248,6 +1338,9 @@ pub async fn set_stock_settings(app: AppHandle, settings: StockSettings) -> Resu
         let bytes =
             serde_json::to_vec_pretty(&next).map_err(|_| "Could not encode stock settings")?;
         atomic_write(&crate::config::config_path(), &bytes)?;
+        if cfg.stock_settings.provider != settings.provider {
+            VIEWER_GENERATION.fetch_add(1, Ordering::SeqCst);
+        }
         cfg.stock_settings = settings.clone();
         GENERATION.fetch_add(1, Ordering::SeqCst);
         drop(cfg);
@@ -1309,6 +1402,8 @@ fn update_credentials(
         transport.token = None;
     }
     transport.cache.entries.clear();
+    transport.discovered_accounts.clear();
+    VIEWER_GENERATION.fetch_add(1, Ordering::SeqCst);
     GENERATION.fetch_add(1, Ordering::SeqCst);
     credential_status()
 }
@@ -1338,6 +1433,8 @@ pub async fn delete_stock_credentials(provider: Provider) -> Result<CredentialSt
             transport.token = None;
         }
         transport.cache.entries.clear();
+        transport.discovered_accounts.clear();
+        VIEWER_GENERATION.fetch_add(1, Ordering::SeqCst);
         GENERATION.fetch_add(1, Ordering::SeqCst);
         credential_status()
     })
@@ -1347,18 +1444,23 @@ pub async fn delete_stock_credentials(provider: Provider) -> Result<CredentialSt
 
 #[tauri::command]
 pub async fn stock_request(app: AppHandle, request: StockRequest) -> Result<StockReply> {
-    let (request, generation) = {
+    let (request, generation, viewer_generation) = {
         let state = app.state::<crate::AppState>();
         let cfg = state.cfg.lock().map_err(|_| "Stock settings lock failed")?;
         (
             request.validated(&cfg.stock_settings)?,
             GENERATION.load(Ordering::SeqCst),
+            VIEWER_GENERATION.load(Ordering::SeqCst),
         )
     };
     tauri::async_runtime::spawn_blocking(move || {
         let context = Context {
             app: &app,
-            generation,
+            generation: if request.viewer() {
+                viewer_generation
+            } else {
+                generation
+            },
             request: &request,
         };
         context.check()?;
@@ -1370,6 +1472,10 @@ pub async fn stock_request(app: AppHandle, request: StockRequest) -> Result<Stoc
         if transport.generation != generation {
             transport.cache.entries.clear();
             transport.generation = generation;
+        }
+        if transport.viewer_generation != viewer_generation {
+            transport.discovered_accounts.clear();
+            transport.viewer_generation = viewer_generation;
         }
         transport.perform(
             &request,
@@ -2129,6 +2235,8 @@ mod tests {
             token: None,
             cache: Cache::default(),
             generation: 0,
+            viewer_generation: 0,
+            discovered_accounts: HashSet::new(),
             next_request: [None, None],
             test_base: Some(url),
         }
@@ -2141,6 +2249,28 @@ mod tests {
             200,
             json!({"result":[{"symbol":"AAPL","lastPrice":"100","currency":"USD"}],"error":null}),
         )
+    }
+
+    #[test]
+    fn account_notch_settings_are_separate_and_safe() {
+        let defaults: StockSettings = serde_json::from_value(json!({"accountSeq":17})).unwrap();
+        assert!(!defaults.account_notch_enabled);
+        assert_eq!(defaults.account_notch_seq, 0);
+        assert_eq!(defaults.account_seq, 17);
+        for seq in [1, 9_007_199_254_740_991_u64] {
+            let settings: StockSettings = serde_json::from_value(json!({
+                "accountSeq":17,"accountNotchEnabled":true,"accountNotchSeq":seq
+            })).unwrap();
+            let encoded = serde_json::to_value(settings.validated().unwrap()).unwrap();
+            assert_eq!(encoded["accountNotchEnabled"], true);
+            assert_eq!(encoded["accountNotchSeq"], seq);
+            assert_eq!(encoded["accountSeq"], 17);
+        }
+        for seq in [json!(0), json!(-1), json!(1.5), json!("7"), json!(9_007_199_254_740_992_u64)] {
+            assert!(!serde_json::from_value::<StockSettings>(json!({
+                "accountNotchEnabled":true,"accountNotchSeq":seq
+            })).is_ok_and(|s| s.validated().is_ok()));
+        }
     }
 
     #[test]
@@ -2199,7 +2329,7 @@ mod tests {
         assert!(raw.clone().validated(&StockSettings::default()).is_err());
         assert!(raw.validated(&settings(Provider::Finnhub)).is_err());
         let raw: StockRequest = serde_json::from_value(json!({"kind":"accounts"})).unwrap();
-        assert!(raw.validated(&settings(Provider::Toss)).is_err());
+        assert!(raw.validated(&settings(Provider::Toss)).is_ok());
         let symbols: Vec<String> = (0..200).map(|i| format!("A{i}")).collect();
         assert_eq!(
             request(json!({"kind":"prices","symbols":symbols}))
@@ -2254,6 +2384,152 @@ mod tests {
         ] {
             let raw: StockRequest = serde_json::from_value(value).unwrap();
             assert_eq!(raw.validated(&settings).unwrap().account_seq, Some(7));
+        }
+    }
+
+    #[test]
+    fn account_viewer_has_a_separate_gate_and_a_fixed_unfiltered_endpoint() {
+        let mut settings = StockSettings {
+            account_seq: 17,
+            ..StockSettings::default()
+        };
+        for value in [
+            json!({"kind":"accounts"}),
+            json!({"kind":"accountOverview","accountSeq":7}),
+        ] {
+            let raw: StockRequest = serde_json::from_value(value).unwrap();
+            let validated = raw.validated(&settings).unwrap();
+            assert!(validated.viewer());
+            assert!(validated.query().is_empty());
+            if validated.kind == Kind::AccountOverview {
+                assert_eq!(validated.path(), "/api/v1/holdings");
+                assert_eq!(validated.account_seq, Some(7));
+            }
+        }
+        for value in [
+            json!({"kind":"accountOverview"}),
+            json!({"kind":"accountOverview","accountSeq":0}),
+            json!({"kind":"accountOverview","accountSeq":9_007_199_254_740_992_u64}),
+            json!({"kind":"accountOverview","accountSeq":7,"symbol":"AAPL"}),
+            json!({"kind":"accountOverview","accountSeq":7,"market":"us"}),
+            json!({"kind":"accounts","accountSeq":7}),
+            json!({"kind":"holdings","accountSeq":17}),
+            json!({"kind":"prices","symbols":["AAPL"]}),
+        ] {
+            let raw: StockRequest = serde_json::from_value(value).unwrap();
+            assert!(raw.validated(&settings).is_err());
+        }
+        settings.provider = Provider::Finnhub;
+        let raw: StockRequest = serde_json::from_value(json!({"kind":"accounts"})).unwrap();
+        assert!(raw.validated(&settings).is_err());
+    }
+
+    #[test]
+    fn account_notch_discovery_survives_failed_reload_in_the_same_epoch() {
+        // No HTTP: fail credential retrieval after the discovery/overview gate.
+        let mut transport = test_transport(String::new());
+        transport.discovered_accounts = HashSet::from([7]);
+        let failure = || Err("Synthetic credential read failure".into());
+        assert!(transport.perform(&request(json!({"kind":"accounts"})), failure, &|| Ok(())).is_err());
+        assert_eq!(transport.discovered_accounts, HashSet::from([7]));
+        let checked = std::cell::Cell::new(false);
+        let overview = request(json!({"kind":"accountOverview","accountSeq":7}));
+        assert!(transport.perform(&overview, || {
+            checked.set(true);
+            Err("Synthetic credential read failure".into())
+        }, &|| Ok(())).is_err());
+        assert!(checked.get(), "previously discovered account still reaches credentials");
+        checked.set(false);
+        assert!(transport.perform(&request(json!({"kind":"accountOverview","accountSeq":8})), || {
+            checked.set(true);
+            failure()
+        }, &|| Ok(())).is_err());
+        assert!(!checked.get(), "undiscovered account is still rejected before credentials");
+        transport.discovered_accounts.clear(); // Same clear used by provider/credential epoch changes.
+        assert!(transport.perform(&overview, || {
+            checked.set(true);
+            failure()
+        }, &|| Ok(())).is_err());
+        assert!(!checked.get(), "new epoch cannot reuse old discovery");
+    }
+
+    #[test]
+    fn explicit_discovery_masks_accounts_and_viewer_replies_bypass_the_cache() {
+        let accounts = json!({"result":[
+            {"accountSeq":7,"accountNo":"12345678","accountType":"BROKERAGE"},
+            {"accountSeq":8,"accountNo":"1234","accountType":"BROKERAGE"},
+            {"accountSeq":9,"accountNo":"0001","accountType":"FUTURE_TYPE"}
+        ]});
+        let (url, server) = server(
+            vec![
+                auth("test-token"),
+                (200, accounts),
+                (200, json!({"result":{"items":[],"marker":"first"}})),
+                (200, json!({"result":{"items":[],"marker":"second"}})),
+            ],
+            None,
+        );
+        let mut transport = test_transport(url);
+        let overview = request(json!({"kind":"accountOverview","accountSeq":7}));
+        assert!(transport
+            .perform(&overview, fake_credentials, &|| Ok(()))
+            .is_err());
+        let discovery = transport
+            .perform(
+                &request(json!({"kind":"accounts"})),
+                fake_credentials,
+                &|| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(discovery.data["result"][0]["accountNo"], "•••• 5678");
+        assert_eq!(discovery.data["result"][1]["accountNo"], "••••");
+        assert_eq!(discovery.data["result"][2]["accountNo"], "••••");
+        assert_eq!(transport.discovered_accounts, HashSet::from([7, 8]));
+        assert!(transport
+            .perform(
+                &request(json!({"kind":"accountOverview","accountSeq":9})),
+                fake_credentials,
+                &|| Ok(())
+            )
+            .is_err());
+        assert_eq!(
+            transport
+                .perform(&overview, fake_credentials, &|| Ok(()))
+                .unwrap()
+                .data["result"]["marker"],
+            "first"
+        );
+        assert_eq!(
+            transport
+                .perform(&overview, fake_credentials, &|| Ok(()))
+                .unwrap()
+                .data["result"]["marker"],
+            "second"
+        );
+        assert!(transport.cache.entries.is_empty());
+        transport.discovered_accounts.clear();
+        assert!(transport
+            .perform(&overview, fake_credentials, &|| Ok(()))
+            .is_err());
+        let calls = server.join().unwrap();
+        assert_eq!(
+            calls.len(),
+            4,
+            "one token, discovery and two fresh private reads"
+        );
+        for call in &calls[2..] {
+            assert!(call.starts_with("GET /api/v1/holdings HTTP"));
+            assert!(call
+                .to_ascii_lowercase()
+                .contains("x-tossinvest-account: 7"));
+        }
+        for result in [
+            json!([{"accountSeq":0,"accountNo":"12345","accountType":"BROKERAGE"}]),
+            json!([{"accountSeq":9_007_199_254_740_992_u64,"accountNo":"12345","accountType":"BROKERAGE"}]),
+            json!([{"accountSeq":7,"accountNo":"12345","accountType":"BROKERAGE"},{"accountSeq":7,"accountNo":"12345","accountType":"BROKERAGE"}]),
+            json!([{"accountSeq":7,"accountNo":"","accountType":"BROKERAGE"}]),
+        ] {
+            assert!(discovered_accounts(&json!({"result":result})).is_err());
         }
     }
 

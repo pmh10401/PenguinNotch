@@ -1143,6 +1143,7 @@ struct SettingsView: View {
         snapshots += SystemUsageReading().snapshots
         snapshots += [CalendarMonth.snapshot(), NotchWidgetsMonitor.weatherPlaceholder(), TodoItem.snapshot(preferences.todoItems)]
         snapshots += StockBoard.orderSnapshots(stored: preferences.stockSymbols)
+        if preferences.accountNotchSeq > 0 { snapshots += [TossAccountStore.snapshot()] }
         return snapshots
     }
 

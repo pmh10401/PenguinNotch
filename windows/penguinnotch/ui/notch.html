@@ -1340,6 +1340,7 @@ function renderRing(){
     const label=p.stock?p.glyph:p.base==='gemini'?'AGY':p.name;
     glyph.innerHTML=bar?`<span class="bar-name">${esc(label)}</span>`:glyphHtml(p);
     cell.classList.toggle('stock-cell',!!p.stock);
+    cell.classList.toggle('account-cell',!!p.account);
     if(p.stock){cell.dataset.stockDrag=PenguinNotchStocks.stockID(p.stock);cell.title=PenguinNotchStocks.t(uiLang,'Drag to reorder');}
     else delete cell.dataset.stockDrag;
     if(p.meter){
@@ -1347,7 +1348,7 @@ function renderRing(){
       const col=p.meter.color||(p.meter.steady?AMPLE:(used==null?'#8e8e93':meterTone(used)));
       const fraction=p.meter.fraction==null?0:Math.min(Math.max(p.meter.fraction,0),1);
       svg.innerHTML=track;
-      reading.innerHTML=bar?svgBar(fraction,col):p.stock?stockSweep(fraction,col,p.meter.counterclockwise):svgArc(25,fraction,col,5);
+      reading.innerHTML=bar?svgBar(fraction,col):p.stock||p.account?stockSweep(fraction,col,p.meter.counterclockwise):svgArc(25,fraction,col,5);
       activity.innerHTML='';
       pct.textContent=p.meter.text;
       pct.style.color=p.meter.color||'';
@@ -1456,6 +1457,12 @@ function renderCard(){
   const c=document.getElementById('card');
   const p=providers().find(x=>x.id===hoverId)||providers()[0];
   if(!p){ c.innerHTML=''; return; }
+  if(p.account){
+    stockStore.activeStock=null;
+    const html=PenguinNotchStocks.accountCardHTML(stockStore,uiLang);
+    if(lastStockCardHTML!==html||c.dataset.stock!==p.id){const scroll=c.scrollTop;c.innerHTML=html;c.dataset.stock=p.id;lastStockCardHTML=html;PenguinNotchStocks.bindAccountCard(c,stockStore);c.scrollTop=scroll;}
+    placeCard();return;
+  }
   if(p.stock){
     const html=PenguinNotchStocks.cardHTML(stockStore,p.stock,uiLang);
     if(lastStockCardHTML!==html||c.dataset.stock!==p.id){const scroll=c.scrollTop,restoreDisclosures=PenguinNotchStocks.rememberDisclosures(c);c.innerHTML=html;c.dataset.stock=p.id;lastStockCardHTML=html;PenguinNotchStocks.bindCard(c,stockStore,p.stock);restoreDisclosures();c.scrollTop=scroll;}
@@ -1845,6 +1852,7 @@ let press=null, dragging=false;
 const PRESS_MIN=380, PRESS_MAX=6000;
 const refreshing={};
 function refreshRing(id){
+  if(id==='widget-account'&&stockStore){void stockStore.refreshAccountNotch(true);return;}
   if(id.startsWith('widget-stock:')&&stockStore){void stockStore.tick();return;}
   if(refreshing[id]) return;
   refreshing[id]={at:Date.now(),timer:setTimeout(()=>settle(id),PRESS_MAX)};
@@ -2206,7 +2214,14 @@ invoke('get_notch_edge').then(e=>{applyEdge(e);reportDpr();}).catch(()=>reportDp
 invoke('get_codex').then(u=>{codexSnap=u||codexSnap;renderRing();}).catch(()=>{});
 invoke('get_usage').then(u=>{usage=u||usage;renderRing();}).catch(e=>notice('get_usage failed: '+e));
 invoke('get_state').then(s=>{stateSnap=s||stateSnap;setUiLanguage(stateSnap.lang_resolved);renderRing();}).catch(()=>{});
-stockStore=new PenguinNotchStocks.Store({invoke,listen,emit:(name,payload)=>window.__TAURI__.event.emit(name,payload),owner:true,onChange:()=>{renderRing();if(card.classList.contains('show')&&hoverId.startsWith('widget-stock:')){renderCard();armWatchdog();}}});
+stockStore=new PenguinNotchStocks.Store({invoke,listen,emit:(name,payload)=>window.__TAURI__.event.emit(name,payload),owner:true,onChange:()=>{
+  renderRing();
+  if(card.dataset.stock==='widget-account'&&!stockStore.accountNotchSummary){card.innerHTML='';card.dataset.stock='';lastStockCardHTML='';}
+  if(card.classList.contains('show')&&(hoverId.startsWith('widget-stock:')||hoverId==='widget-account')){
+    if(hoverId==='widget-account'&&(!stockStore.settings.accountNotchEnabled||stockStore.settings.provider!=='toss'))hideCard();
+    else{renderCard();armWatchdog();}
+  }
+}});
 stockStore.unlisten.push(PenguinNotchStocks.bindStockDrag(pill,stockStore,active=>{stockDragging=active;if(active){clearTimeout(hideTimer);hideCard();}else{press=null;reportHot();scheduleFold();}}));
 stockStore.init().catch(()=>notice(PenguinNotchStocks.t(uiLang,'Stock settings unavailable')));
 window.addEventListener('beforeunload',()=>stockStore.dispose());

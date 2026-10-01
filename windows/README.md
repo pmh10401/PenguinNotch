@@ -9,7 +9,7 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-**Source version: 1.22.1 (Windows build r54).** Stock quotes retain
+**Source version: 1.24.1 (Windows build r57; not yet released).** Stock quotes retain
 a validated same-session closing baseline through transient request failures;
 a new session or trading day still requires a valid new baseline. This integrates upstream 1.19.0
 with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.
@@ -86,9 +86,15 @@ by default. Windows quotes poll once a minute; chart requests are cached per
 symbol for 1 minute, 10 minutes or 1 day, with daily cache rollover on the market's
 local date. Charts display at most 20 candles and use earlier bars for analysis.
 
+**Stock settings (1.24.1 source)** use the same four local tabs as macOS: **Watchlist → My account → Analysis → History**. Watchlist opens first; connection and display options start collapsed. Charts and estimates live in Analysis; archives and exports live in History. Detailed methods, investment/total returns and holdings stay collapsed until needed. Windows has no Codex analysis control.
+
+**My Toss account** is the only account discovery/selection surface. Click **Load accounts**, choose a masked account, and use **Refresh** or **Hide account information**. Viewing still works with forecasts and notch stock display off. **Show account in notch** and **Include account holdings in estimates** remain separate opt-ins; opening tabs or loading accounts keeps saved choices, while an explicit new selection moves already-enabled account features to that account. KRW/USD stock values, profit/loss, fractional quantities and costs follow macOS. Cash, bonds and options are excluded; overall ratios are API KRW-converted values. Viewer replies bypass caches. With the account notch off, leaving My account clears its viewer. Provider/credential changes discard old private values. Private information is never persisted, exported or sent to AI.
+
+After explicitly loading an account, enable **Show account in notch**. Its daily return uses the API KRW-converted ratio; gains are green/clockwise and losses red/counterclockwise. Hover shows KRW/USD stock market values and daily profit/loss separately with the refresh time. Cash is excluded. The notch owner polls every 60 seconds independently of stock/forecast visibility and does not store private amounts. Settings remains a manual viewer; closing it does not stop the enabled notch. Disable the notch to stop its private polling. Only its account selector and display choice are saved.
+
 Enable **Stock forecasts** to estimate watchlist stocks without account access
 or owning them (1.19.1). **Watchlist only** keeps account requests off. To include
-actual holdings too, explicitly load accounts and select one; failed account reads
+actual holdings too, select an account in **My account** and enable **Include account holdings in estimates**; failed account reads
 do not stop watchlist estimates. The selected chart interval controls the volatility
 estimate for today's regular close. Daily forecast snapshots, observed minute traces, manual/automatic capture,
 next-day scoring and filtered CSV export follow the macOS rules documented in the
