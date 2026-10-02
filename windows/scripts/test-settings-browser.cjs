@@ -436,8 +436,15 @@ async function task6ReviewFixUI(page,check){
     await page.evaluate(manifest=>{replayManifests=[manifest];releaseInitialReplayList(replayManifests);},manifest);
     await page.evaluate(()=>stockBacktestStore.ready);
     assert.equal(await page.evaluate(()=>stockBacktestStore.runs.length),1,'actual settings mount/status reload preserves delayed initial list1');
-    // A later publication must remain authoritative over the older initial archive snapshot.
-    assert.equal(await page.evaluate(async manifest=>{let release;const owner=new PenguinNotchBacktests.BacktestStore({invoke:async()=>new Promise(r=>release=r)});owner.publish({...manifest,status:'paused',collectionCompletedAt:null});release({type:'manifests',manifests:[manifest]});await owner.ready;return owner.runs[0].status;},manifest),'paused');
+    // Older unknown archives must join without overwriting newer known rows.
+    const merged=await page.evaluate(async manifest=>{
+      let release;const owner=new PenguinNotchBacktests.BacktestStore({invoke:async()=>new Promise(r=>release=r)});
+      owner.publish({...manifest,status:'paused',collectionCompletedAt:null});
+      const older={...manifest,runID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',createdAt:manifest.createdAt-1000,collectionStartedAt:manifest.createdAt-1000};
+      release({type:'manifests',manifests:[manifest,older]});await owner.ready;
+      return owner.runs.map(m=>({runID:m.runID,status:m.status}));
+    },manifest);
+    assert.deepEqual(merged,[{runID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'completed'},{runID:manifest.runID,status:'paused'}]);
     return;
   }
   await page.evaluate(({manifest,sample,result,hash,resultHash})=>{

@@ -524,6 +524,59 @@ test('Task6 fix1 idle status reload retains late listing but newer publication w
   assert.equal(newer.runs[0].status,'paused','a stale initial list must not overwrite a published archive update');
 });
 
+test('Task6 fix2 busy first calendar accepts initial archive and retains it after cancel',async t=>{
+  const f=collectorFixture(t);let listResolve,release,entered;
+  const list=new Promise(r=>listResolve=r),blocked=new Promise(r=>release=r),waiting=new Promise(r=>entered=r);
+  const owner=new B.BacktestStore({invoke:(c,a)=>a.request.action==='list'?list:f.invoke(c,a),
+    stockRequest:async r=>{entered();await blocked;return f.stockRequest(r);},now:f.now,sleep:f.sleep});
+  const running=owner.start({symbols:[f.stock],sessions:20}),cancelled=assert.rejects(running,/collection_cancelled/);
+  await waiting;assert.equal(owner.archiveRevision,0);assert.equal(owner.busy,true);
+  const id=owner.activeRunID,progress=copy(owner.progress),listed=manifest();
+  listResolve({type:'manifests',manifests:[listed]});await owner.ready;
+  const beforeCancel=copy(owner.runs),busy=owner.busy,activeID=owner.activeRunID,currentProgress=copy(owner.progress);
+  owner.cancel();release();await cancelled;
+  assert.deepEqual(beforeCancel,[listed],'read-only initial archive must load while first calendar is pending');
+  assert.equal(busy,true);assert.equal(activeID,id);assert.deepEqual(currentProgress,progress);
+  assert.deepEqual(owner.runs,[listed],'cancelling prepublication collection must retain the existing archive');
+  assert.equal(owner.busy,false);assert.equal(owner.activeRunID,null);assert.equal(f.manifests.size,0);
+});
+
+test('Task6 fix2 late initial snapshot unions unknown IDs without rolling back current publication',async t=>{
+  for(const status of ['running','paused','completed'])await t.test(status,async t=>{
+    const f=collectorFixture(t,{mode:'partial'});let listResolve,release,entered;
+    const list=new Promise(r=>listResolve=r),blocked=new Promise(r=>release=r),waiting=new Promise(r=>entered=r);
+    let first=true;
+    const owner=new B.BacktestStore({invoke:(c,a)=>a.request.action==='list'?list:f.invoke(c,a),
+      stockRequest:async r=>{if(status!=='completed'&&r.type==='candles'&&first){first=false;entered();await blocked;}return f.stockRequest(r);},now:f.now,sleep:f.sleep});
+    const running=owner.start({symbols:[f.stock],sessions:20});
+    const cancelled=status!=='completed'?assert.rejects(running,/collection_cancelled/):null;
+    if(status==='completed')await running;else await waiting;
+    if(status==='paused'){owner.cancel();release();await cancelled;}
+    const current=copy(owner.runs[0]),progress=copy(owner.progress),id=owner.activeRunID,busy=owner.busy;
+    assert.ok(owner.archiveRevision>0);
+    assert.equal(current.status,status);
+    const old={...manifest(),createdAt:current.createdAt-2000,collectionStartedAt:current.createdAt-2000};
+    const oldest={...old,runID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',createdAt:old.createdAt-1000,collectionStartedAt:old.createdAt-1000};
+    const stale={...current,status:'ready',collectionCompletedAt:null,cases:current.cases.map(e=>({...e,status:'pending',inputSHA256:null,resultSHA256:null,reason:null}))};
+    listResolve({type:'manifests',manifests:[stale,old,oldest]});await owner.ready;
+    const merged=copy(owner.runs),currentProgress=copy(owner.progress),activeID=owner.activeRunID,currentBusy=owner.busy;
+    if(status==='running'){owner.cancel();release();await cancelled;}
+    assert.deepEqual(merged,[oldest,old,current],'unknown old runs join in canonical createdAt order; known current rows win in full');
+    assert.deepEqual(currentProgress,progress);assert.equal(activeID,id);assert.equal(currentBusy,busy);
+    assert.equal(new Set(merged.map(m=>m.runID)).size,3,'no duplicate current run');
+  });
+});
+
+test('Task6 fix2 stale listing errors and corrupt snapshots cannot reset published state',async t=>{
+  for(const failure of ['reject','corrupt'])await t.test(failure,async()=>{
+    let resolve,reject;const owner=new B.BacktestStore({invoke:()=>new Promise((a,b)=>{resolve=a;reject=b;})});
+    const current={...manifest(),status:'paused'};owner.publish(current);owner.errorMessage='collection_cancelled';
+    const progress=copy(owner.progress);
+    if(failure==='reject')reject(Error('archive failure'));else resolve({type:'manifests',manifests:[{...manifest(),version:2}]});
+    await owner.ready;assert.deepEqual(owner.runs,[current]);assert.deepEqual(owner.progress,progress);assert.equal(owner.errorMessage,'collection_cancelled');
+  });
+});
+
 test('Task6 fix1 native settings epoch cancellation retries identical frozen public request once',async t=>{
   const f=collectorFixture(t,{mode:'partial'}),native=[];let epoch=0,release,entered;
   const waiting=new Promise(r=>entered=r),blocked=new Promise(r=>release=r);

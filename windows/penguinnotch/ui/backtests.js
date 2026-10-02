@@ -174,7 +174,11 @@ class BacktestStore {
     this.runs=[];this.activeRunID=null;this.progress={completed:0,total:0};this.errorMessage=null;
     this.listeners=new Set();this.generation=0;this.archiveRevision=0;this.revision=0;this.provider='toss';this.busy=false;this.lastRequestAt=null;
     const archiveRevision=this.archiveRevision;
-    this.ready=archive('list',{},this.invoke).then(r=>{if(this.archiveRevision===archiveRevision&&!this.busy){this.runs=r.manifests;this.emit();}})
+    this.ready=archive('list',{},this.invoke).then(r=>{
+      // Listing is independent of collection; current known rows win over the initial snapshot.
+      this.runs=[...new Map([...r.manifests,...this.runs].map(m=>[m.runID,m])).values()].sort((a,b)=>a.createdAt-b.createdAt);
+      this.emit();
+    })
       .catch(()=>{if(this.archiveRevision===archiveRevision&&!this.busy){this.errorMessage='archive_unavailable';this.emit();}});
   }
   subscribe(listener){this.listeners.add(listener);listener(this);return ()=>this.listeners.delete(listener);}
