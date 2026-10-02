@@ -256,3 +256,16 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project Pen
 - [릴리즈 후 최종 Windows 배포](https://github.com/pmh10401/PenguinNotch/actions/runs/36834349508)도 같은 소스의 설치·doctor·제거·설치 파일 게시·피드 게시를 모두 통과했습니다. 초기 패키지와 최종 릴리즈 실행의 자산을 섞지 않고, `releases/latest/download/`에서 받은 네 파일을 최종 게시 자산과 대조했습니다. 모든 URL의 HTTP 200, 두 설치 파일의 공개 키 서명·한 바이트 변조 거부, 피드 버전·URL·GitHub 자산 해시를 확인했습니다.
 - 최종 Windows 파일 변경에 맞춰 [SHA256SUMS.txt](https://github.com/pmh10401/PenguinNotch/releases/download/v1.24.1/SHA256SUMS.txt)를 갱신했습니다. 게시한 해시 목록 자체의 SHA-256은 `e94cf91b3b682fdc3df569b186b97a0ed01bb5d351a947db70fe45df18963708`이며 공개 최신 주소에서 다시 받은 내용과 정확히 일치합니다. GitHub의 latest는 v1.24.1이며 다섯 자산이 모두 공개 상태입니다.
 - 최종 파일 SHA-256: DMG `7e6e369e391503a898497a072007daaf140bbdb6a49b72d8e720732c74fc6903`, appcast `835375ca7f9bed0b091fa93e9173ad79e5f46182d6782b20479262214b9d55b9`, EXE `02c25a5260178719d9e6d71d293ab89fe489dd3ef63514b90e45042b750b52d0`, latest.json `3db1d9ad4507d60dc8f805fb88c18b29df40cbe3d88db816c96437980e96025a`.
+
+## S18
+
+### 2026-10-02 정규장 종가 예측의 기록·평가 계약 검수
+
+- 코드 기준: [`92ddece9aa88d7c2206753e13ee9fe1239603bab`](https://github.com/pmh10401/PenguinNotch/commit/92ddece9aa88d7c2206753e13ee9fe1239603bab), 앱 1.24.1. [GBM과 봉별 추정](../../Sources/Widgets/StockForecast.swift), [기록·점수·대응 비교](../../Sources/Widgets/StockForecastJournal.swift), [Codex 입력과 같은 입력의 GBM](../../Sources/Widgets/StockCodexAnalysis.swift), [기술적 신호](../../Sources/Widgets/StockTimingSignal.swift), [Windows 함수](../../windows/penguinnotch/ui/stocks.js)를 읽었습니다.
+- [일반 이력 화면](../../Sources/Settings/StockForecastHistoryView.swift)은 GBM 저널을, [Codex 이력 화면](../../Sources/Settings/StockCodexAnalysisView.swift)은 별도 저장소를 읽습니다. 두 모델의 수동/자동 시점과 근거를 보존하며 비교해야 합니다. 분봉 추정의 확률/구간은 별도 성과 이력에 저장하지 않으며 현재 모든 모델 교집합 규칙에는 모델 추가 시 대응 표본이 감소하는 한계가 있습니다.
+- 가격 단위: [TossInvestClient](../../Sources/Widgets/TossInvestClient.swift)의 입력 일봉은 `adjusted:true`, 당시 실제 종가의 후속 조회는 `adjusted:false`입니다. 이는 당시 시세와 목표 종가의 관측 단위를 유지하려는 기존 규칙입니다. 이를 사후 조회한 수정주가와 임의로 섞는 새 백테스트는 별도 검증이 필요합니다.
+- 공식 자료: [토스 OpenAPI](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json), 1.2.19, SHA-256 `7588debd863ac074e9e408185413ab573c3d45e9221e8cedaeec7c54ee295f03`. 캔들 interval은 1m/1d, 최대 200봉, before/nextBefore와 수정 옵션, 날짜별 KR/US 거래 달력 명세를 확인했습니다. 이 확인은 과거 분봉의 실제 제공 기간·완전성이나 사용자 인증 요청 성공을 증명하지 않습니다.
+- 방법론: [Hyndman·Athanasopoulos의 시간 순서 교차 검증](https://otexts.com/fpp3/tscv.html)은 각 예측 시점 이전 관측만 사용하는 반복 평가를 설명합니다. [Look-Ahead-Bench](https://arxiv.org/abs/2601.13770)는 금융 LLM의 학습 정보와 시간 누출을 연구합니다. 특정 현재 모델의 누출이나 주가 예측 성공을 확인했다는 근거로 사용하지 않습니다.
+- Grok은 지정된 공개 코드만 읽어 비교 집합·사후 LLM 재실행·수정 가격·분봉 근거·확률 사건의 다섯 위험을 제시했고 Codex가 호출 흐름과 대조했습니다. 기대값과 확률의 부호가 다르다는 지적은 분포의 비대칭성과 구분하며 그 자체를 응답 오류로 단정하지 않습니다. 계좌·인증·사용자 이력·미추적 연구 산출물은 전달하지 않았습니다.
+- 로컬 저장 기록의 읽기 전용 감사는 별도 로컬 보고서에 두었습니다. Windows의 실제 `validForecast`/`score` 함수로 변환 입력을 검사해 집계와 대조했습니다. 첫 검사 어댑터의 존재하지 않는 반환 필드 단언은 실제 `accuracy` 필드로 바꿔 후속 검사를 통과했으며 앱 코드는 변경하지 않았습니다. 새 과거 시세 수집·모델 호출·Swift 빌드·Windows 실기·통합 기능 구현·설치·릴리즈는 수행하지 않았습니다.
+- 범위 승인 후 [정규장 종가 예측 통합·평가 설계](../superpowers/specs/2026-10-02-stock-forecast-evaluation-design.md)를 작성했습니다. 기존 이력 보존, 60분 전 cutoff, 같은 입력의 봉별 계산, 별도 재현 아카이브와 선택 모델 대응 비교를 명세합니다. 이는 검토용 문서이며 미래의 구현·과거 자료 확보·검증 성공을 입증하지 않습니다.
