@@ -132,9 +132,7 @@ final class StockForecastEvaluationTests: XCTestCase {
                 // An offscreen window has no published AX children. One local SDK recognition
                 // request checks the actual bitmap labels and placement, not source strings.
                 let recognition = VNRecognizeTextRequest()
-                // Natural-language captions need dictionary correction for the i/l ambiguity
-                // in 1x CI snapshots. Technical model IDs remain uncorrected and exact.
-                recognition.recognitionLevel = .accurate; recognition.usesLanguageCorrection = index == 1
+                recognition.recognitionLevel = .accurate; recognition.usesLanguageCorrection = false
                 recognition.recognitionLanguages = language == "ko" ? ["ko-KR", "en-US"] : ["en-US"]
                 try VNImageRequestHandler(cgImage: try XCTUnwrap(bitmap.cgImage)).perform([recognition])
                 let labels = (recognition.results ?? []).compactMap { observation -> (text: String, frame: CGRect)? in
@@ -176,7 +174,12 @@ final class StockForecastEvaluationTests: XCTestCase {
         host.frame = rect; defer { window.close() }
         for _ in 0..<3 { host.layoutSubtreeIfNeeded(); RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.02)) }
         host.layoutSubtreeIfNeeded(); host.displayIfNeeded()
-        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        // Keep native text at a fixed 2x pixel density: CI's 1x backing made Vision
+        // confuse i/l in correctly rendered captions. The view stays 680 points wide.
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1360,
+            pixelsHigh: Int(height * 2), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.size = rect.size
         host.cacheDisplay(in: host.bounds, to: bitmap)
         return bitmap
     }
