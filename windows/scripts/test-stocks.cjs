@@ -19,6 +19,68 @@ const dailyRaw=rows=>({result:{candles:rows.map(c=>({timestamp:new Date(c.date).
 const clone=value=>structuredClone(value);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
+function testForecastEvaluation() {
+  const fixture=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../../Tests/Fixtures/stock-forecast-evaluation-v1.json'),'utf8'));
+  const rows=S.evaluationRows(fixture.records),comparison=S.evaluationComparison(rows,['A','B']);
+  assert.equal(rows.length,3);assert.equal(comparison.pairedCount,1);
+  assert.deepEqual(comparison.rows.map(r=>r.model),['A','B']);
+  assert.ok(comparison.rows.every(r=>r.paired.evaluated===1));
+  assert.equal(S.evaluationComparison(rows,['A','B','C']).pairedCount,0);
+  const equivalent=S.evaluationComparison(fixture.rows,['A','B']);
+  assert.equal(equivalent.pairedCount,1);assert.equal(equivalent.rows[0].available.evaluated,1);
+  assert.equal(S.evaluationMetrics(fixture.rows.slice(0,2)).evaluated,1);
+  assert.deepEqual(S.coalescedEvaluationRows(fixture.rows)[0].references.map(r=>r.source),['recorded','pairedCalculation']);
+  const [a,paired,b]=fixture.rows;
+  const conflict=S.evaluationComparison([a,{...paired,expectedClose:103},b],['A','B']);
+  assert.equal(conflict.pairedCount,0);assert.equal(conflict.excludedConflicts,1);
+  assert.equal(S.evaluationComparison([a,{...paired,riseProbability:paired.riseProbability+Number.EPSILON},b],['A','B']).pairedCount,0,'one representable output difference is a conflict');
+  assert.equal(S.evaluationComparison([a,a,b],['A','B']).pairedCount,0);
+  for(const patch of [{actualClose:106},{inputKey:'different-evidence'},{capture:'scheduled'},{currency:'KRW'},{inputPrice:103},{inputKey:null}]) {
+    assert.equal(S.evaluationComparison([a,{...b,...patch}],['A','B']).pairedCount,0);
+  }
+  const legacy={...a,inputKey:null};
+  assert.equal(S.evaluationMetrics([legacy]).evaluated,1);
+  assert.equal(S.evaluationComparison([legacy],['A']).pairedCount,1);
+  assert.equal(S.evaluationComparison([legacy,b],['A','B']).excludedMissingEvidence,1);
+  assert.equal(S.evaluationComparison(rows,[]).pairedCount,0);
+  for(const sample of fixture.metricCases) {
+    const metrics=S.evaluationMetrics(sample.rows);
+    for(const [key,wanted] of Object.entries(sample.expected)) {
+      if(key==='maeByCurrency') {
+        assert.deepEqual(Object.keys(metrics[key]).sort(),Object.keys(wanted).sort());
+        for(const [currency,value] of Object.entries(wanted))near(metrics[key][currency],value,1e-6);
+      } else if(wanted===null)assert.equal(metrics[key],null,sample.name+' '+key);
+      else near(metrics[key],wanted,1e-6);
+    }
+  }
+  const legacyRecord={...fixture.records[0],evidence:null};
+  assert.equal(S.validForecast(legacyRecord),true);assert.equal(S.evaluationRows([legacyRecord])[0].inputKey,null);
+  assert.equal(S.chartEstimate(legacyRecord,[],'1d',legacyRecord.createdAt),null,'legacy history has no candles to recompute');
+  assert.equal(S.evidenceHTML(legacyRecord,'en'),'','legacy history cannot invent evidence');
+  const legacySignal=S.technical(bars(),'1d','us',end,end,legacyRecord);
+  assert.ok(legacySignal===null||legacySignal.live===false,'missing evidence cannot confirm a live signal');
+  assert.equal(S.evaluationRows([{...legacyRecord,currency:'KRW'}]).length,0);
+  const differentQuote={...fixture.records[1],quoteAt:fixture.records[1].quoteAt-.25};
+  assert.equal(S.validForecast(differentQuote),true);
+  const exactInputs=S.evaluationRows([fixture.records[0],differentQuote]);
+  assert.equal(exactInputs.length,2,'valid old quote precision cannot be dropped');
+  assert.notEqual(exactInputs[0].inputKey,exactInputs[1].inputKey);
+  assert.equal(S.evaluationComparison(exactInputs,['A','B']).pairedCount,0);
+  const nearestEarlier={...fixture.records[1],quoteAt:fixture.records[1].quoteAt-.000244140625};
+  assert.notEqual(nearestEarlier.quoteAt,fixture.records[1].quoteAt);
+  assert.equal(S.evaluationComparison(S.evaluationRows([fixture.records[0],nearestEarlier]),['A','B']).pairedCount,0);
+  assert.equal(S.evaluationComparison([a,{...b,source:'replay'}],['A','B']).pairedCount,0,'replay never joins recorded captures');
+  assert.equal(S.evaluationMetrics([a,{...paired,inputKey:'different-frozen-input'}]).evaluated,2,'same model on different inputs is not a duplicate');
+  const huge={...a,inputPrice:1e-308,actualClose:1e-308,expectedClose:1e308,lowerClose:1e-308,upperClose:1e308};
+  const overflow=S.evaluationMetrics([huge]);assert.equal(overflow.evaluated,1);assert.equal(overflow.mape,null);assert.equal(overflow.meanWidthPercent,null);
+  assert.equal(S.evaluationMetrics([huge,a]).mape,null,'overflow cannot disappear from an aggregate');
+  const baseline=S.evaluationMetrics([{...a,expectedClose:a.inputPrice,riseProbability:null,lowerClose:null,upperClose:null}]);
+  assert.equal(baseline.brier,null);assert.equal(baseline.coverage,null);
+  const old=S.score([fixture.records[0]]);near(old.mape,100/105);near(old.range,1);near(old.brier,.04);assert.equal(old.accuracy,1);
+  assert.equal(S.compareModels(fixture.records,['A','B']).pairedCount,1);
+  console.log('PASS shared evaluation fixture, selected cohorts, deduplication/provenance, units, pending/legacy/conflicts and overflow');
+}
+
 // Synthetic accounts only. No credentials, provider traffic or persistent viewer data.
 const accountList=()=>({result:[{accountSeq:7,accountNo:'•••• 5678',accountType:'BROKERAGE'},{accountSeq:8,accountNo:'••••',accountType:'BROKERAGE'}]});
 function overviewFixture(patch={}) {
@@ -514,6 +576,7 @@ async function testStockSettingsTabs(){
 }
 
 async function main(){
+  testForecastEvaluation();
   await testAccountViewer();
   await testAccountNotch();
   await testViewerMemo();

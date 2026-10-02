@@ -202,7 +202,7 @@ function estimate(price,closes,session,now) {
   return variance===null?null:distribution(price,closes[0],variance*(session.end-now)/(session.end-session.start),closes.length-1);
 }
 function chartEstimate(record,bars,interval,now) {
-  if(!validForecast(record)||record.createdAt>now||now>=record.sessionEnd||now-record.quoteAt>120000) return null;
+  if(!validForecast(record)||!record.evidence||record.createdAt>now||now>=record.sessionEnd||now-record.quoteAt>120000) return null;
   const session={start:record.sessionStart,end:record.sessionEnd};
   if(interval==='1d') return estimate(record.inputPrice,record.evidence.closes.map(c=>c.price),session,record.quoteAt);
   const duration=interval==='1m'?60000:600000,completed=completedBars(bars,record.quoteAt,interval,session),last=completed.at(-1);
@@ -234,7 +234,7 @@ function technical(bars,interval,market,fetchedAt,now,record=null) {
   if(!Number.isFinite(ratio)) return null;
   const action=ratio>=1.5&&fast>slow&&last.close>high&&last.close>last.open?'buy':ratio>=1.5&&fast<slow&&last.close<low&&last.close<last.open?'sell':'wait';
   let live=false;
-  if(record&&validForecast(record)&&record.market===market&&record.createdAt<=now&&now<record.sessionEnd&&now-record.quoteAt<=120000) {
+  if(record&&validForecast(record)&&record.evidence&&record.market===market&&record.createdAt<=now&&now<record.sessionEnd&&now-record.quoteAt<=120000) {
     const age=record.quoteAt-last.end;
     const recent=interval==='1d'?dayKey(last.end,market)===dayKey(record.evidence.closes[0].date,market):age>=0&&age<=(interval==='1m'?60000:600000)+120000&&last.end>record.sessionStart;
     live=recent&&((action==='buy'&&record.inputPrice>high)||(action==='sell'&&record.inputPrice<low));
@@ -250,8 +250,10 @@ function validForecast(r) {
   if(!validTrend(r,FORECAST_KEYS)||!FORECAST_KEYS.every(k=>Object.hasOwn(r,k))||!['manual','scheduled'].includes(r.capture)||!['previousClose','lowerClose','upperClose'].every(k=>positive(r[k]))||r.lowerClose>r.upperClose||!Number.isFinite(r.riseProbability)||r.riseProbability<0||r.riseProbability>1||!Number.isInteger(r.observations)||r.observations<20||r.observations>60) return false;
   if(r.capture==='scheduled'&&(r.sessionEnd-r.createdAt<3300000||r.sessionEnd-r.createdAt>3600000)) return false;
   const e=r.evidence;
-  if(!onlyKeys(e,['adjusted','closes'])||e.adjusted!==true||!Array.isArray(e.closes)||e.closes.length!==r.observations+1||e.closes[0]?.price!==r.previousClose||!positive(dailyVariance(e.closes.map(c=>c.price)))) return false;
-  if(!e.closes.every((c,i)=>onlyKeys(c,['date','price'])&&historyTime(c.date)&&positive(c.price)&&dayKey(c.date,r.market)<dayKey(i?e.closes[i-1].date:r.sessionStart,r.market))) return false;
+  if(e!==null) {
+    if(!onlyKeys(e,['adjusted','closes'])||e.adjusted!==true||!Array.isArray(e.closes)||e.closes.length!==r.observations+1||e.closes[0]?.price!==r.previousClose||!positive(dailyVariance(e.closes.map(c=>c.price)))) return false;
+    if(!e.closes.every((c,i)=>onlyKeys(c,['date','price'])&&historyTime(c.date)&&positive(c.price)&&dayKey(c.date,r.market)<dayKey(i?e.closes[i-1].date:r.sessionStart,r.market))) return false;
+  }
   return r.actualClose===null&&r.evaluatedAt===null||positive(r.actualClose)&&historyTime(r.evaluatedAt)&&r.evaluatedAt>=r.sessionEnd&&dayKey(r.evaluatedAt,r.market)>dayKey(r.sessionStart,r.market);
 }
 const groupID=r=>`${r.stockID}|${r.sessionStart}|${r.model}`;
@@ -279,21 +281,71 @@ function saveSnapshots(history,records,now) {
   for(const r of records) if(validForecast(r)&&r.createdAt<=now&&now-r.createdAt<=90000&&now<r.sessionEnd&&!ids.has(forecastID(r))){forecasts.push({...r});ids.add(forecastID(r));}
   return {...history,forecasts};
 }
-function score(records) {
-  const done=records.filter(r=>positive(r.actualClose)),directions=done.filter(r=>r.actualClose!==r.previousClose&&r.riseProbability!==0.5);
-  const avg=f=>done.length?done.reduce((s,r)=>s+f(r),0)/done.length:null;
-  return {total:records.length,evaluated:done.length,directionCount:directions.length,accuracy:directions.length?directions.filter(r=>(r.riseProbability>0.5)===(r.actualClose>r.previousClose)).length/directions.length:null,mae:avg(r=>Math.abs(r.expectedClose-r.actualClose)),mape:avg(r=>Math.abs(r.expectedClose-r.actualClose)/r.actualClose*100),baseline:avg(r=>Math.abs(r.inputPrice-r.actualClose)/r.actualClose*100),range:avg(r=>+(r.lowerClose<=r.actualClose&&r.actualClose<=r.upperClose)),brier:avg(r=>(r.riseProbability-+(r.actualClose>r.previousClose))**2)};
+// Match Foundation's reference clock spelling; the original epoch-ms values also remain in the key.
+const evaluationClock=time=>{const seconds=time/1000-978307200;return Number.isInteger(seconds)?seconds.toFixed(1):String(seconds);};
+function evaluationRows(records) {
+  return coalescedEvaluationRows(records.filter(validForecast).filter(r=>Number.isSafeInteger(r.sessionStart)).map(r=>({
+    referenceID:forecastID(r),source:'recorded',
+    inputKey:r.evidence?JSON.stringify([r.stockID,r.currency,r.capture,r.quoteAt,r.sessionStart,r.sessionEnd,r.previousClose,r.inputPrice,r.evidence.adjusted,r.evidence.closes.map(c=>[c.date,c.price]),[evaluationClock(r.quoteAt),evaluationClock(r.sessionStart),evaluationClock(r.sessionEnd),r.evidence.closes.map(c=>evaluationClock(c.date))]]):null,
+    stockID:r.stockID,currency:r.currency,model:r.model,capture:r.capture,sessionStart:r.sessionStart,
+    inputPrice:r.inputPrice,previousClose:r.previousClose,expectedClose:r.expectedClose,lowerClose:r.lowerClose,upperClose:r.upperClose,riseProbability:r.riseProbability,actualClose:r.actualClose,
+    references:[{referenceID:forecastID(r),source:'recorded'}]
+  })));
 }
-function compareModels(records) {
-  const valid=records.filter(validForecast),models=[...new Set(valid.map(r=>r.model))].sort(),groups=new Map();
-  for(const r of valid.filter(r=>r.actualClose!==null)) {
-    // Swift's comparison key excludes the model/output and capture clock, but
-    // requires the exact quote, input prices, session and saved daily evidence.
-    const key=JSON.stringify([r.stockID,r.currency,r.capture,r.quoteAt,r.sessionStart,r.sessionEnd,r.previousClose,r.inputPrice,r.observations,r.evidence.adjusted,r.evidence.closes.map(c=>[c.date,c.price])]);
+const evaluationInput=r=>JSON.stringify([r.inputKey,r.stockID,r.currency,r.capture,r.sessionStart,r.inputPrice,r.previousClose,r.source==='replay']);
+function coalescedEvaluationRows(rows) {
+  const groups=new Map();
+  rows.forEach((r,i)=>{
+    const key=r.inputKey===null?'missing:'+i:JSON.stringify([evaluationInput(r),r.model]);
     if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);
+  });
+  return [...groups.values()].flatMap(group=>{
+    const first=group[0],equivalent=group.every(r=>['expectedClose','lowerClose','upperClose','riseProbability','actualClose'].every(k=>r[k]===first[k]));
+    if(group.some(r=>r.source==='pairedCalculation')&&group.filter(r=>r.source==='recorded').length<=1&&equivalent)
+      return [{...(group.find(r=>r.source==='recorded')??first),references:group.flatMap(r=>r.references?.length?r.references:[{referenceID:r.referenceID,source:r.source}])}];
+    return group;
+  });
+}
+function evaluationAverage(values) {
+  if(!values.length||!values.every(Number.isFinite))return null;
+  const result=values.reduce((sum,value)=>sum+value/values.length,0);
+  return Number.isFinite(result)?result:null;
+}
+function evaluationMetrics(rows) {
+  const unique=coalescedEvaluationRows(rows),done=unique.filter(r=>positive(r.actualClose));
+  const probability=done.filter(r=>r.riseProbability!==null),directions=probability.filter(r=>Number.isFinite(r.riseProbability)&&r.riseProbability>=0&&r.riseProbability<=1&&r.riseProbability!==.5&&r.actualClose!==r.previousClose);
+  const ranges=done.filter(r=>r.lowerClose!==null&&r.upperClose!==null),currencies=[...new Set(done.map(r=>r.currency))],maeByCurrency={};
+  for(const currency of currencies){const error=evaluationAverage(done.filter(r=>r.currency===currency).map(r=>Math.abs(r.expectedClose-r.actualClose)));if(error!==null)maeByCurrency[currency]=error;}
+  return {total:unique.length,evaluated:done.length,directionCount:directions.length,directionHits:directions.filter(r=>(r.riseProbability>.5)===(r.actualClose>r.previousClose)).length,
+    mape:evaluationAverage(done.map(r=>Math.abs(r.expectedClose-r.actualClose)/r.actualClose*100)),baselineMAPE:evaluationAverage(done.map(r=>Math.abs(r.inputPrice-r.actualClose)/r.actualClose*100)),
+    brier:evaluationAverage(probability.map(r=>Number.isFinite(r.riseProbability)&&r.riseProbability>=0&&r.riseProbability<=1?(r.riseProbability-+(r.actualClose>r.previousClose))**2:NaN)),
+    coverage:evaluationAverage(ranges.map(r=>r.lowerClose<=r.actualClose&&r.actualClose<=r.upperClose?100:0)),
+    meanWidthPercent:evaluationAverage(ranges.map(r=>(r.upperClose-r.lowerClose)/r.inputPrice*100)),maeByCurrency};
+}
+function evaluationComparison(rows,selectedModels) {
+  const models=[...new Set(selectedModels)].sort(),selected=coalescedEvaluationRows(rows.filter(r=>models.includes(r.model))),groups=new Map();
+  const missing=selected.filter(r=>models.length>1&&r.inputKey===null);
+  for(const r of selected.filter(r=>models.length===1||r.inputKey!==null)){
+    const key=evaluationInput(r);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);
   }
-  const matched=[...groups.values()].filter(rows=>rows.length===models.length&&new Set(rows.map(r=>r.model)).size===models.length&&new Set(rows.map(r=>r.actualClose)).size===1),paired=matched.flat();
-  return {pairedCount:matched.length,baseline:score(matched.map(rows=>rows[0])).baseline,rows:models.map(model=>({model,available:score(valid.filter(r=>r.model===model)),paired:score(paired.filter(r=>r.model===model))}))};
+  let pairedCount=0,excludedConflicts=0;const paired=[];
+  for(const group of groups.values()){
+    if(new Set(group.map(r=>r.model)).size!==group.length||new Set(group.filter(r=>r.actualClose!==null).map(r=>r.actualClose)).size>1){excludedConflicts++;continue;}
+    if(group.length!==models.length||!group.every(r=>r.actualClose!==null))continue;
+    pairedCount++;paired.push(...group);
+  }
+  return {pairedCount,excludedConflicts,excludedMissingEvidence:missing.length,rows:models.map(model=>({model,available:evaluationMetrics(selected.filter(r=>r.model===model)),paired:evaluationMetrics(paired.filter(r=>r.model===model))}))};
+}
+function legacyEvaluationScore(metrics) {
+  const currencies=Object.values(metrics.maeByCurrency);
+  return {total:metrics.total,evaluated:metrics.evaluated,directionCount:metrics.directionCount,accuracy:metrics.directionCount?metrics.directionHits/metrics.directionCount:null,
+    mae:currencies.length===1?currencies[0]:null,mape:metrics.mape,baseline:metrics.baselineMAPE,range:metrics.coverage===null?null:metrics.coverage/100,brier:metrics.brier};
+}
+function score(records) { return legacyEvaluationScore(evaluationMetrics(evaluationRows(records))); }
+function compareModels(records,selectedModels=null) {
+  const rows=evaluationRows(records),comparison=evaluationComparison(rows,selectedModels??rows.map(r=>r.model));
+  return {pairedCount:comparison.pairedCount,baseline:comparison.rows[0]?.paired.baselineMAPE??null,
+    rows:comparison.rows.map(r=>({model:r.model,available:legacyEvaluationScore(r.available),paired:legacyEvaluationScore(r.paired)}))};
 }
 function probabilityBins(records) {
   const groups=new Map();
@@ -698,6 +750,7 @@ function rememberDisclosures(element) {
   return ()=>element.querySelectorAll(selector).forEach(node=>{node.open=open.has(node.dataset.stockDisclosure);});
 }
 function evidenceHTML(record,lang,key='evidence:'+forecastID(record)) {
+  if(!record.evidence)return '';
   const tr=key=>esc(t(lang,key)),p=v=>esc(priceText(v,record.currency,lang)),closes=record.evidence.closes;
   const time=v=>esc(new Intl.DateTimeFormat(lang==='ko'?'ko-KR':'en-US',{timeZone:zone(record.market),year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'}).format(v));
   const percent=v=>Number.isFinite(v)?(v*100).toFixed(2)+'%':'—',historical=n=>closes.length>n?closes[0].price/closes[n].price-1:NaN;
@@ -1042,7 +1095,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
   render();
   return {render,show(visible,moveFocus=true){store.visible=visible;settingsHidden=!visible;if(!visible){clearCredentialInputs();store.clearViewer(false);renderViewer();}void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();if(moveFocus)requestAnimationFrame(()=>element.querySelector('#stock-tab-'+activeTab)?.focus({preventScroll:true}));void store.tick();}}};
 }
-const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
+const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,evaluationRows,coalescedEvaluationRows,evaluationMetrics,evaluationComparison,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 else root.PenguinNotchStocks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

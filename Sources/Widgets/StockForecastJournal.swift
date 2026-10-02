@@ -46,14 +46,15 @@ struct StockForecastRecord: Codable, Identifiable {
         return (riseProbability > 0.5) == (actualClose > previousClose)
     }
     var absolutePercentageError: Double? {
-        actualClose.map { abs(NSDecimalNumber(decimal: (expectedClose - $0) / $0).doubleValue) * 100 }
+        evaluationMetrics.mape
     }
     var baselineError: Double? {
-        actualClose.map { abs(NSDecimalNumber(decimal: (inputPrice - $0) / $0).doubleValue) * 100 }
+        evaluationMetrics.baselineMAPE
     }
-    var rangeHit: Bool? { actualClose.map { lowerClose <= $0 && $0 <= upperClose } }
-    var brierScore: Double? {
-        actualClose.map { pow(riseProbability - ($0 > previousClose ? 1 : 0), 2) }
+    var rangeHit: Bool? { evaluationMetrics.coverage.map { $0 == 100 } }
+    var brierScore: Double? { evaluationMetrics.brier }
+    private var evaluationMetrics: StockEvaluationMetrics {
+        StockEvaluation.metrics(StockEvaluation.rows(journal: [self], analyses: []))
     }
     var isValid: Bool {
         stock?.id == stockID && !model.isEmpty && model.count <= 100
@@ -86,19 +87,18 @@ struct StockForecastScore {
     let brier: Double?
 
     init(_ records: [StockForecastRecord]) {
-        total = records.count
-        let completed = records.filter { $0.actualClose != nil }
-        evaluated = completed.count
-        let directions = completed.compactMap(\.directionHit)
-        directionCount = directions.count
-        directionHits = directions.filter { $0 }.count
-        func average(_ values: [Double]) -> Double? {
-            values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
-        }
-        meanError = average(completed.compactMap(\.absolutePercentageError))
-        baselineError = average(completed.compactMap(\.baselineError))
-        rangeCoverage = average(completed.compactMap(\.rangeHit).map { $0 ? 100 : 0 })
-        brier = average(completed.compactMap(\.brierScore))
+        self.init(StockEvaluation.metrics(StockEvaluation.rows(journal: records, analyses: [])))
+    }
+
+    init(_ metrics: StockEvaluationMetrics) {
+        total = metrics.total
+        evaluated = metrics.evaluated
+        directionCount = metrics.directionCount
+        directionHits = metrics.directionHits
+        meanError = metrics.mape
+        baselineError = metrics.baselineMAPE
+        rangeCoverage = metrics.coverage
+        brier = metrics.brier
     }
 }
 
@@ -112,41 +112,17 @@ struct StockForecastComparison {
         let paired: StockForecastScore
         var id: String { model }
     }
-    private struct Inputs: Hashable {
-        let stockID: String
-        let currency: String
-        let capture: String
-        let quoteAt: Date
-        let sessionStart: Date
-        let sessionEnd: Date
-        let previousClose: Decimal
-        let inputPrice: Decimal
-        let observations: Int
-        let evidence: StockForecastEvidence?
-    }
     let rows: [Row]
     let pairedCount: Int
     let baselineError: Double?
 
     init(_ records: [StockForecastRecord]) {
-        let valid = records.filter(\.isValid)
-        let models = Set(valid.map(\.model))
-        let groups = Dictionary(grouping: valid.filter { $0.actualClose != nil && (models.count == 1 || $0.evidence != nil) }) {
-            Inputs(stockID: $0.stockID, currency: $0.currency, capture: $0.capture.rawValue,
-                   quoteAt: $0.quoteAt, sessionStart: $0.sessionStart, sessionEnd: $0.sessionEnd,
-                   previousClose: $0.previousClose, inputPrice: $0.inputPrice,
-                   observations: $0.observations, evidence: $0.evidence)
-        }
-        let matched = groups.values.filter {
-            $0.count == models.count && Set($0.map(\.model)) == models
-                && Set($0.compactMap(\.actualClose)).count == 1
-        }
-        pairedCount = matched.count
-        let paired = matched.flatMap { $0 }
-        baselineError = StockForecastScore(matched.compactMap(\.first)).baselineError
-        rows = models.sorted().map { model in
-            Row(model: model, available: StockForecastScore(valid.filter { $0.model == model }),
-                paired: StockForecastScore(paired.filter { $0.model == model }))
+        let evaluationRows = StockEvaluation.rows(journal: records, analyses: [])
+        let comparison = StockEvaluation.compare(evaluationRows, selectedModels: Set(evaluationRows.map(\.model)))
+        pairedCount = comparison.pairedCount
+        baselineError = comparison.rows.first?.paired.baselineMAPE
+        rows = comparison.rows.map {
+            Row(model: $0.model, available: StockForecastScore($0.available), paired: StockForecastScore($0.paired))
         }
     }
 }

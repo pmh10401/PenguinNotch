@@ -1,0 +1,682 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "stockID": "us:TEST",
+      "name": "Public mock",
+      "market": "us",
+      "currency": "USD",
+      "model": "A",
+      "capture": "manual",
+      "createdAt": 1790362800000,
+      "quoteAt": 1790362800000,
+      "sessionStart": 1790343000000,
+      "sessionEnd": 1790366400000,
+      "previousClose": 100,
+      "inputPrice": 102,
+      "expectedClose": 104,
+      "lowerClose": 100,
+      "upperClose": 106,
+      "riseProbability": 0.8,
+      "observations": 20,
+      "evidence": {
+        "adjusted": true,
+        "closes": [
+          {
+            "date": 1790222400000,
+            "price": 100
+          },
+          {
+            "date": 1790136000000,
+            "price": 101
+          },
+          {
+            "date": 1790049600000,
+            "price": 100
+          },
+          {
+            "date": 1789963200000,
+            "price": 101
+          },
+          {
+            "date": 1789876800000,
+            "price": 100
+          },
+          {
+            "date": 1789790400000,
+            "price": 101
+          },
+          {
+            "date": 1789704000000,
+            "price": 100
+          },
+          {
+            "date": 1789617600000,
+            "price": 101
+          },
+          {
+            "date": 1789531200000,
+            "price": 100
+          },
+          {
+            "date": 1789444800000,
+            "price": 101
+          },
+          {
+            "date": 1789358400000,
+            "price": 100
+          },
+          {
+            "date": 1789272000000,
+            "price": 101
+          },
+          {
+            "date": 1789185600000,
+            "price": 100
+          },
+          {
+            "date": 1789099200000,
+            "price": 101
+          },
+          {
+            "date": 1789012800000,
+            "price": 100
+          },
+          {
+            "date": 1788926400000,
+            "price": 101
+          },
+          {
+            "date": 1788840000000,
+            "price": 100
+          },
+          {
+            "date": 1788753600000,
+            "price": 101
+          },
+          {
+            "date": 1788667200000,
+            "price": 100
+          },
+          {
+            "date": 1788580800000,
+            "price": 101
+          },
+          {
+            "date": 1788494400000,
+            "price": 100
+          }
+        ]
+      },
+      "actualClose": 105,
+      "evaluatedAt": 1790395260000
+    },
+    {
+      "stockID": "us:TEST",
+      "name": "Public mock",
+      "market": "us",
+      "currency": "USD",
+      "model": "B",
+      "capture": "manual",
+      "createdAt": 1790362800000,
+      "quoteAt": 1790362800000,
+      "sessionStart": 1790343000000,
+      "sessionEnd": 1790366400000,
+      "previousClose": 100,
+      "inputPrice": 102,
+      "expectedClose": 103,
+      "lowerClose": 100,
+      "upperClose": 106,
+      "riseProbability": 0.8,
+      "observations": 20,
+      "evidence": {
+        "adjusted": true,
+        "closes": [
+          {
+            "date": 1790222400000,
+            "price": 100
+          },
+          {
+            "date": 1790136000000,
+            "price": 101
+          },
+          {
+            "date": 1790049600000,
+            "price": 100
+          },
+          {
+            "date": 1789963200000,
+            "price": 101
+          },
+          {
+            "date": 1789876800000,
+            "price": 100
+          },
+          {
+            "date": 1789790400000,
+            "price": 101
+          },
+          {
+            "date": 1789704000000,
+            "price": 100
+          },
+          {
+            "date": 1789617600000,
+            "price": 101
+          },
+          {
+            "date": 1789531200000,
+            "price": 100
+          },
+          {
+            "date": 1789444800000,
+            "price": 101
+          },
+          {
+            "date": 1789358400000,
+            "price": 100
+          },
+          {
+            "date": 1789272000000,
+            "price": 101
+          },
+          {
+            "date": 1789185600000,
+            "price": 100
+          },
+          {
+            "date": 1789099200000,
+            "price": 101
+          },
+          {
+            "date": 1789012800000,
+            "price": 100
+          },
+          {
+            "date": 1788926400000,
+            "price": 101
+          },
+          {
+            "date": 1788840000000,
+            "price": 100
+          },
+          {
+            "date": 1788753600000,
+            "price": 101
+          },
+          {
+            "date": 1788667200000,
+            "price": 100
+          },
+          {
+            "date": 1788580800000,
+            "price": 101
+          },
+          {
+            "date": 1788494400000,
+            "price": 100
+          }
+        ]
+      },
+      "actualClose": 105,
+      "evaluatedAt": 1790395260000
+    },
+    {
+      "stockID": "us:TEST",
+      "name": "Public mock",
+      "market": "us",
+      "currency": "USD",
+      "model": "C",
+      "capture": "manual",
+      "createdAt": 1790362800000,
+      "quoteAt": 1790362800000,
+      "sessionStart": 1790343000000,
+      "sessionEnd": 1790366400000,
+      "previousClose": 100,
+      "inputPrice": 102,
+      "expectedClose": 104,
+      "lowerClose": 100,
+      "upperClose": 106,
+      "riseProbability": 0.8,
+      "observations": 20,
+      "evidence": {
+        "adjusted": true,
+        "closes": [
+          {
+            "date": 1790222400000,
+            "price": 100
+          },
+          {
+            "date": 1790136000000,
+            "price": 101
+          },
+          {
+            "date": 1790049600000,
+            "price": 100
+          },
+          {
+            "date": 1789963200000,
+            "price": 101
+          },
+          {
+            "date": 1789876800000,
+            "price": 100
+          },
+          {
+            "date": 1789790400000,
+            "price": 101
+          },
+          {
+            "date": 1789704000000,
+            "price": 100
+          },
+          {
+            "date": 1789617600000,
+            "price": 101
+          },
+          {
+            "date": 1789531200000,
+            "price": 100
+          },
+          {
+            "date": 1789444800000,
+            "price": 101
+          },
+          {
+            "date": 1789358400000,
+            "price": 100
+          },
+          {
+            "date": 1789272000000,
+            "price": 101
+          },
+          {
+            "date": 1789185600000,
+            "price": 100
+          },
+          {
+            "date": 1789099200000,
+            "price": 101
+          },
+          {
+            "date": 1789012800000,
+            "price": 100
+          },
+          {
+            "date": 1788926400000,
+            "price": 101
+          },
+          {
+            "date": 1788840000000,
+            "price": 100
+          },
+          {
+            "date": 1788753600000,
+            "price": 101
+          },
+          {
+            "date": 1788667200000,
+            "price": 100
+          },
+          {
+            "date": 1788580800000,
+            "price": 101
+          },
+          {
+            "date": 1788494400000,
+            "price": 100
+          }
+        ]
+      },
+      "actualClose": null,
+      "evaluatedAt": null
+    }
+  ],
+  "rows": [
+    {
+      "referenceID": "recorded-A",
+      "source": "recorded",
+      "inputKey": "public-input-1",
+      "stockID": "us:TEST",
+      "currency": "USD",
+      "model": "A",
+      "capture": "manual",
+      "sessionStart": 1790343000000,
+      "inputPrice": 102,
+      "previousClose": 100,
+      "expectedClose": 104,
+      "lowerClose": 100,
+      "upperClose": 106,
+      "riseProbability": 0.8,
+      "actualClose": 105,
+      "references": [
+        {
+          "referenceID": "recorded-A",
+          "source": "recorded"
+        }
+      ]
+    },
+    {
+      "referenceID": "paired-A",
+      "source": "pairedCalculation",
+      "inputKey": "public-input-1",
+      "stockID": "us:TEST",
+      "currency": "USD",
+      "model": "A",
+      "capture": "manual",
+      "sessionStart": 1790343000000,
+      "inputPrice": 102,
+      "previousClose": 100,
+      "expectedClose": 104,
+      "lowerClose": 100,
+      "upperClose": 106,
+      "riseProbability": 0.8,
+      "actualClose": 105,
+      "references": [
+        {
+          "referenceID": "paired-A",
+          "source": "pairedCalculation"
+        }
+      ]
+    },
+    {
+      "referenceID": "recorded-B",
+      "source": "recorded",
+      "inputKey": "public-input-1",
+      "stockID": "us:TEST",
+      "currency": "USD",
+      "model": "B",
+      "capture": "manual",
+      "sessionStart": 1790343000000,
+      "inputPrice": 102,
+      "previousClose": 100,
+      "expectedClose": 103,
+      "lowerClose": 100,
+      "upperClose": 106,
+      "riseProbability": 0.8,
+      "actualClose": 105,
+      "references": [
+        {
+          "referenceID": "recorded-B",
+          "source": "recorded"
+        }
+      ]
+    }
+  ],
+  "metricCases": [
+    {
+      "name": "flat and half probability",
+      "rows": [
+        {
+          "referenceID": "recorded-A",
+          "source": "recorded",
+          "inputKey": "public-input-1",
+          "stockID": "us:TEST",
+          "currency": "USD",
+          "model": "A",
+          "capture": "manual",
+          "sessionStart": 1790343000000,
+          "inputPrice": 102,
+          "previousClose": 100,
+          "expectedClose": 100,
+          "lowerClose": 100,
+          "upperClose": 106,
+          "riseProbability": 0.5,
+          "actualClose": 100,
+          "references": [
+            {
+              "referenceID": "recorded-A",
+              "source": "recorded"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 1,
+        "evaluated": 1,
+        "directionCount": 0,
+        "directionHits": 0,
+        "mape": 0,
+        "baselineMAPE": 2,
+        "brier": 0.25,
+        "coverage": 100,
+        "meanWidthPercent": 5.882352941176471,
+        "maeByCurrency": {
+          "USD": 0
+        }
+      }
+    },
+    {
+      "name": "unclipped percentages and inclusive lower bound",
+      "rows": [
+        {
+          "referenceID": "recorded-A",
+          "source": "recorded",
+          "inputKey": "public-input-1",
+          "stockID": "us:TEST",
+          "currency": "USD",
+          "model": "A",
+          "capture": "manual",
+          "sessionStart": 1790343000000,
+          "inputPrice": 100,
+          "previousClose": 90,
+          "expectedClose": 350,
+          "lowerClose": 100,
+          "upperClose": 350,
+          "riseProbability": 0.8,
+          "actualClose": 100,
+          "references": [
+            {
+              "referenceID": "recorded-A",
+              "source": "recorded"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 1,
+        "evaluated": 1,
+        "directionCount": 1,
+        "directionHits": 1,
+        "mape": 250,
+        "baselineMAPE": 0,
+        "brier": 0.04,
+        "coverage": 100,
+        "meanWidthPercent": 250,
+        "maeByCurrency": {
+          "USD": 250
+        }
+      }
+    },
+    {
+      "name": "pending stays missing",
+      "rows": [
+        {
+          "referenceID": "recorded-A",
+          "source": "recorded",
+          "inputKey": "public-input-1",
+          "stockID": "us:TEST",
+          "currency": "USD",
+          "model": "A",
+          "capture": "manual",
+          "sessionStart": 1790343000000,
+          "inputPrice": 102,
+          "previousClose": 100,
+          "expectedClose": 104,
+          "lowerClose": 100,
+          "upperClose": 106,
+          "riseProbability": 0.8,
+          "actualClose": null,
+          "references": [
+            {
+              "referenceID": "recorded-A",
+              "source": "recorded"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 1,
+        "evaluated": 0,
+        "directionCount": 0,
+        "directionHits": 0,
+        "mape": null,
+        "baselineMAPE": null,
+        "brier": null,
+        "coverage": null,
+        "meanWidthPercent": null,
+        "maeByCurrency": {}
+      }
+    },
+    {
+      "name": "currency MAE remains separate",
+      "rows": [
+        {
+          "referenceID": "recorded-A",
+          "source": "recorded",
+          "inputKey": "public-input-1",
+          "stockID": "us:TEST",
+          "currency": "USD",
+          "model": "A",
+          "capture": "manual",
+          "sessionStart": 1790343000000,
+          "inputPrice": 102,
+          "previousClose": 100,
+          "expectedClose": 104,
+          "lowerClose": 100,
+          "upperClose": 106,
+          "riseProbability": 0.8,
+          "actualClose": 100,
+          "references": [
+            {
+              "referenceID": "recorded-A",
+              "source": "recorded"
+            }
+          ]
+        },
+        {
+          "referenceID": "recorded-KR",
+          "source": "recorded",
+          "inputKey": "public-kr-1",
+          "stockID": "kr:005930",
+          "currency": "KRW",
+          "model": "A",
+          "capture": "manual",
+          "sessionStart": 1790343000000,
+          "inputPrice": 1000,
+          "previousClose": 900,
+          "expectedClose": 1100,
+          "lowerClose": 1000,
+          "upperClose": 1200,
+          "riseProbability": 0.6,
+          "actualClose": 1000,
+          "references": [
+            {
+              "referenceID": "recorded-KR",
+              "source": "recorded"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 2,
+        "evaluated": 2,
+        "directionCount": 1,
+        "directionHits": 1,
+        "mape": 7,
+        "baselineMAPE": 1,
+        "brier": 0.4,
+        "coverage": 100,
+        "meanWidthPercent": 12.941176470588236,
+        "maeByCurrency": {
+          "USD": 4,
+          "KRW": 100
+        }
+      }
+    },
+    {
+      "name": "inclusive upper bound",
+      "rows": [
+        {
+          "referenceID": "recorded-A",
+          "source": "recorded",
+          "inputKey": "public-input-1",
+          "stockID": "us:TEST",
+          "currency": "USD",
+          "model": "A",
+          "capture": "manual",
+          "sessionStart": 1790343000000,
+          "inputPrice": 100,
+          "previousClose": 90,
+          "expectedClose": 350,
+          "lowerClose": 100,
+          "upperClose": 350,
+          "riseProbability": 0.8,
+          "actualClose": 350,
+          "references": [
+            {
+              "referenceID": "recorded-A",
+              "source": "recorded"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 1,
+        "evaluated": 1,
+        "directionCount": 1,
+        "directionHits": 1,
+        "mape": 0,
+        "baselineMAPE": 71.42857142857143,
+        "brier": 0.04,
+        "coverage": 100,
+        "meanWidthPercent": 250,
+        "maeByCurrency": {
+          "USD": 0
+        }
+      }
+    },
+    {
+      "name": "half probability excludes rising direction but includes Brier",
+      "rows": [
+        {
+          "referenceID": "recorded-A",
+          "source": "recorded",
+          "inputKey": "public-input-1",
+          "stockID": "us:TEST",
+          "currency": "USD",
+          "model": "A",
+          "capture": "manual",
+          "sessionStart": 1790343000000,
+          "inputPrice": 102,
+          "previousClose": 100,
+          "expectedClose": 104,
+          "lowerClose": 100,
+          "upperClose": 106,
+          "riseProbability": 0.5,
+          "actualClose": 105,
+          "references": [
+            {
+              "referenceID": "recorded-A",
+              "source": "recorded"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 1,
+        "evaluated": 1,
+        "directionCount": 0,
+        "directionHits": 0,
+        "mape": 0.9523809523809523,
+        "baselineMAPE": 2.857142857142857,
+        "brier": 0.25,
+        "coverage": 100,
+        "meanWidthPercent": 5.882352941176471,
+        "maeByCurrency": {
+          "USD": 1
+        }
+      }
+    }
+  ]
+}
