@@ -196,6 +196,33 @@ class BacktestStore {
   }
   publish(m){const index=this.runs.findIndex(r=>r.runID===m.runID);if(index<0)this.runs.push(m);else this.runs[index]=m;
     this.progress={completed:m.cases.filter(e=>e.status!=='pending').length,total:m.cases.length};this.emit();}
+  // Readonly original bytes + the same loadCase receipt; no typed reserialization hash.
+  async loadCase(runID,caseID){
+    const m=(await archive('loadManifest',{runID},this.invoke)).manifest,e=m.cases.find(e=>e.caseID===caseID);
+    if(!e)throw Error('Invalid replay binding');
+    const c=e.status==='saved'?await archive('loadCase',{runID,caseID},this.invoke):null;
+    const r=e.status==='saved'&&e.resultSHA256!==null?await archive('loadResult',{runID,caseID},this.invoke):null;
+    const caseData=c?parsedBody(c.body,validCase):null,result=r?.body?parsedBody(r.body,validResult):null;
+    if(c&&(c.sha256!==e.inputSHA256||caseData.input.stockID!==e.stockID||caseData.input.tradingDay!==e.tradingDay)
+      ||r&&(r.sha256!==e.resultSHA256||!result||result.inputSHA256!==c.sha256||JSON.stringify([...result.outcomes.map(o=>o.model)].sort())!==JSON.stringify([...m.models].sort())))throw Error('Invalid replay binding');
+    return {referenceID:`${runID.toLowerCase()}/${caseID}${c?'/'+c.sha256:''}`,entry:e,caseData,result,inputSHA256:c?.sha256??null,resultSHA256:r?.sha256??null,caseBody:c?.body??null,resultBody:r?.body??null,
+      rawDetail:JSON.stringify({entry:e,caseBody:c?.body??null,resultBody:r?.body??null})};
+  }
+  async produceResult(m,e,generation,revision){
+    this.check(generation,revision);
+    const c=await archive('loadCase',{runID:m.runID,caseID:e.caseID},this.invoke);this.check(generation,revision);
+    const existing=await archive('loadResult',{runID:m.runID,caseID:e.caseID},this.invoke);this.check(generation,revision);
+    if(existing.body!==null){const r=parsedBody(existing.body,validResult);
+      if(r.inputSHA256!==c.sha256||JSON.stringify(r.outcomes.map(o=>o.model).sort())!==JSON.stringify([...m.models].sort()))throw Error('Invalid replay binding');
+      return {input:c.sha256,result:existing.sha256};
+    }
+    const input=parsedBody(c.body,validCase).input;
+    const result={version:1,caseID:e.caseID,inputSHA256:c.sha256,calculationVersion:'replay-v1',computedAt:this.now(),
+      outcomes:m.models.map(model=>predictReplay(input,['1d','1m','10m'][MODELS.indexOf(model)]))};
+    this.check(generation,revision);
+    const receipt=await archive('saveResult',{runID:m.runID,body:JSON.stringify(result)},this.invoke);this.check(generation,revision);
+    return {input:c.sha256,result:receipt.sha256};
+  }
   async start({symbols,sessions=60}){
     if(this.busy)throw Error('collection_already_running');
     const stocks=Array.isArray(symbols)?symbols.map(s=>S.parseStock(typeof s==='string'?s:S.stockID(s))):[];
@@ -243,7 +270,10 @@ class BacktestStore {
   async pause(m){
     if(m.status==='completed')return;
     // A save already in flight can leave valid orphan bytes. Native resume reuses them without requests.
-    try{await archive('updateProgress',{runID:m.runID,entries:m.cases,status:'paused'},this.invoke);m.status='paused';this.publish(m);}catch(_){this.errorMessage='archive_unavailable';}
+    try{const current=(await archive('loadManifest',{runID:m.runID},this.invoke)).manifest;
+      if(current.status==='completed'){Object.assign(m,current);this.publish(m);return;}
+      await archive('updateProgress',{runID:m.runID,entries:m.cases,status:'paused'},this.invoke);m.status='paused';this.publish(m);
+    }catch(_){this.errorMessage='archive_unavailable';}
   }
   async collect(m,calendars,generation,revision,recover=false){
     await archive('updateProgress',{runID:m.runID,entries:m.cases,status:'running'},this.invoke);this.check(generation,revision);m.status='running';this.publish(m);
@@ -255,7 +285,7 @@ class BacktestStore {
       try{saved=await archive('loadCase',{runID:m.runID,caseID:e.caseID},this.invoke);}catch(error){
         if(String(error?.message??error)!=='Invalid replay archive')throw error;
         // Native loadCase currently uses its strict archive error for absent uncommitted bodies.
-        const audit=(await archive('loadManifest',{runID:m.runID},this.invoke)).manifest;
+        this.check(generation,revision);const audit=(await archive('loadManifest',{runID:m.runID},this.invoke)).manifest;
         if(audit.cases[n].status!=='pending'||audit.cases[n].inputSHA256!==null)throw error;
       }
       this.check(generation,revision);if(saved)existing.set(e.caseID,saved);
@@ -274,18 +304,18 @@ class BacktestStore {
     for(let n=0;n<m.cases.length;n++){
       const e=m.cases[n];this.check(generation,revision);if(e.status!=='pending')continue;
       const saved=existing.get(e.caseID);
-      if(saved)m.cases[n]={...e,status:'saved',inputSHA256:saved.sha256};
-      else{
+      if(!saved){
         const stock=S.parseStock(e.stockID),key=stock.market+'|'+e.tradingDay;
         try{
           const c=await this.collectCase(stock,e,calendars.get(key),generation,revision);this.check(generation,revision);
-          const receipt=await archive('saveCase',{runID:m.runID,body:JSON.stringify(c)},this.invoke);this.check(generation,revision);
-          m.cases[n]={...e,status:'saved',inputSHA256:receipt.sha256};
+          await archive('saveCase',{runID:m.runID,body:JSON.stringify(c)},this.invoke);this.check(generation,revision);
         }catch(error){if(!(error instanceof CollectionSkip))throw error;this.check(generation,revision);m.cases[n]={...e,status:'skipped',reason:error.message};}
       }
+      if(m.cases[n].status!=='skipped'){const receipt=await this.produceResult(m,e,generation,revision);
+        m.cases[n]={...e,status:'saved',inputSHA256:receipt.input,resultSHA256:receipt.result};}
       this.check(generation,revision);await archive('updateProgress',{runID:m.runID,entries:m.cases,status:'running'},this.invoke);this.check(generation,revision);this.publish(m);
     }
-    this.check(generation,revision);await archive('updateProgress',{runID:m.runID,entries:m.cases,status:'completed'},this.invoke);Object.assign(m,(await archive('loadManifest',{runID:m.runID},this.invoke)).manifest);this.check(generation,revision);this.publish(m);
+    this.check(generation,revision);await archive('updateProgress',{runID:m.runID,entries:m.cases,status:'completed'},this.invoke);this.check(generation,revision);Object.assign(m,(await archive('loadManifest',{runID:m.runID},this.invoke)).manifest);this.check(generation,revision);this.publish(m);
   }
   async collectCase(stock,e,calendar,generation,revision){
     const {start,end}=calendar.session,cutoff=end-3600000;
@@ -327,7 +357,70 @@ class BacktestStore {
     if(daily.requestedAt<end||proofReply.requestedAt<end||!validCase(c))fail('invalid_collected_case');return c;
   }
 }
-const api={PRICE_BASIS,validInput,validCase,predictReplay,validManifest,validResult,archive,BacktestStore};
+// inputSHA256 is the SAME archive.loadCase receipt, not a hash of a reserialized object.
+function replayRows(runID,caseData,result,inputSHA256){
+  if(!uuid(runID)||!validCase(caseData)||!validResult(result)||result.caseID!==caseData.input.caseID||result.inputSHA256!==inputSHA256)throw Error('Invalid replay binding');
+  const i=caseData.input,key=`${runID.toLowerCase()}/${i.caseID}/${inputSHA256}`;
+  return result.outcomes.filter(o=>o.status==='forecast').map(o=>({referenceID:key,source:'replay',inputKey:key,stockID:i.stockID,currency:i.currency,
+    model:o.model,capture:'replay',sessionStart:i.sessionStart,inputPrice:i.inputPrice,previousClose:i.previousClose,expectedClose:o.forecast.expectedClose,
+    lowerClose:o.forecast.lowerClose,upperClose:o.forecast.upperClose,riseProbability:o.forecast.riseProbability,actualClose:caseData.target.actualClose,
+    references:[{referenceID:key,source:'replay'}]}));
+}
+function evaluationCalibration(rows){
+  return S.probabilityBinsForRows(S.coalescedEvaluationRows(rows).filter(r=>positive(r.actualClose)&&positive(r.previousClose)
+    &&typeof r.riseProbability==='number'&&Number.isFinite(r.riseProbability)&&r.riseProbability>=0&&r.riseProbability<=1));
+}
+function filteredEvaluationRows(rows,{market,stockID,day,capture,source}={}){
+  return rows.filter(r=>{const stock=S.parseStock(r.stockID);return stock&&(!market||stock.market===market)&&(!stockID||r.stockID===stockID)
+    &&(!day||S.dayKey(r.sessionStart,stock.market)===day)&&(!capture||r.capture===capture)&&(!source||r.source===source);});
+}
+function replaySummary(manifest,loaded,selectedModels,{market,stockID,day}={}){
+  const models=[...new Set(selectedModels)].sort();
+  if(!validManifest(manifest)||models.some(m=>!manifest.models.includes(m))||!unique(loaded.map(c=>c.entry.caseID)))throw Error('Invalid replay binding');
+  const entries=manifest.cases.filter(e=>(!market||S.parseStock(e.stockID).market===market)&&(!stockID||e.stockID===stockID)&&(!day||e.tradingDay===day));
+  const byID=new Map(loaded.map(c=>[c.entry.caseID,c])),skips=new Map();let rows=[],unavailable=0;
+  for(const e of entries.filter(e=>e.status==='saved')){
+    const c=byID.get(e.caseID);if(!c){unavailable++;continue;}
+    if(!validEntry(c.entry)||Object.keys(e).some(k=>c.entry[k]!==e[k])||c.inputSHA256!==e.inputSHA256)throw Error('Invalid replay binding');
+    if(!c.result){unavailable++;continue;}
+    if(c.resultSHA256!==e.resultSHA256||!e.resultSHA256||JSON.stringify(c.result.outcomes.map(o=>o.model).sort())!==JSON.stringify([...manifest.models].sort()))throw Error('Invalid replay binding');
+    rows.push(...replayRows(manifest.runID,c.caseData,c.result,c.inputSHA256));
+    for(const o of c.result.outcomes.filter(o=>o.status==='skipped'))skips.set(o.model,(skips.get(o.model)||0)+1);
+  }
+  rows=rows.filter(r=>models.includes(r.model));const pending=entries.filter(e=>e.status==='pending').length;
+  return {rows,requested:entries.length,acquired:entries.filter(e=>e.status==='saved').length,pending,skipped:entries.filter(e=>e.status==='skipped').length,
+    unavailable,stockCount:new Set(entries.map(e=>e.stockID)).size,dayCount:new Set(entries.map(e=>e.tradingDay)).size,
+    comparison:S.evaluationComparison(rows,models),models:models.map(model=>{const own=rows.filter(r=>r.model===model);
+      return {model,success:own.length,skipped:skips.get(model)||0,pending,unavailable,metrics:S.evaluationMetrics(own),calibration:evaluationCalibration(own)};})};
+}
+function evaluationCSV(rows,metrics,details={}){
+  const header=['type','referenceID','source','inputKey','stockID','market','tradingDay','currency','model','capture','sessionStart','inputPrice','previousClose',
+    'expectedClose','lowerClose','upperClose','riseProbability','actualClose','status','reason','priceBasis','references','rawDetail','total','evaluated',
+    'directionCount','directionHits','probabilityCount','rangeCount','mape','baselineMAPE','brier','coverage','meanWidthPercent','maeByCurrency','limitation'];
+  const numeric=new Set([...header.slice(10,18),...header.slice(23,34)]);
+  const text=value=>{let s=String(value??'');if(/^[=+@-]/.test(s.trimStart()))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+  const line=values=>header.map(k=>numeric.has(k)&&(values[k]==null||typeof values[k]==='number'&&Number.isFinite(values[k]))?String(values[k]??''):text(values[k])).join(',');
+  const uniqueRows=S.coalescedEvaluationRows(rows),lines=[header.join(',')];
+  for(const r of uniqueRows){const stock=S.parseStock(r.stockID);lines.push(line({...r,type:'forecast',market:stock?.market??'',
+    tradingDay:stock?S.dayKey(r.sessionStart,stock.market):'',status:r.actualClose===null?'pending':'evaluated',reason:r.actualClose===null?'awaiting_actual':'',
+    priceBasis:r.source==='replay'?PRICE_BASIS:'original-record-evidence',references:JSON.stringify(r.references??[]),rawDetail:details[r.referenceID]??'',
+    limitation:r.source==='replay'?'Reconstructed from currently fetched data; historical information vintage is not guaranteed':''}));}
+  for(const id of Object.keys(details).sort()){
+    let detail=null;try{detail=JSON.parse(details[id]);}catch(_){/* The original text is still exported verbatim. */}
+    const entry=detail?.entry,unavailable=entry?.status==='saved'&&typeof detail.resultBody!=='string';
+    lines.push(line({type:'detail',referenceID:id,rawDetail:details[id],status:entry?.status??'',reason:unavailable?'result_unavailable':entry?.reason??''}));
+    if(typeof detail?.resultBody==='string'){
+      let result=null;try{result=parsedBody(detail.resultBody,validResult);}catch(_){/* Invalid details cannot create evaluated outcomes. */}
+      for(const outcome of result?.outcomes??[])lines.push(line({type:'outcome',referenceID:id,source:'replay',model:outcome.model,status:outcome.status,reason:outcome.reason}));
+    }
+  }
+  const done=uniqueRows.filter(r=>positive(r.actualClose));
+  lines.push(line({...metrics,type:'metrics',probabilityCount:done.filter(r=>r.riseProbability!==null).length,
+    rangeCount:done.filter(r=>r.lowerClose!==null&&r.upperClose!==null).length,maeByCurrency:JSON.stringify(metrics.maeByCurrency,Object.keys(metrics.maeByCurrency).sort())}));
+  return lines.join('\r\n')+'\r\n';
+}
+
+const api={PRICE_BASIS,validInput,validCase,predictReplay,validManifest,validResult,archive,BacktestStore,replayRows,evaluationCalibration,filteredEvaluationRows,replaySummary,evaluationCSV};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 root.PenguinNotchBacktests=api;
 })(globalThis);

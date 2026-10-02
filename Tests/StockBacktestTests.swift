@@ -20,6 +20,115 @@ final class StockBacktestTests: XCTestCase {
     private func outcomes(_ input: StockBacktestInput) -> [StockBacktestOutcome] {
         StockChartInterval.allCases.map { StockBacktest.predict(input: input, interval: $0) }
     }
+    @MainActor
+    func testCollectorPersistsResultsBeforeSaved() async throws {
+        let f = BacktestPublicFixture(mode: "partial", dailyCount: 2)
+        let archive = StockBacktestArchive(directory: try temporaryArchive()), store = f.store(archive)
+        try await store.start(symbols: [f.stock], sessions: 20)
+        let m = store.runs[0]
+        for e in m.cases {
+            XCTAssertNotNil(e.resultSHA256)
+            let loaded = try await store.loadCase(runID: m.runID, caseID: e.caseID)
+            let result = try XCTUnwrap(loaded.result)
+            XCTAssertEqual(result.outcomes.filter { $0.status == .forecast }.count, 1)
+            XCTAssertEqual(result.outcomes.filter { $0.status == .skipped }.count, 2)
+            XCTAssertEqual(result.inputSHA256, e.inputSHA256)
+            XCTAssertEqual(loaded.resultSHA256, e.resultSHA256)
+            let rows = try StockEvaluation.replayRows(runID: m.runID, caseData: XCTUnwrap(loaded.caseData), result: result, inputSHA256: XCTUnwrap(loaded.inputSHA256))
+            XCTAssertEqual(loaded.referenceID, rows[0].referenceID)
+            let csv = StockEvaluation.csv(rows: rows, metrics: StockEvaluation.metrics(rows), details: [rows[0].referenceID: loaded.rawDetail])
+            XCTAssertTrue(csv.contains("insufficient_daily_history")); XCTAssertTrue(csv.contains("insufficient_intraday_history"))
+            XCTAssertTrue(csv.contains("\"outcome\""))
+        }
+    }
+
+    @MainActor
+    func testResultSaveCancellationOrphanReuseAndReadonlyCompletedLoader() async throws {
+        let c = try samples()[0].caseData, body = try JSONEncoder().encode(c)
+        let path = try temporaryArchive()
+        var archive = StockBacktestArchive(directory: path), m = archiveManifest(c)
+        m.models = Array(StockBacktestArchive.models.prefix(2))
+        try archive.create(m); let hash = try archive.saveCase(runID: m.runID, body: body)
+        let counter = BacktestReadCounter(), entered = DispatchSemaphore(value: 0), proceed = DispatchSemaphore(value: 0)
+        archive.fault = { stage in
+            XCTAssertFalse(Thread.isMainThread)
+            if stage == "place" { counter.increment(); if counter.value == 2 { entered.signal(); _ = proceed.wait(timeout: .now() + 15) } }
+        }
+        let store = StockBacktestStore(archive: archive, request: { _ in XCTFail("frozen cases must not query"); throw CocoaError(.fileReadUnknown) }, provider: { .toss })
+        let running = Task { try await store.resume(runID: m.runID) }
+        let wait: @Sendable () -> Bool = { entered.wait(timeout: .now() + 15) == .success }
+        let waiting = await Task.detached { wait() }.value
+        XCTAssertTrue(waiting); store.cancel(); proceed.signal()
+        do { try await running.value; XCTFail("cancelled result must not mark case saved") } catch is CancellationError { }
+        archive.fault = nil
+        let paused = try archive.loadManifest(runID: m.runID)
+        XCTAssertEqual(paused.status, .paused); XCTAssertEqual(paused.cases[0].status, .pending)
+        XCTAssertNil(paused.cases[0].resultSHA256)
+        let original = try XCTUnwrap(archive.loadResult(runID: m.runID, caseID: c.input.caseID))
+        XCTAssertEqual(try archive.loadCase(runID: m.runID, caseID: c.input.caseID).body, body)
+        let pending = try await store.loadCase(runID: m.runID, caseID: c.input.caseID)
+        XCTAssertNil(pending.result); XCTAssertNil(pending.caseData)
+        let reopened = StockBacktestStore(archive: archive, request: { _ in XCTFail("orphan must not query"); throw CocoaError(.fileReadUnknown) }, provider: { .toss })
+        try await reopened.resume(runID: m.runID)
+        let loaded = try await reopened.loadCase(runID: m.runID, caseID: c.input.caseID)
+        XCTAssertEqual(loaded.caseBody, body); XCTAssertEqual(loaded.inputSHA256, hash)
+        XCTAssertEqual(loaded.resultBody, original); XCTAssertEqual(loaded.resultSHA256, StockBacktestArchive.hash(original))
+        XCTAssertEqual(loaded.result?.outcomes.map(\.model), m.models)
+        let detail = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(loaded.rawDetail.utf8)) as? [String: Any])
+        XCTAssertEqual(detail["caseBody"] as? String, String(decoding: body, as: UTF8.self))
+        XCTAssertEqual(detail["resultBody"] as? String, String(decoding: original, as: UTF8.self))
+        let frozen = try Data(contentsOf: path.appending(path: m.runID.uuidString.lowercased() + "/manifest.json"))
+        try await reopened.resume(runID: m.runID)
+        XCTAssertEqual(try Data(contentsOf: path.appending(path: m.runID.uuidString.lowercased() + "/manifest.json")), frozen)
+        XCTAssertTrue(reopened.supportsReplay); XCTAssertTrue(reopened.watchedSymbols.isEmpty)
+
+        // Completed source-only archives remain immutable and unavailable, even after explicit resume.
+        let legacyArchive = StockBacktestArchive(directory: try temporaryArchive()), legacy = archiveManifest(c)
+        try legacyArchive.create(legacy); let legacyHash = try legacyArchive.saveCase(runID: legacy.runID, body: body)
+        var entries = legacy.cases; entries[0].status = .saved; entries[0].inputSHA256 = legacyHash
+        try legacyArchive.updateProgress(runID: legacy.runID, entries: entries, status: .completed)
+        let oldStore = StockBacktestStore(archive: legacyArchive, request: { _ in XCTFail("completed must not query"); throw CocoaError(.fileReadUnknown) }, provider: { .toss })
+        let oldManifest = try legacyArchive.loadManifest(runID: legacy.runID)
+        try await oldStore.resume(runID: legacy.runID)
+        let old = try await oldStore.loadCase(runID: legacy.runID, caseID: c.input.caseID)
+        XCTAssertNil(old.result); XCTAssertEqual(old.caseBody, body)
+        XCTAssertEqual(try legacyArchive.loadManifest(runID: legacy.runID), oldManifest)
+        XCTAssertNil(try legacyArchive.loadResult(runID: legacy.runID, caseID: c.input.caseID))
+        let summary = try StockEvaluation.replaySummary(manifest: oldManifest, loaded: [old], selectedModels: Set(legacy.models))
+        XCTAssertEqual(summary.unavailable, 1); XCTAssertEqual(summary.comparison.pairedCount, 0)
+        XCTAssertTrue(summary.rows.isEmpty); XCTAssertNil(summary.models[0].metrics.mape)
+    }
+
+    @MainActor
+    func testCancellationAfterCompletionKeepsImmutableAllSkippedResult() async throws {
+        let c = try StockBacktest.decodeCase(wireBody), path = try temporaryArchive(), counter = BacktestReadCounter()
+        var archive = StockBacktestArchive(directory: path)
+        let m = archiveManifest(c)
+        try archive.create(m); _ = try archive.saveCase(runID: m.runID, body: wireBody)
+        let entered = DispatchSemaphore(value: 0), proceed = DispatchSemaphore(value: 0)
+        archive.fault = { stage in
+            XCTAssertFalse(Thread.isMainThread)
+            if stage == "place" { counter.increment(); if counter.value == 4 { entered.signal(); _ = proceed.wait(timeout: .now() + 15) } }
+        }
+        let store = StockBacktestStore(archive: archive, request: { _ in XCTFail("all-skipped frozen case must not query"); throw CocoaError(.fileReadUnknown) }, provider: { .toss })
+        let running = Task { try await store.resume(runID: m.runID) }
+        let wait: @Sendable () -> Bool = { entered.wait(timeout: .now() + 15) == .success }
+        let waiting = await Task.detached { wait() }.value
+        XCTAssertTrue(waiting); store.cancel(); proceed.signal()
+        do { try await running.value; XCTFail("cancelled caller must observe cancellation") } catch is CancellationError { }
+        archive.fault = nil
+        XCTAssertEqual(store.errorMessage, "collection_cancelled"); XCTAssertNil(store.activeRunID)
+        let completed = try archive.loadManifest(runID: m.runID)
+        XCTAssertEqual(completed.status, .completed); XCTAssertEqual(store.runs[0], completed)
+        let loaded = try await store.loadCase(runID: m.runID, caseID: c.input.caseID)
+        XCTAssertEqual(loaded.caseBody, wireBody); XCTAssertEqual(loaded.inputSHA256, wireHash)
+        XCTAssertEqual(loaded.result?.outcomes[0].status, .skipped)
+        let summary = try StockEvaluation.replaySummary(manifest: completed, loaded: [loaded], selectedModels: Set(m.models))
+        XCTAssertTrue(summary.rows.isEmpty); XCTAssertNil(summary.models[0].metrics.mape)
+        XCTAssertEqual(summary.models[0].skipped, 1); XCTAssertEqual(summary.unavailable, 0)
+        XCTAssertThrowsError(try archive.updateProgress(runID: m.runID, entries: completed.cases, status: .paused))
+    }
+
     func testTargetCannotChangePrediction() throws {
         var a = try samples()[0].caseData
         var b = a

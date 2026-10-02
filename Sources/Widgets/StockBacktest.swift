@@ -104,9 +104,9 @@ struct StockBacktestCase: Codable, Equatable, Sendable {
     }
 }
 
-struct StockBacktestOutcome: Codable, Equatable {
-    enum Status: String, Codable { case forecast, skipped }
-    struct Forecast: Codable, Equatable {
+struct StockBacktestOutcome: Codable, Equatable, Sendable {
+    enum Status: String, Codable, Sendable { case forecast, skipped }
+    struct Forecast: Codable, Equatable, Sendable {
         let expectedClose: Decimal
         let lowerClose: Decimal
         let upperClose: Decimal
@@ -130,7 +130,7 @@ struct StockBacktestOutcome: Codable, Equatable {
     }
 }
 
-struct StockBacktestResult: Codable {
+struct StockBacktestResult: Codable, Sendable {
     var version: Int
     var caseID: String
     var inputSHA256: String
@@ -358,6 +358,10 @@ struct StockBacktestArchive: Sendable {
             }
         }
         let result = try JSONDecoder().decode(StockBacktestResult.self, from: body)
+        try validateResult(result)
+        return result
+    }
+    static func validateResult(_ result: StockBacktestResult) throws {
         guard result.version == 1, safeCaseID(result.caseID), digest(result.inputSHA256),
               result.calculationVersion == "replay-v1", StockBacktest.time(result.computedAt),
               !result.outcomes.isEmpty, result.outcomes.count <= 3,
@@ -374,7 +378,6 @@ struct StockBacktestArchive: Sendable {
                 guard o.forecast == nil, o.reason == (o.model.contains("daily") ? "insufficient_daily_history" : "insufficient_intraday_history") else { throw invalid() }
             }
         }
-        return result
     }
     private func encoded(_ m: StockBacktestManifest) throws -> Data {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
@@ -561,6 +564,13 @@ struct StockBacktestArchive: Sendable {
             try write(sub, c.input.caseID + ".json", body: body); return Self.hash(body)
         } }
     }
+    // Selected readonly entry lookup; do not re-audit every run payload for each exported case.
+    func loadEntry(runID: UUID, caseID: String) throws -> StockBacktestManifest.Entry {
+        try locked { root in try withManifest(root, runID) { _, m in
+            guard let entry = m.cases.first(where: { $0.caseID == caseID }) else { throw Self.invalid() }
+            return entry
+        } }
+    }
     func loadCase(runID: UUID, caseID: String) throws -> (body: Data, sha256: String) {
         guard Self.safeCaseID(caseID) else { throw Self.invalid() }
         // Selected reads bind strict manifest identity and selected bytes; resume/writes still audit every payload.
@@ -624,6 +634,19 @@ enum StockBacktestReply {
     case candles(values: [StockCandle], nextBefore: String?, requestedAt: Int64)
 }
 
+/// A readonly receipt: inputSHA256 belongs to caseBody, never to a typed reserialization.
+struct StockBacktestLoadedCase: Sendable {
+    let referenceID: String
+    let entry: StockBacktestManifest.Entry
+    let caseData: StockBacktestCase?
+    let result: StockBacktestResult?
+    let inputSHA256: String?
+    let resultSHA256: String?
+    let caseBody: Data?
+    let resultBody: Data?
+    let rawDetail: String
+}
+
 @MainActor
 final class StockBacktestStore: ObservableObject {
     struct Progress: Equatable { var completed = 0; var total = 0 }
@@ -638,6 +661,9 @@ final class StockBacktestStore: ObservableObject {
         let store = StockBacktestStore(preferences: preferences); sharedInstance = store; return store
     }
     private let archive: StockBacktestArchive
+    private weak var preferences: Preferences?
+    var watchedSymbols: [WatchedStock] { WatchedStock.parseList(preferences?.stockSymbols ?? []) }
+    var supportsReplay: Bool { provider() == .toss }
     private let requestOverride: Request?
     private let now: () -> Date
     private let sleep: (UInt64) async throws -> Void
@@ -657,7 +683,7 @@ final class StockBacktestStore: ObservableObject {
          sleep: @escaping (UInt64) async throws -> Void = { try await Task.sleep(for: .milliseconds($0)) },
          revision: (() -> Int)? = nil, provider: (() -> StockQuoteSource)? = nil) {
         let archive = archive ?? StockBacktestArchive(directory: StockForecastJournal.fileURL.deletingLastPathComponent().appending(path: "Backtests"))
-        self.archive = archive; requestOverride = request
+        self.archive = archive; self.preferences = preferences; requestOverride = request
         self.now = now; self.sleep = sleep
         self.revision = revision ?? { [weak preferences] in preferences?.stockSettingsRevision ?? 0 }
         self.provider = provider ?? { [weak preferences] in
@@ -684,6 +710,45 @@ final class StockBacktestStore: ObservableObject {
     private func io<T: Sendable>(_ operation: @escaping @Sendable (StockBacktestArchive) throws -> T) async throws -> T {
         let archive = archive
         return try await Task.detached { try operation(archive) }.value
+    }
+    /// Pending/skipped and immutable source-only saved cases have no scored result.
+    func loadCase(runID: UUID, caseID: String) async throws -> StockBacktestLoadedCase {
+        try Task.checkCancellation()
+        let loaded = try await io { archive in
+            let e = try archive.loadEntry(runID: runID, caseID: caseID)
+            let c = e.status == .saved ? try archive.loadCase(runID: runID, caseID: caseID) : nil
+            let body = e.status == .saved && e.resultSHA256 != nil ? try archive.loadResult(runID: runID, caseID: caseID) : nil
+            let result = try body.map(StockBacktestArchive.decodeResult)
+            let detail: [String: Any] = ["entry": try StockBacktest.jsonObject(JSONEncoder().encode(e)),
+                "caseBody": c.map { String(decoding: $0.body, as: UTF8.self) as Any } ?? NSNull(),
+                "resultBody": body.map { String(decoding: $0, as: UTF8.self) as Any } ?? NSNull()]
+            let raw = try JSONSerialization.data(withJSONObject: detail, options: [.sortedKeys, .withoutEscapingSlashes])
+            return StockBacktestLoadedCase(referenceID: "\(runID.uuidString.lowercased())/\(caseID)" + (c.map { "/" + $0.sha256 } ?? ""), entry: e, caseData: try c.map { try StockBacktest.decodeCase($0.body) }, result: result,
+                inputSHA256: c?.sha256, resultSHA256: body.map(StockBacktestArchive.hash), caseBody: c?.body,
+                resultBody: body, rawDetail: String(decoding: raw, as: UTF8.self))
+        }
+        try Task.checkCancellation()
+        return loaded
+    }
+    private func produceResult(runID: UUID, entry: StockBacktestManifest.Entry, models: [String], token: UUID, revision: Int) async throws -> (input: String, result: String) {
+        try check(token, revision)
+        let c = try await io { try $0.loadCase(runID: runID, caseID: entry.caseID) }; try check(token, revision)
+        let existing = try await io { try $0.loadResult(runID: runID, caseID: entry.caseID) }; try check(token, revision)
+        if let existing { return (c.sha256, StockBacktestArchive.hash(existing)) }
+        let at = Self.milliseconds(now())
+        let hash = try await io { archive in
+            let input = try StockBacktest.decodeCase(c.body).input
+            let outcomes = models.map { model in
+                StockBacktest.predict(input: input, interval: model == StockBacktestArchive.models[0] ? .day
+                    : model == StockBacktestArchive.models[1] ? .minute : .tenMinutes)
+            }
+            let result = StockBacktestResult(version: 1, caseID: entry.caseID, inputSHA256: c.sha256,
+                calculationVersion: "replay-v1", computedAt: at, outcomes: outcomes)
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+            return try archive.saveResult(runID: runID, body: encoder.encode(result))
+        }
+        try check(token, revision)
+        return (c.sha256, hash)
     }
     private func transport() throws -> Request {
         if let requestOverride { return requestOverride }
@@ -756,6 +821,9 @@ final class StockBacktestStore: ObservableObject {
         guard var m = manifest, m.status != .completed else { return }
         do {
             let id = m.runID, entries = m.cases
+            // Cancellation can arrive after the terminal write committed; never try to pause that archive.
+            let current = try await io { try $0.loadManifest(runID: id) }
+            if current.status == .completed { publish(current); return }
             try await io { try $0.updateProgress(runID: id, entries: entries, status: .paused) }
             m.status = .paused; publish(m)
         } catch { errorMessage = "archive_unavailable" }
@@ -837,20 +905,23 @@ final class StockBacktestStore: ObservableObject {
         }
         for n in m.cases.indices {
             try check(token, revision); let e = m.cases[n]; if e.status != .pending { continue }
-            if let hash = saved[e.caseID] { m.cases[n].status = .saved; m.cases[n].inputSHA256 = hash }
-            else {
+            if saved[e.caseID] == nil {
                 let stock = WatchedStock.parse(e.stockID)!, key = stock.market.rawValue + "|" + e.tradingDay
                 do {
                     let c = try await collectCase(stock: stock, entry: e, session: calendars[key]!, request: request, token: token, revision: revision)
                     try check(token, revision)
-                    let hash = try await io { archive in
+                    _ = try await io { archive in
                         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
                         return try archive.saveCase(runID: id, body: encoder.encode(c))
                     }
-                    try check(token, revision); m.cases[n].status = .saved; m.cases[n].inputSHA256 = hash
+                    try check(token, revision)
                 } catch let error as Skipped {
                     try check(token, revision); m.cases[n].status = .skipped; m.cases[n].reason = error.reason
                 }
+            }
+            if m.cases[n].status != .skipped {
+                let receipt = try await produceResult(runID: id, entry: e, models: m.models, token: token, revision: revision)
+                m.cases[n].status = .saved; m.cases[n].inputSHA256 = receipt.input; m.cases[n].resultSHA256 = receipt.result
             }
             try check(token, revision); let updated = m.cases
             try await io { try $0.updateProgress(runID: id, entries: updated, status: .running) }
@@ -859,6 +930,7 @@ final class StockBacktestStore: ObservableObject {
         }
         try check(token, revision); let finished = m.cases
         try await io { try $0.updateProgress(runID: id, entries: finished, status: .completed) }
+        try check(token, revision)
         m = try await io { try $0.loadManifest(runID: id) }; manifest = m
         try check(token, revision); publish(m)
     }

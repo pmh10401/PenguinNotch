@@ -207,7 +207,9 @@ function collectorFixture(t,{market='us',mode='',dailyCount=61}={}){
   if(request.action==='loadManifest'){assert.ok(m);return {type:'manifest',manifest:copy(m)};}
   if(request.action==='loadCase'){if(!fs.existsSync(file))throw Error('Invalid replay archive');const body=fs.readFileSync(file,'utf8');return {type:'body',body,sha256:crypto.createHash('sha256').update(body).digest('hex')};}
   if(request.action==='saveCase'){assert.ok(B.validCase(JSON.parse(request.body)));const c=JSON.parse(request.body),f=path.join(directory,id,c.input.caseID+'.json');if(fs.existsSync(f))assert.equal(fs.readFileSync(f,'utf8'),request.body);else fs.writeFileSync(f,request.body);return {type:'receipt',sha256:crypto.createHash('sha256').update(request.body).digest('hex')};}
-  if(request.action==='updateProgress'){m.cases=copy(request.entries);m.status=request.status;if(m.status==='completed')m.collectionCompletedAt=clock;assert.ok(B.validManifest(m));return {type:'empty'};}
+  if(request.action==='loadResult'){const f=path.join(directory,id,request.caseID+'.result.json');if(!fs.existsSync(f))return {type:'body',body:null,sha256:null};const body=fs.readFileSync(f,'utf8');return {type:'body',body,sha256:crypto.createHash('sha256').update(body).digest('hex')};}
+  if(request.action==='saveResult'){const r=JSON.parse(request.body);assert.ok(B.validResult(r));const c=fs.readFileSync(path.join(directory,id,r.caseID+'.json'),'utf8');assert.equal(r.inputSHA256,crypto.createHash('sha256').update(c).digest('hex'));assert.deepEqual(r.outcomes.map(o=>o.model).sort(),[...m.models].sort());const f=path.join(directory,id,r.caseID+'.result.json');if(fs.existsSync(f))assert.equal(fs.readFileSync(f,'utf8'),request.body);else fs.writeFileSync(f,request.body);return {type:'receipt',sha256:crypto.createHash('sha256').update(request.body).digest('hex')};}
+  if(request.action==='updateProgress'){for(const e of request.entries)if(e.resultSHA256!==null){const f=path.join(directory,id,e.caseID+'.result.json');assert.equal(e.resultSHA256,crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex'));}m.cases=copy(request.entries);m.status=request.status;if(m.status==='completed')m.collectionCompletedAt=clock;assert.ok(B.validManifest(m));return {type:'empty'};}
   throw Error('Forbidden fake IPC action');
  };
  const stockRequest=async request=>{
@@ -349,4 +351,99 @@ test('collector freezes divergent market calendars',async t=>{
  }});
  await store.start({symbols:stocks,sessions:20});const m=store.runs[0];assert.equal(m.status,'completed');assert.equal(m.cases.length,40);
  assert.equal(candles,120);assert.ok(m.cases.every(e=>e.status==='saved'));assert.deepEqual((await f.invoke('stock_backtest_archive',{request:{action:'loadManifest',runID:m.runID}})).manifest.cases,m.cases);
+});
+
+test('testIncompleteCohortNeverScoresAsZero',()=>{
+ const runID='12345678-1234-1234-1234-123456789abc',hash='a'.repeat(64),a=copy(samples[0].caseData),b=copy(samples[1].caseData);b.input.dailyCloses=b.input.dailyCloses.slice(0,2);
+ const rows=[a,b].flatMap(c=>B.replayRows(runID,c,replayResult(c,hash,['1d','1m']),hash)),models=[...new Set(rows.map(r=>r.model))];
+ const comparison=S.evaluationComparison(rows,models);assert.equal(comparison.pairedCount,1);
+ assert.equal(comparison.rows.find(r=>r.model.includes('daily')).available.evaluated,1);assert.equal(comparison.rows.find(r=>r.model.includes('1m')).available.evaluated,2);
+ assert.ok(comparison.rows.every(r=>r.available.mape===r.available.baselineMAPE));assert.equal(S.evaluationComparison(rows,[models[1]]).pairedCount,2);
+ const pair=rows.slice(0,2);for(const patch of [{actualClose:null},{actualClose:1},{inputKey:'different-hash'},{capture:'manual'},{source:'recorded'}])assert.equal(S.evaluationComparison([pair[0],{...pair[1],...patch}],models).pairedCount,0);
+ const baseline={...pair[0],expectedClose:pair[0].inputPrice,lowerClose:null,upperClose:null,riseProbability:null};assert.equal(S.evaluationMetrics([baseline]).brier,null);assert.equal(S.evaluationMetrics([baseline]).coverage,null);
+ assert.equal(B.filteredEvaluationRows(rows,{market:'kr'}).length,0);assert.equal(B.filteredEvaluationRows(rows,{day:a.input.tradingDay,capture:'replay',source:'replay'}).length,2);
+});
+test('collector persists results before saved',async t=>{
+ const f=collectorFixture(t,{mode:'partial',dailyCount:2});await f.store.start({symbols:[f.stock],sessions:20});
+ const m=f.store.runs[0];assert.ok(m.cases.every(e=>e.resultSHA256!==null),'source-only cases must not be presented as scored');
+ const loaded=await Promise.all(m.cases.map(e=>f.store.loadCase(m.runID,e.caseID))),summary=B.replaySummary(m,loaded,m.models);
+ assert.equal(summary.requested,20);assert.equal(summary.acquired,20);assert.equal(summary.pending,0);assert.equal(summary.skipped,0);assert.equal(summary.unavailable,0);assert.equal(summary.stockCount,1);assert.equal(summary.dayCount,20);assert.equal(summary.comparison.pairedCount,0);
+ assert.equal(summary.models.find(m=>m.model.includes('1m')).success,20);assert.equal(summary.models.find(m=>m.model.includes('daily')).skipped,20);
+ const rows=B.replayRows(m.runID,loaded[0].caseData,loaded[0].result,loaded[0].inputSHA256),csv=readCSV(B.evaluationCSV(rows,S.evaluationMetrics(rows),{[rows[0].referenceID]:loaded[0].rawDetail}));
+ const records=csv.slice(1).map(r=>Object.fromEntries(csv[0].map((k,n)=>[k,r[n]])));assert.ok(records.some(r=>r.type==='outcome'&&r.reason==='insufficient_daily_history'));assert.ok(records.some(r=>r.type==='outcome'&&r.reason==='insufficient_intraday_history'));
+ const pending=copy(m);pending.status='paused';pending.collectionCompletedAt=null;pending.cases=pending.cases.map(e=>({...e,status:'pending',inputSHA256:null,resultSHA256:null}));const waiting=B.replaySummary(pending,loaded,m.models);assert.equal(waiting.rows.length,0);assert.equal(waiting.pending,20);assert.ok(waiting.models.every(m=>m.metrics.mape===null));
+ assert.equal(B.replaySummary(m,loaded,m.models,{market:'kr'}).requested,0);
+});
+function replayResult(c,hash='a'.repeat(64),models=['1d','1m','10m']){
+ return {version:1,caseID:c.input.caseID,inputSHA256:hash,calculationVersion:'replay-v1',computedAt:c.target.fetchedAt,outcomes:models.map(i=>B.predictReplay(c.input,i))};
+}
+function readCSV(body){
+ const rows=[];let row=[],value='',quoted=false;
+ for(let i=0;i<body.length;i++){const c=body[i];if(c==='"'){if(quoted&&body[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}
+ else if(!quoted&&c===','){row.push(value);value='';}else if(!quoted&&c==='\r'&&body[i+1]==='\n'){row.push(value);rows.push(row);row=[];value='';i++;}else value+=c;}
+ assert.equal(quoted,false);return rows;
+}
+test('replay target-only scoring, unsupported bindings and exact public fixture aggregates',()=>{
+ const runID='12345678-1234-1234-1234-123456789abc',hash='a'.repeat(64);
+ for(const sample of samples){const c=copy(sample.caseData),r=replayResult(c,hash),rows=B.replayRows(runID,c,r,hash);
+  assert.equal(rows.length,3);assert.ok(rows.every(row=>row.expectedClose===c.input.inputPrice));
+  for(let n=0;n<3;n++){const expected=sample.expected[['1d','1m','10m'][n]],row=rows[n],m=S.evaluationMetrics([row]);
+   assert.ok(Math.abs(row.lowerClose-expected.lowerClose)<=expected.lowerClose*1e-8);assert.ok(Math.abs(row.upperClose-expected.upperClose)<=expected.upperClose*1e-8);
+   assert.ok(Math.abs(row.riseProbability-expected.riseProbability)<=1e-6);assert.equal(m.mape,m.baselineMAPE);
+   assert.ok(Math.abs(m.brier-(expected.riseProbability-+(c.target.actualClose>c.input.previousClose))**2)<=1e-6);
+   assert.ok(Math.abs(m.meanWidthPercent-(expected.upperClose-expected.lowerClose)/c.input.inputPrice*100)<=1e-6);
+  }
+  const changed=copy(c);changed.target.actualClose=1;assert.deepEqual(replayResult(changed,hash).outcomes,r.outcomes);
+  assert.notEqual(S.evaluationMetrics(B.replayRows(runID,changed,r,hash)).mape,S.evaluationMetrics(rows).mape);
+  for(const patch of [{version:2},{calculationVersion:'replay-v2'},{inputSHA256:'b'.repeat(64)},{caseID:'us_OTHER_2026-09-25'},{outcomes:[{...r.outcomes[0],model:'unsupported'}]}])assert.throws(()=>B.replayRows(runID,c,{...r,...patch},hash));
+  assert.throws(()=>B.replayRows('invalid',c,r,hash));assert.throws(()=>B.replayRows(runID,{...c,version:2},r,hash));
+ }
+});
+test('replay calibration, bounds, denominator exclusions and numeric CSV roundtrip',()=>{
+ const runID='12345678-1234-1234-1234-123456789abc',c=samples[0].caseData;
+ const base=B.replayRows(runID,c,replayResult(c),'a'.repeat(64))[0];
+ const rows=[{...base,referenceID:' =PUBLIC("name")',inputKey:'one',riseProbability:.5,actualClose:base.previousClose,lowerClose:base.previousClose,upperClose:base.previousClose},
+  {...base,inputKey:'two',riseProbability:1,actualClose:base.upperClose},
+  {...base,inputKey:'three',riseProbability:0,actualClose:base.lowerClose},
+  {...base,inputKey:'four',riseProbability:null,lowerClose:null,upperClose:null}];
+ const m=S.evaluationMetrics(rows);assert.equal(m.evaluated,4);assert.equal(m.directionCount,2);assert.equal(m.coverage,100);
+ const bins=B.evaluationCalibration(rows);assert.equal(bins.reduce((n,b)=>n+b.count,0),3);assert.equal(bins.find(b=>b.id===5).rises,0);
+ assert.deepEqual(bins,S.probabilityBinsForRows(rows.slice(0,3)));assert.ok(bins.every(b=>b.lower>=0&&b.upper<=1));
+ const huge=S.evaluationMetrics([{...base,inputPrice:1,expectedClose:1000,actualClose:1,lowerClose:1,upperClose:1000}]);assert.equal(huge.mape,99900);assert.equal(huge.meanWidthPercent,99900);assert.ok(huge.brier>=0&&huge.brier<=1);
+ const raw='{"name":"=PUBLIC\\nname", "precise":100.000000000000000000001,"reason":"insufficient_daily_history"}\n';
+ const exported=B.evaluationCSV([{...rows[0],expectedClose:-5,capture:'-manual'},...rows.slice(1)],S.evaluationMetrics(rows),{[rows[0].referenceID]:raw,'skip-only':'{"status":"skipped","reason":"missing_previous_close"}'});
+ const [head,...values]=readCSV(exported),records=values.map(v=>Object.fromEntries(head.map((k,n)=>[k,v[n]])));
+ const forecast=records.find(r=>r.type==='forecast');assert.equal(forecast.expectedClose,'-5');assert.equal(forecast.capture,"'-manual");assert.equal(forecast.referenceID,"' =PUBLIC(\"name\")");assert.equal(forecast.rawDetail,raw);
+ assert.equal(forecast.source,'replay');assert.equal(forecast.inputKey,'one');assert.equal(forecast.priceBasis,B.PRICE_BASIS);assert.ok(forecast.limitation);
+ const unsafe=readCSV(B.evaluationCSV([{...rows[0],expectedClose:'=PUBLIC("text")'}],S.evaluationMetrics(rows),{}));assert.equal(unsafe[1][head.indexOf('expectedClose')],"'=PUBLIC(\"text\")");
+ const totals=records.find(r=>r.type==='metrics');assert.equal(totals.directionCount,'2');assert.equal(totals.probabilityCount,'3');assert.equal(totals.rangeCount,'3');
+ assert.ok(records.some(r=>r.referenceID==='skip-only'&&r.rawDetail.includes('missing_previous_close')));
+});
+test('restart reuses orphan original result, cancel after saveResult, legacy completed stays unavailable',async t=>{
+ const f=collectorFixture(t,{mode:'partial',dailyCount:2});let owner;
+ const invoke=async(command,args)=>{const reply=await f.invoke(command,args);if(args.request.action==='saveResult')owner.cancel();return reply;};
+ owner=new B.BacktestStore({invoke,stockRequest:f.stockRequest,now:f.now,sleep:f.sleep});await owner.ready;
+ await assert.rejects(()=>owner.start({symbols:[f.stock],sessions:20}));
+ const m=owner.runs[0],e=m.cases[0];assert.equal(m.status,'paused');assert.equal(e.status,'pending');assert.equal(e.resultSHA256,null);
+ const original=await B.archive('loadResult',{runID:m.runID,caseID:e.caseID},f.invoke),caseOriginal=await B.archive('loadCase',{runID:m.runID,caseID:e.caseID},f.invoke);
+ const before=f.calls.length,resumed=new B.BacktestStore({invoke:f.invoke,stockRequest:f.stockRequest,now:f.now,sleep:f.sleep});await resumed.ready;await resumed.resume(m.runID);
+ assert.equal(f.calls.length-before,19*4); // one calendar + daily + proof + partial input, no request for orphan
+ assert.deepEqual(await B.archive('loadResult',{runID:m.runID,caseID:e.caseID},f.invoke),original);
+ const loaded=await resumed.loadCase(m.runID,e.caseID);assert.equal(loaded.caseBody,caseOriginal.body);assert.equal(loaded.resultBody,original.body);assert.equal(loaded.inputSHA256,caseOriginal.sha256);
+ assert.equal(JSON.parse(loaded.rawDetail).caseBody,caseOriginal.body);assert.equal(loaded.referenceID,B.replayRows(m.runID,loaded.caseData,loaded.result,loaded.inputSHA256)[0].referenceID);
+ const saved=f.manifests.get(m.runID);const old=copy(saved);old.cases=old.cases.map(e=>({...e,resultSHA256:null}));f.manifests.set(m.runID,old);
+ const calls=f.calls.length,writes=f.writes.filter(([a])=>['saveCase','saveResult','updateProgress'].includes(a)).length;
+ await resumed.resume(m.runID);const legacy=await resumed.loadCase(m.runID,e.caseID);
+ assert.equal(legacy.result,null);assert.equal(f.calls.length,calls);assert.equal(f.writes.filter(([a])=>['saveCase','saveResult','updateProgress'].includes(a)).length,writes);
+ const summary=B.replaySummary(old,[legacy],old.models);assert.equal(summary.rows.length,0);assert.equal(summary.unavailable,20);assert.equal(summary.comparison.pairedCount,0);assert.ok(summary.models.every(m=>m.metrics.mape===null));
+ const bad=copy(saved);bad.cases[0].inputSHA256='0'.repeat(64);f.manifests.set(m.runID,bad);await assert.rejects(()=>resumed.loadCase(m.runID,e.caseID));
+});
+
+test('cancellation after terminal write reads immutable completion and never pauses it',async t=>{
+ const f=collectorFixture(t,{mode:'partial',dailyCount:2});let owner;
+ const invoke=async(command,args)=>{const reply=await f.invoke(command,args);if(args.request.action==='updateProgress'&&args.request.status==='completed')owner.cancel();return reply;};
+ owner=new B.BacktestStore({invoke,stockRequest:f.stockRequest,now:f.now,sleep:f.sleep});await owner.ready;
+ await assert.rejects(()=>owner.start({symbols:[f.stock],sessions:20}));assert.equal(owner.errorMessage,'collection_cancelled');
+ assert.equal(owner.runs[0].status,'completed');assert.ok(B.validManifest(owner.runs[0]));assert.ok(owner.runs[0].cases.every(e=>e.resultSHA256));
+ assert.equal(f.manifests.get(owner.runs[0].runID).status,'completed');assert.equal(owner.activeRunID,null);assert.equal(owner.busy,false);
 });

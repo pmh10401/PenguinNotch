@@ -353,8 +353,11 @@ function compareModels(records,selectedModels=null) {
     rows:comparison.rows.map(r=>({model:r.model,available:legacyEvaluationScore(r.available),paired:legacyEvaluationScore(r.paired)}))};
 }
 function probabilityBins(records) {
+  return probabilityBinsForRows(records.filter(r=>validForecast(r)&&r.actualClose!==null));
+}
+function probabilityBinsForRows(records) {
   const groups=new Map();
-  for(const r of records.filter(r=>validForecast(r)&&r.actualClose!==null)){const id=Math.min(9,Math.floor(r.riseProbability*10));if(!groups.has(id))groups.set(id,[]);groups.get(id).push(r);}
+  for(const r of records){const id=Math.min(9,Math.floor(r.riseProbability*10));if(!groups.has(id))groups.set(id,[]);groups.get(id).push(r);}
   return [...groups].sort(([a],[b])=>a-b).map(([id,rows])=>{
     const count=rows.length,rises=rows.filter(r=>r.actualClose>r.previousClose).length,observedRate=rises/count,z=1.959963984540054,denominator=1+z*z/count;
     const center=(observedRate+z*z/(2*count))/denominator,radius=z*Math.sqrt(observedRate*(1-observedRate)/count+z*z/(4*count*count))/denominator;
@@ -1100,7 +1103,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
   render();
   return {render,show(visible,moveFocus=true){store.visible=visible;settingsHidden=!visible;if(!visible){clearCredentialInputs();store.clearViewer(false);renderViewer();}void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();if(moveFocus)requestAnimationFrame(()=>element.querySelector('#stock-tab-'+activeTab)?.focus({preventScroll:true}));void store.tick();}}};
 }
-const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,intradayEstimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,evaluationRows,coalescedEvaluationRows,evaluationMetrics,evaluationComparison,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
+const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,intradayEstimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,evaluationRows,coalescedEvaluationRows,evaluationMetrics,evaluationComparison,score,compareModels,probabilityBins,probabilityBinsForRows,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 else root.PenguinNotchStocks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
