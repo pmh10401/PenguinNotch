@@ -132,7 +132,9 @@ final class StockForecastEvaluationTests: XCTestCase {
                 // An offscreen window has no published AX children. One local SDK recognition
                 // request checks the actual bitmap labels and placement, not source strings.
                 let recognition = VNRecognizeTextRequest()
-                recognition.recognitionLevel = .accurate; recognition.usesLanguageCorrection = false
+                // Natural-language captions need dictionary correction for the i/l ambiguity
+                // in 1x CI snapshots. Technical model IDs remain uncorrected and exact.
+                recognition.recognitionLevel = .accurate; recognition.usesLanguageCorrection = index == 1
                 recognition.recognitionLanguages = language == "ko" ? ["ko-KR", "en-US"] : ["en-US"]
                 try VNImageRequestHandler(cgImage: try XCTUnwrap(bitmap.cgImage)).perform([recognition])
                 let labels = (recognition.results ?? []).compactMap { observation -> (text: String, frame: CGRect)? in
