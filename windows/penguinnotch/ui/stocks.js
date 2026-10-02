@@ -284,10 +284,11 @@ function saveSnapshots(history,records,now) {
 // Match Foundation's reference clock spelling; the original epoch-ms values also remain in the key.
 const evaluationClock=time=>{const seconds=time/1000-978307200;return Number.isInteger(seconds)?seconds.toFixed(1):String(seconds);};
 function evaluationRows(records) {
-  return coalescedEvaluationRows(records.filter(validForecast).filter(r=>Number.isSafeInteger(r.sessionStart)).map(r=>({
+  // Normalize only the published row timestamp; the frozen key keeps the original clock.
+  return coalescedEvaluationRows(records.filter(validForecast).filter(r=>Number.isSafeInteger(Math.trunc(r.sessionStart))).map(r=>({
     referenceID:forecastID(r),source:'recorded',
     inputKey:r.evidence?JSON.stringify([r.stockID,r.currency,r.capture,r.quoteAt,r.sessionStart,r.sessionEnd,r.previousClose,r.inputPrice,r.evidence.adjusted,r.evidence.closes.map(c=>[c.date,c.price]),[evaluationClock(r.quoteAt),evaluationClock(r.sessionStart),evaluationClock(r.sessionEnd),r.evidence.closes.map(c=>evaluationClock(c.date))]]):null,
-    stockID:r.stockID,currency:r.currency,model:r.model,capture:r.capture,sessionStart:r.sessionStart,
+    stockID:r.stockID,currency:r.currency,model:r.model,capture:r.capture,sessionStart:Math.trunc(r.sessionStart),
     inputPrice:r.inputPrice,previousClose:r.previousClose,expectedClose:r.expectedClose,lowerClose:r.lowerClose,upperClose:r.upperClose,riseProbability:r.riseProbability,actualClose:r.actualClose,
     references:[{referenceID:forecastID(r),source:'recorded'}]
   })));

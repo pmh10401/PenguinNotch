@@ -55,6 +55,17 @@ function testForecastEvaluation() {
   }
   const legacyRecord={...fixture.records[0],evidence:null};
   assert.equal(S.validForecast(legacyRecord),true);assert.equal(S.evaluationRows([legacyRecord])[0].inputKey,null);
+  const fractionalLegacy={...legacyRecord,sessionStart:legacyRecord.sessionStart+.25};
+  assert.equal(S.validForecast(fractionalLegacy),true);
+  const retained=S.evaluationRows([fractionalLegacy]);assert.equal(retained.length,1,'valid fractional session history must retain its score');
+  assert.equal(retained[0].sessionStart,legacyRecord.sessionStart);assert.equal(Number.isSafeInteger(retained[0].sessionStart),true);
+  assert.equal(retained[0].inputKey,null);
+  const retainedScore=S.score([fractionalLegacy]);assert.equal(retainedScore.total,1);assert.equal(retainedScore.evaluated,1);
+  near(retainedScore.mape,100/105);near(retainedScore.baseline,300/105);
+  const exactSessions=S.evaluationRows([{...fixture.records[0],sessionStart:legacyRecord.sessionStart+.25},{...fixture.records[1],sessionStart:legacyRecord.sessionStart+.75}]);
+  assert.equal(exactSessions.length,2);assert.equal(exactSessions[0].sessionStart,exactSessions[1].sessionStart);
+  assert.notEqual(exactSessions[0].inputKey,exactSessions[1].inputKey);
+  assert.equal(S.evaluationComparison(exactSessions,['A','B']).pairedCount,0,'normalizing the published time cannot collapse frozen inputs');
   assert.equal(S.chartEstimate(legacyRecord,[],'1d',legacyRecord.createdAt),null,'legacy history has no candles to recompute');
   assert.equal(S.evidenceHTML(legacyRecord,'en'),'','legacy history cannot invent evidence');
   const legacySignal=S.technical(bars(),'1d','us',end,end,legacyRecord);

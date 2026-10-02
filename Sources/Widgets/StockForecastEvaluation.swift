@@ -98,7 +98,8 @@ enum StockEvaluation {
 
     private static func row(_ record: StockForecastRecord, source: StockEvaluationSource,
                             referenceID: String) -> StockEvaluationRow? {
-        guard record.isValid, let start = milliseconds(record.sessionStart), let sessionStart = Int64(exactly: start),
+        // Normalize only the published row timestamp; the frozen key below keeps the original clock.
+        guard record.isValid, let start = milliseconds(record.sessionStart), let sessionStart = Int64(exactly: start.rounded(.towardZero)),
               let end = milliseconds(record.sessionEnd), let quote = milliseconds(record.quoteAt) else { return nil }
         var key: String?
         if let evidence = record.evidence {

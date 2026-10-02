@@ -133,6 +133,45 @@ final class StockForecastEvaluationTests: XCTestCase {
         XCTAssertEqual(StockEvaluation.compare(rows, selectedModels: ["A", "B"]).pairedCount, 0)
     }
 
+    func testFractionalSessionStartRetainsLegacyScoresAndExactFrozenIdentity() throws {
+        let original = try fixture().records[0]
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(original)) as? [String: Any])
+        let evidence = json["evidence"]!
+        let start = original.sessionStart.timeIntervalSince1970 * 1000
+        json["sessionStart"] = start + 0.25
+        json["evidence"] = NSNull()
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .millisecondsSince1970
+        let legacy = try decoder.decode(StockForecastRecord.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertTrue(legacy.isValid)
+        let rows = StockEvaluation.rows(journal: [legacy], analyses: [])
+        XCTAssertEqual(rows.count, 1)
+        let score = StockForecastScore([legacy])
+        XCTAssertEqual(score.total, 1)
+        XCTAssertEqual(score.evaluated, 1)
+        let row = try XCTUnwrap(rows.first)
+        XCTAssertEqual(try XCTUnwrap(score.meanError), 100.0 / 105, accuracy: 1e-10)
+        XCTAssertEqual(try XCTUnwrap(score.baselineError), 300.0 / 105, accuracy: 1e-10)
+        XCTAssertEqual(try XCTUnwrap(legacy.absolutePercentageError), 100.0 / 105, accuracy: 1e-10)
+        XCTAssertEqual(row.sessionStart, Int64(start))
+        XCTAssertNil(row.inputKey)
+
+        json["evidence"] = evidence
+        let first = try decoder.decode(StockForecastRecord.self, from: JSONSerialization.data(withJSONObject: json))
+        json["model"] = "B"
+        json["sessionStart"] = start + 0.75
+        let second = try decoder.decode(StockForecastRecord.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertTrue(first.isValid && second.isValid)
+        let exact = StockEvaluation.rows(journal: [first, second], analyses: [])
+        XCTAssertEqual(exact.count, 2)
+        let firstRow = try XCTUnwrap(exact.first), secondRow = try XCTUnwrap(exact.last)
+        XCTAssertEqual(firstRow.sessionStart, secondRow.sessionStart)
+        XCTAssertNotEqual(firstRow.inputKey, secondRow.inputKey)
+        XCTAssertEqual(StockEvaluation.compare(exact, selectedModels: ["A", "B"]).pairedCount, 0)
+    }
+
     func testFrozenEvidenceAndNativeDateIdentityNeverCollapse() throws {
         let records = try fixture().records, b = records[1]
         func changed(quoteAt: Date, evidence: StockForecastEvidence) -> StockForecastRecord {
