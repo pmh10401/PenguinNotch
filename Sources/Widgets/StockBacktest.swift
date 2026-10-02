@@ -1,11 +1,12 @@
+import Combine
 import Foundation
 import CryptoKit
 import Darwin
 
 /// Public, adjusted-as-fetched inputs. Target prices are deliberately a separate type.
-struct StockBacktestInput: Codable, Equatable {
-    struct Close: Codable, Equatable { var date: Int64; var price: Decimal }
-    struct Minute: Codable, Equatable {
+struct StockBacktestInput: Codable, Equatable, Sendable {
+    struct Close: Codable, Equatable, Sendable { var date: Int64; var price: Decimal }
+    struct Minute: Codable, Equatable, Sendable {
         var end: Int64
         var open: Decimal
         var high: Decimal
@@ -67,10 +68,10 @@ struct StockBacktestInput: Codable, Equatable {
     }
 }
 
-struct StockBacktestCase: Codable, Equatable {
-    struct Target: Codable, Equatable { var actualClose: Decimal; var candleAt: Int64; var fetchedAt: Int64 }
-    struct Source: Codable, Equatable {
-        struct Page: Codable, Equatable {
+struct StockBacktestCase: Codable, Equatable, Sendable {
+    struct Target: Codable, Equatable, Sendable { var actualClose: Decimal; var candleAt: Int64; var fetchedAt: Int64 }
+    struct Source: Codable, Equatable, Sendable {
+        struct Page: Codable, Equatable, Sendable {
             var before: String
             var nextBefore: String?
             var fetchedAt: Int64
@@ -138,10 +139,10 @@ struct StockBacktestResult: Codable {
     var outcomes: [StockBacktestOutcome]
 }
 
-struct StockBacktestManifest: Codable, Equatable {
-    enum Status: String, Codable { case ready, running, paused, completed }
-    struct Entry: Codable, Equatable {
-        enum Status: String, Codable { case pending, saved, skipped }
+struct StockBacktestManifest: Codable, Equatable, Sendable {
+    enum Status: String, Codable, Sendable { case ready, running, paused, completed }
+    struct Entry: Codable, Equatable, Sendable {
+        enum Status: String, Codable, Sendable { case pending, saved, skipped }
         var caseID: String
         var stockID: String
         var tradingDay: String
@@ -292,9 +293,9 @@ enum StockBacktest {
 }
 
 /// Separate immutable replay files. All filesystem operations are relative to no-follow directory handles.
-struct StockBacktestArchive {
+struct StockBacktestArchive: Sendable {
     let directory: URL
-    var fault: ((String) throws -> Void)? = nil // Internal fault injection for temp-only preservation tests.
+    var fault: (@Sendable (String) throws -> Void)? = nil // Internal fault injection for temp-only preservation tests.
     private static let limit = 2 * 1024 * 1024
     static let models = ["GBM daily zero drift v1 / replay v1", "GBM 1m zero drift v1 / replay v1", "GBM 10m zero drift v1 / replay v1"]
     private static func invalid() -> CocoaError { CocoaError(.fileReadCorruptFile) }
@@ -540,6 +541,10 @@ struct StockBacktestArchive {
             try write(dir, "manifest.json", body: body); guard fsync(root) == 0 else { throw Self.invalid() }
         }
     }
+    // One off-actor inventory audit also identifies valid orphan case bytes for zero-query resume.
+    func collection(runID: UUID) throws -> (manifest: StockBacktestManifest, saved: [String: String]) {
+        try locked { root in try run(root, runID) { _, m, inventory in (m, inventory.cases) } }
+    }
     func loadManifest(runID: UUID) throws -> StockBacktestManifest {
         try locked { root in try run(root, runID) { _, m, _ in m } }
     }
@@ -603,5 +608,344 @@ struct StockBacktestArchive {
             let body = try encoded(next); try checkHashes(next, inventory)
             if next != old { try write(dir, "manifest.json", body: body, replace: true) }
         } }
+    }
+}
+
+
+enum StockBacktestRequest {
+    case calendar(market: WatchedStock.Market, date: String)
+    case candles(stock: WatchedStock, interval: String, before: String, count: Int, adjusted: Bool)
+}
+enum StockBacktestReply {
+    case calendar(value: MarketSessions, requestedAt: Int64)
+    case candles(values: [StockCandle], nextBefore: String?, requestedAt: Int64)
+}
+
+@MainActor
+final class StockBacktestStore: ObservableObject {
+    struct Progress: Equatable { var completed = 0; var total = 0 }
+    typealias Request = (StockBacktestRequest) async throws -> StockBacktestReply
+    @Published private(set) var runs: [StockBacktestManifest] = []
+    @Published private(set) var activeRunID: UUID?
+    @Published private(set) var progress = Progress()
+    @Published private(set) var errorMessage: String?
+    private static var sharedInstance: StockBacktestStore?
+    static func shared(preferences: Preferences) -> StockBacktestStore {
+        if let sharedInstance { return sharedInstance }
+        let store = StockBacktestStore(preferences: preferences); sharedInstance = store; return store
+    }
+    private let archive: StockBacktestArchive
+    private let requestOverride: Request?
+    private let now: () -> Date
+    private let sleep: (UInt64) async throws -> Void
+    private let revision: () -> Int
+    private let provider: () -> StockQuoteSource
+    private var generation = UUID()
+    private var busy = false
+    private var pageTask: Task<StockBacktestReply, Error>?
+    private var lastRequestAt: Date?
+    private var cancellables = Set<AnyCancellable>()
+    private struct Session { let start: Int64; let end: Int64; let fetchedAt: Int64; var previousDay = "" }
+    private struct Skipped: Error { let reason: String }
+
+    init(preferences: Preferences? = nil,
+         archive: StockBacktestArchive? = nil,
+         request: Request? = nil, now: @escaping () -> Date = Date.init,
+         sleep: @escaping (UInt64) async throws -> Void = { try await Task.sleep(for: .milliseconds($0)) },
+         revision: (() -> Int)? = nil, provider: (() -> StockQuoteSource)? = nil) {
+        let archive = archive ?? StockBacktestArchive(directory: StockForecastJournal.fileURL.deletingLastPathComponent().appending(path: "Backtests"))
+        self.archive = archive; requestOverride = request
+        self.now = now; self.sleep = sleep
+        self.revision = revision ?? { [weak preferences] in preferences?.stockSettingsRevision ?? 0 }
+        self.provider = provider ?? { [weak preferences] in
+            preferences?.stockQuoteSource ?? StockQuoteSource(rawValue: UserDefaults.standard.string(forKey: "stockQuoteSource") ?? "toss") ?? .toss
+        }
+        // No credential read or automatic collection. Do not let the initial listing overwrite a new run.
+        let token = generation
+        Task { [weak self, archive] in
+            do {
+                let listed = try await Task.detached { try archive.list() }.value
+                guard let self, self.generation == token, !self.busy else { return }
+                self.runs = listed
+            } catch {
+                guard let self, self.generation == token, !self.busy else { return }
+                self.errorMessage = "archive_unavailable"
+            }
+        }
+        preferences?.$stockSettingsRevision.dropFirst().sink { [weak self] _ in self?.cancel() }.store(in: &cancellables)
+    }
+    func cancel() { generation = UUID(); pageTask?.cancel() }
+    private func check(_ token: UUID, _ revision: Int) throws {
+        guard generation == token, self.revision() == revision, provider() == .toss, !Task.isCancelled else { throw CancellationError() }
+    }
+    private func io<T: Sendable>(_ operation: @escaping @Sendable (StockBacktestArchive) throws -> T) async throws -> T {
+        let archive = archive
+        return try await Task.detached { try operation(archive) }.value
+    }
+    private func transport() throws -> Request {
+        if let requestOverride { return requestOverride }
+        // Capture once on explicit start/resume. The shared API actor owns tokens and renewal.
+        let credentials = TossCredentials.load()
+        guard !credentials.clientID.isEmpty, !credentials.clientSecret.isEmpty else { throw TossInvestAPI.Failure.http(401) }
+        return { request in
+            var refreshed = false
+            while true {
+                try Task.checkCancellation()
+                let token = try await TossInvestAPI.accessToken(clientID: credentials.clientID, clientSecret: credentials.clientSecret)
+                try Task.checkCancellation()
+                do {
+                    switch request {
+                    case .calendar(let market, let day):
+                        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = StockQuoteCodec.timeZone(for: market)
+                        let formatter = DateFormatter(); formatter.calendar = calendar; formatter.timeZone = calendar.timeZone
+                        formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+                        guard let at = formatter.date(from: day), formatter.string(from: at) == day else { throw TossInvestAPI.Failure.invalidResponse }
+                        let atRequest = Self.milliseconds(Date())
+                        let value = try await TossInvestAPI.marketSessions(token: token.value, market: market, at: at)
+                        return .calendar(value: value, requestedAt: atRequest)
+                    case .candles(let stock, let interval, let before, let count, let adjusted):
+                        guard count == 200, adjusted else { throw TossInvestAPI.Failure.invalidResponse }
+                        return try await TossInvestAPI.backtestPage(token: token.value, stock: stock, interval: interval, before: before)
+                    }
+                } catch TossInvestAPI.Failure.http(401) where !refreshed {
+                    refreshed = true
+                    // No new token cache; body(for:) has invalidated the rejected shared token.
+                    try await Task.sleep(for: .milliseconds(250))
+                }
+            }
+        }
+    }
+    nonisolated private static func milliseconds(_ date: Date) -> Int64 { Int64(date.timeIntervalSince1970 * 1000) }
+    private static func iso(_ time: Int64) -> String { ISO8601DateFormatter().string(from: StockBacktest.date(time)) }
+    private static func day(_ time: Int64, _ market: WatchedStock.Market) -> String {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = StockQuoteCodec.timeZone(for: market)
+        return StockBacktest.day(StockBacktest.date(time), calendar: calendar)
+    }
+    private func session(_ value: TradingSession?, market: WatchedStock.Market, fetchedAt: Int64) throws -> Session? {
+        guard let value else { return nil }
+        let start = Self.milliseconds(value.startTime), end = Self.milliseconds(value.endTime)
+        guard StockBacktest.time(start), StockBacktest.time(end), end - start > 3_600_000,
+              Self.day(start, market) == Self.day(end - 1, market) else { throw TossInvestAPI.Failure.invalidResponse }
+        return Session(start: start, end: end, fetchedAt: fetchedAt)
+    }
+    private func fetch(_ input: StockBacktestRequest, using request: @escaping Request, token: UUID, revision: Int) async throws -> StockBacktestReply {
+        try check(token, revision)
+        if let lastRequestAt {
+            let delay = 0.250 - now().timeIntervalSince(lastRequestAt)
+            if delay > 0 { try await sleep(UInt64(ceil(delay * 1000))) }
+        }
+        try check(token, revision); lastRequestAt = now()
+        let task = Task { try await request(input) }; pageTask = task
+        defer { pageTask = nil }
+        let reply = try await task.value; try check(token, revision)
+        let requestedAt: Int64
+        switch reply { case .calendar(_, let at), .candles(_, _, let at): requestedAt = at }
+        guard StockBacktest.time(requestedAt), requestedAt <= Self.milliseconds(now()) else { throw TossInvestAPI.Failure.invalidResponse }
+        return reply
+    }
+    private func publish(_ manifest: StockBacktestManifest) {
+        if let n = runs.firstIndex(where: { $0.runID == manifest.runID }) { runs[n] = manifest } else { runs.append(manifest) }
+        progress = Progress(completed: manifest.cases.filter { $0.status != .pending }.count, total: manifest.cases.count)
+    }
+    private func pause(_ manifest: StockBacktestManifest?, error: Error) async {
+        errorMessage = error is CancellationError ? "collection_cancelled" : "collection_failed"
+        if case TossInvestAPI.Failure.http(let code) = error, code == 401 || code == 403 { errorMessage = "authentication_paused" }
+        guard var m = manifest, m.status != .completed else { return }
+        do {
+            let id = m.runID, entries = m.cases
+            try await io { try $0.updateProgress(runID: id, entries: entries, status: .paused) }
+            m.status = .paused; publish(m)
+        } catch { errorMessage = "archive_unavailable" }
+    }
+    func start(symbols: [WatchedStock], sessions: Int = 60) async throws {
+        guard !busy else { throw CocoaError(.validationMultipleErrors) }
+        guard [20,60,120].contains(sessions), !symbols.isEmpty, symbols.count <= 30,
+              Set(symbols.map(\.id)).count == symbols.count,
+              symbols.allSatisfy({ WatchedStock.parse($0.id) == $0 && !$0.symbol.contains("..") }), provider() == .toss else { throw TossInvestAPI.Failure.invalidResponse }
+        busy = true; generation = UUID(); let token = generation, revision = revision(), started = Self.milliseconds(now())
+        let runID = UUID(); activeRunID = runID; progress = Progress(completed: 0, total: symbols.count * sessions)
+        errorMessage = nil; var manifest: StockBacktestManifest?
+        defer { busy = false; activeRunID = nil }
+        do {
+            let request = try transport(); try check(token, revision)
+            var calendars: [String: Session] = [:], dates: [String: [String]] = [:]
+            for market in Array(Set(symbols.map { $0.market.rawValue })).sorted() {
+                let marketValue = WatchedStock.Market(rawValue: market)!
+                var day = Self.day(started, marketValue), days: [String] = []
+                for _ in 0...sessions {
+                    guard case .calendar(let value, let at) = try await fetch(.calendar(market: marketValue, date: day), using: request, token: token, revision: revision) else { throw TossInvestAPI.Failure.invalidResponse }
+                    var today = try session(value.today.regular(market: marketValue), market: marketValue, fetchedAt: at)
+                    if let today, Self.day(today.start, marketValue) != day { throw TossInvestAPI.Failure.invalidResponse }
+                    guard let previous = try session(value.previousBusinessDay.regular(market: marketValue), market: marketValue, fetchedAt: at),
+                          previous.end <= started, Self.day(previous.start, marketValue) < day else { throw TossInvestAPI.Failure.invalidResponse }
+                    today?.previousDay = Self.day(previous.start, marketValue)
+                    if let today, today.end <= started { days.append(day); calendars[market + "|" + day] = today }
+                    if days.count == sessions { break }
+                    day = Self.day(previous.start, marketValue)
+                }
+                guard days.count == sessions else { throw TossInvestAPI.Failure.invalidResponse }; dates[market] = days
+            }
+            try check(token, revision)
+            let entries = symbols.flatMap { stock in dates[stock.market.rawValue]!.map { day in
+                StockBacktestManifest.Entry(caseID: "\(stock.market.rawValue)_\(stock.symbol)_\(day)", stockID: stock.id, tradingDay: day,
+                    status: .pending, inputSHA256: nil, resultSHA256: nil, reason: nil)
+            } }
+            let m = StockBacktestManifest(version: 1, runID: runID, createdAt: started, collectionStartedAt: started,
+                collectionCompletedAt: nil, protocolVersion: "replay-v1", codeVersion: "1.25.0/66", priceBasis: StockBacktest.priceBasis,
+                cutoffMinutes: 60, sessions: sessions, symbols: symbols.map(\.id), models: StockBacktestArchive.models, status: .ready, cases: entries)
+            manifest = m
+            try await io { try $0.create(m) }; try check(token, revision); publish(m)
+            try await collect(&manifest, saved: [:], calendars: calendars, request: request, token: token, revision: revision)
+        } catch { await pause(manifest, error: error); throw error }
+    }
+    func resume(runID: UUID) async throws {
+        guard !busy else { throw CocoaError(.validationMultipleErrors) }
+        busy = true; generation = UUID(); let token = generation, revision = revision()
+        activeRunID = runID; progress = Progress()
+        errorMessage = nil; var manifest: StockBacktestManifest?
+        defer { busy = false; activeRunID = nil }
+        do {
+            let loaded = try await io { try $0.collection(runID: runID) }; try check(token, revision)
+            manifest = loaded.manifest; publish(loaded.manifest)
+            if loaded.manifest.status == .completed { return }
+            // A run whose pending cases already have valid bytes needs no credential read or public request.
+            let missing = loaded.manifest.cases.contains { $0.status == .pending && loaded.saved[$0.caseID] == nil }
+            let request: Request = missing ? try transport() : { _ in throw TossInvestAPI.Failure.invalidResponse }
+            try await collect(&manifest, saved: loaded.saved, calendars: [:], request: request, token: token, revision: revision)
+        } catch { await pause(manifest, error: error); throw error }
+    }
+    private func collect(_ manifest: inout StockBacktestManifest?, saved: [String: String], calendars initial: [String: Session],
+                         request: @escaping Request, token: UUID, revision: Int) async throws {
+        var m = manifest!, calendars = initial
+        let id = m.runID, entries = m.cases
+        try check(token, revision); try await io { try $0.updateProgress(runID: id, entries: entries, status: .running) }
+        try check(token, revision); m.status = .running; manifest = m; publish(m)
+        // Freeze every missing session before accepting any new case, including explicit resume.
+        for e in m.cases where e.status == .pending && saved[e.caseID] == nil {
+            let stock = WatchedStock.parse(e.stockID)!, key = stock.market.rawValue + "|" + e.tradingDay
+            if calendars[key] == nil {
+                guard case .calendar(let value, let at) = try await fetch(.calendar(market: stock.market, date: e.tradingDay), using: request, token: token, revision: revision),
+                      var s = try session(value.today.regular(market: stock.market), market: stock.market, fetchedAt: at),
+                      Self.day(s.start, stock.market) == e.tradingDay, s.end <= m.collectionStartedAt else { throw TossInvestAPI.Failure.invalidResponse }
+                guard let previous = try session(value.previousBusinessDay.regular(market: stock.market), market: stock.market, fetchedAt: at),
+                      previous.end < s.start, Self.day(previous.start, stock.market) < e.tradingDay else { throw TossInvestAPI.Failure.invalidResponse }
+                s.previousDay = Self.day(previous.start, stock.market); calendars[key] = s
+            }
+        }
+        for n in m.cases.indices {
+            try check(token, revision); let e = m.cases[n]; if e.status != .pending { continue }
+            if let hash = saved[e.caseID] { m.cases[n].status = .saved; m.cases[n].inputSHA256 = hash }
+            else {
+                let stock = WatchedStock.parse(e.stockID)!, key = stock.market.rawValue + "|" + e.tradingDay
+                do {
+                    let c = try await collectCase(stock: stock, entry: e, session: calendars[key]!, request: request, token: token, revision: revision)
+                    try check(token, revision)
+                    let hash = try await io { archive in
+                        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+                        return try archive.saveCase(runID: id, body: encoder.encode(c))
+                    }
+                    try check(token, revision); m.cases[n].status = .saved; m.cases[n].inputSHA256 = hash
+                } catch let error as Skipped {
+                    try check(token, revision); m.cases[n].status = .skipped; m.cases[n].reason = error.reason
+                }
+            }
+            try check(token, revision); let updated = m.cases
+            try await io { try $0.updateProgress(runID: id, entries: updated, status: .running) }
+            // Progress may already be committed at cancellation; keep its original bytes/identity.
+            manifest = m; try check(token, revision); publish(m)
+        }
+        try check(token, revision); let finished = m.cases
+        try await io { try $0.updateProgress(runID: id, entries: finished, status: .completed) }
+        m = try await io { try $0.loadManifest(runID: id) }; manifest = m
+        try check(token, revision); publish(m)
+    }
+    private func collectCase(stock: WatchedStock, entry: StockBacktestManifest.Entry, session: Session,
+                             request: @escaping Request, token: UUID, revision: Int) async throws -> StockBacktestCase {
+        let cutoff = session.end - 3_600_000, endCursor = Self.iso(session.end)
+        guard case .candles(let daily, let dailyNext, let dailyAt) = try await fetch(.candles(stock: stock, interval: "1d", before: endCursor, count: 200, adjusted: true),
+            using: request, token: token, revision: revision) else { throw TossInvestAPI.Failure.invalidResponse }
+        try Self.validate(daily, before: session.end)
+        if let dailyNext {
+            guard let next = Self.timestamp(dailyNext), next < session.end,
+                  let oldest = daily.map({ Self.milliseconds($0.end) }).min(), next <= oldest else { throw Skipped(reason: "repeated_cursor") }
+        }
+        var days: [String: StockBacktestInput.Minute] = [:]
+        for b in daily {
+            let row = Self.row(b), day = Self.day(row.end, stock.market)
+            if let old = days[day], old != row { throw Skipped(reason: "conflicting_duplicate") }; days[day] = row
+        }
+        guard let target = days[entry.tradingDay] else { throw Skipped(reason: "session_target_mismatch") }
+        let closes = days.keys.filter { $0 < entry.tradingDay }.sorted(by: >).prefix(61).map {
+            StockBacktestInput.Close(date: days[$0]!.end, price: days[$0]!.close)
+        }
+        guard let previous = closes.first, Self.day(previous.date, stock.market) == session.previousDay else { throw Skipped(reason: "missing_previous_close") }
+        var raw = 0, pages: [StockBacktestCase.Source.Page] = [], all: [Int64: StockBacktestInput.Minute] = [:]
+        func page(_ before: String, seen: inout Set<Int64>) async throws -> (rows: [StockCandle], next: String?, at: Int64) {
+            guard pages.count < 8, raw <= 1_200,
+                  let bound = Self.timestamp(before) else { throw Skipped(reason: "collection_bounds") }
+            guard case .candles(let values, let next, let at) = try await fetch(.candles(stock: stock, interval: "1m", before: before, count: 200, adjusted: true),
+                using: request, token: token, revision: revision) else { throw TossInvestAPI.Failure.invalidResponse }
+            try Self.validate(values, before: bound); raw += values.count
+            guard raw <= 1_400 else { throw Skipped(reason: "collection_bounds") }
+            if let next {
+                guard let nextTime = Self.timestamp(next), nextTime < bound, !seen.contains(nextTime),
+                      let oldest = values.map({ Self.milliseconds($0.end) }).min(), nextTime <= oldest else { throw Skipped(reason: "repeated_cursor") }
+                seen.insert(nextTime)
+            }
+            pages.append(.init(before: before, nextBefore: next, fetchedAt: at))
+            for b in values {
+                let row = Self.row(b)
+                if let old = all[row.end], old != row { throw Skipped(reason: "conflicting_duplicate") }; all[row.end] = row
+            }
+            return (values, next, at)
+        }
+        var proofSeen: Set<Int64> = [session.end]
+        let proofReply = try await page(endCursor, seen: &proofSeen)
+        guard let proof = all[session.end],
+              abs(NSDecimalNumber(decimal: proof.close - target.close).doubleValue) <= NSDecimalNumber(decimal: target.close).doubleValue * 1e-8 else {
+            throw Skipped(reason: "session_target_mismatch")
+        }
+        var inputs: [Int64: StockBacktestInput.Minute] = [:], seen: Set<Int64> = [cutoff], before = Self.iso(cutoff)
+        while pages.count < 8, raw <= 1_200 {
+            let reply = try await page(before, seen: &seen)
+            for candle in reply.rows {
+                let row = Self.row(candle)
+                if row.end - 60_000 >= session.start, row.end <= cutoff { inputs[row.end] = row }
+            }
+            if reply.rows.contains(where: { Self.milliseconds($0.end) <= session.start + 60_000 }) || reply.next == nil { break }
+            before = reply.next!
+        }
+        let minutes = inputs.values.sorted { $0.end < $1.end }
+        guard let last = minutes.last, cutoff - last.end <= 120_000 else { throw Skipped(reason: "missing_cutoff_input") }
+        let input = StockBacktestInput(version: 1, caseID: entry.caseID, stockID: entry.stockID, market: stock.market.rawValue,
+            currency: stock.market == .kr ? "KRW" : "USD", tradingDay: entry.tradingDay, sessionStart: session.start, sessionEnd: session.end,
+            cutoff: cutoff, inputBarEnd: last.end, inputPrice: last.close, previousClose: previous.price, priceBasis: StockBacktest.priceBasis,
+            dailyCloses: closes, minutes: minutes)
+        let c = StockBacktestCase(version: 1, input: input, target: .init(actualClose: target.close, candleAt: target.end, fetchedAt: dailyAt),
+            source: .init(provider: "toss", calendarFetchedAt: session.fetchedAt, dailyFetchedAt: dailyAt, minutePages: pages))
+        guard dailyAt >= session.end, proofReply.at >= session.end, c.isValid else { throw Skipped(reason: "invalid_collected_case") }; return c
+    }
+    nonisolated static func timestamp(_ text: String) -> Int64? {
+        guard StockBacktest.cursor(text) else { return nil }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = f.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+        return date.map(milliseconds)
+    }
+    nonisolated private static func row(_ b: StockCandle) -> StockBacktestInput.Minute {
+        .init(end: milliseconds(b.end), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume)
+    }
+    nonisolated static func validate(_ values: [StockCandle], before: Int64) throws {
+        guard values.count <= 200 else { throw Skipped(reason: "invalid_candle_page") }
+        var direction = 0
+        for (n, candle) in values.enumerated() {
+            let b = row(candle)
+            guard StockBacktest.time(b.end), b.end <= before, [b.open,b.high,b.low,b.close].allSatisfy(StockBacktest.positive),
+                  StockBacktest.finite(b.volume), b.volume >= 0, b.high >= max(b.open,b.close), b.low <= min(b.open,b.close) else { throw Skipped(reason: "invalid_candle_page") }
+            if n > 0 {
+                let delta = b.end - milliseconds(values[n-1].end), d = delta == 0 ? 0 : delta > 0 ? 1 : -1
+                guard d == 0 || direction == 0 || direction == d else { throw Skipped(reason: "invalid_candle_order") }
+                if d != 0 { direction = d }
+            }
+        }
     }
 }

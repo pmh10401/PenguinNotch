@@ -188,3 +188,138 @@ test('raw scan handles escaped string punctuation and whitespace before decoded 
   await assert.rejects(()=>B.archive('saveCase',{runID,body:quoted}));
   assert.equal(calls,1);delete globalThis.__TAURI__;
 });
+
+
+// Public-only transport + temporary native-archive stand-in; never delegates to the real IPC/network.
+function collectorFixture(t,{market='us',mode='',dailyCount=61}={}){
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'penguin-backtest-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+ let clock=Date.parse('2026-09-25T22:00:00Z');const calls=[],writes=[],manifests=new Map();
+ const previous=day=>{let date=new Date(day+'T12:00:00Z');do{date.setUTCDate(date.getUTCDate()-1);}while([0,6].includes(date.getUTCDay()));return date.toISOString().slice(0,10);};
+ const session=(day,m=market)=>{const midnight=S.timestamp(day,m);return {start:midnight+(m==='kr'?9:9.5)*3600000,end:midnight+(m==='kr'?15.5:16)*3600000};};
+ const calendar=(day,m)=>{const body=d=>{const r=session(d,m),regularMarket={startTime:new Date(r.start).toISOString(),endTime:new Date(r.end).toISOString()};return m==='kr'?{integrated:{regularMarket}}:{regularMarket};};return {today:body(day),previousBusinessDay:body(previous(day)),nextBusinessDay:null};};
+ const bar=(end,price)=>({end,open:price,high:price+1,low:price-1,close:price,volume:0});
+ const invoke=async(command,{request})=>{
+  assert.equal(command,'stock_backtest_archive');writes.push([request.action,clock]);
+  const id=request.runID,m=manifests.get(id),file=request.caseID&&path.join(directory,id,request.caseID+'.json');
+  if(request.action==='list')return {type:'manifests',manifests:[...manifests.values()].map(copy)};
+  if(request.action==='create'){assert.ok(B.validManifest(request.manifest));const v=copy(request.manifest);manifests.set(v.runID,v);fs.mkdirSync(path.join(directory,v.runID));return {type:'empty'};}
+  if(request.action==='loadManifest'){assert.ok(m);return {type:'manifest',manifest:copy(m)};}
+  if(request.action==='loadCase'){if(!fs.existsSync(file))throw Error('Invalid replay archive');const body=fs.readFileSync(file,'utf8');return {type:'body',body,sha256:crypto.createHash('sha256').update(body).digest('hex')};}
+  if(request.action==='saveCase'){assert.ok(B.validCase(JSON.parse(request.body)));const c=JSON.parse(request.body),f=path.join(directory,id,c.input.caseID+'.json');if(fs.existsSync(f))assert.equal(fs.readFileSync(f,'utf8'),request.body);else fs.writeFileSync(f,request.body);return {type:'receipt',sha256:crypto.createHash('sha256').update(request.body).digest('hex')};}
+  if(request.action==='updateProgress'){m.cases=copy(request.entries);m.status=request.status;if(m.status==='completed')m.collectionCompletedAt=clock;assert.ok(B.validManifest(m));return {type:'empty'};}
+  throw Error('Forbidden fake IPC action');
+ };
+ const stockRequest=async request=>{
+  calls.push({request:copy(request),at:clock});
+  if(request.type==='calendar')return {type:'calendar',value:calendar(request.date,request.market),requestedAt:clock};
+  assert.equal(request.type,'candles');assert.equal(request.count,200);assert.equal(request.adjusted,true);assert.ok(['1m','1d'].includes(request.interval));
+  assert.ok(B.validManifest([...manifests.values()][0]),'all dates frozen before candles');
+  const bound=Date.parse(request.before),day=S.dayKey(bound,request.stock.market),r=session(day,request.stock.market);
+  if(request.interval==='1d'){
+   let d=day;const values=[bar(S.timestamp(d,request.stock.market),100)];
+   for(let n=0;n<dailyCount;n++){d=previous(d);if(mode!=='previous-gap'||n!==0)values.push(bar(S.timestamp(d,request.stock.market),100+(n+1)/100));}
+   return {type:'candles',values,nextBefore:null,requestedAt:clock};
+  }
+  const values=[];for(let end=bound;end>=r.start+60000&&values.length<(mode==='short-pages'?150:200);end-=['bounds','short-pages'].includes(mode)?1000:60000)values.push(bar(end,100+(r.end-end)/60000*.001));
+  if(mode==='mismatch'&&bound===r.end)values[0]=bar(bound,101);
+  if(mode==='proof-missing'&&bound===r.end)values.shift();
+  let nextBefore=values.at(-1).end>r.start+60000?new Date(values.at(-1).end).toISOString():null;
+  if(mode==='cursor'&&bound===r.end-3600000)nextBefore=request.before;
+  if(mode==='conflict'&&bound!==r.end&&bound!==r.end-3600000)values[0]=bar(bound,102);
+  if(mode==='partial'){values.splice(11);nextBefore=null;}
+  return {type:'candles',values,nextBefore,requestedAt:clock};
+ };
+ const store=new B.BacktestStore({invoke,stockRequest,now:()=>clock,sleep:async ms=>{clock+=ms;}});
+ return {store,invoke,stockRequest,calls,writes,manifests,directory,session,previous,calendar,bar,now:()=>clock,sleep:async ms=>{clock+=ms;},stock:{symbol:market==='kr'?'005930':'AAPL',market,visible:false}};
+}
+test('testCollectorsUseOnlyFrozenPublicInputs',async t=>{
+ const f=collectorFixture(t);await f.store.ready;assert.equal(f.calls.length,0);await f.store.start({symbols:[f.stock],sessions:60});
+ const m=f.store.runs[0];assert.equal(m.status,'completed');assert.equal(m.cases.length,60);assert.ok(m.cases.every(e=>e.status==='saved'));
+ assert.equal(f.calls.filter(c=>c.request.type==='calendar').length,60);assert.equal(f.calls.filter(c=>c.request.interval==='1d').length,60);
+ for(let n=1;n<f.calls.length;n++)assert.ok(f.calls[n].at-f.calls[n-1].at>=250);
+ const fs=require('node:fs'),path=require('node:path');
+ for(const e of m.cases){const c=JSON.parse(fs.readFileSync(path.join(f.directory,m.runID,e.caseID+'.json'),'utf8'));
+  assert.equal(c.source.minutePages.length,3);assert.equal(c.input.minutes.length,330);assert.ok(c.input.minutes.every(b=>b.end<=c.input.cutoff));
+  assert.equal(c.input.previousClose,100.01);assert.equal(S.dayKey(c.input.dailyCloses[0].date,'us'),f.previous(e.tradingDay));
+  assert.equal(c.target.actualClose,100);assert.equal(c.input.dailyCloses.length,61);assert.ok(!c.input.minutes.some(b=>b.end===c.input.sessionEnd));
+ }
+ const before=f.calls.length,bytes=m.cases.map(e=>fs.readFileSync(path.join(f.directory,m.runID,e.caseID+'.json')));
+ await f.store.resume(m.runID);assert.equal(f.calls.length,before);m.cases.forEach((e,n)=>assert.deepEqual(fs.readFileSync(path.join(f.directory,m.runID,e.caseID+'.json')),bytes[n]));
+ assert.equal(f.store.progress.completed,60);assert.equal(f.store.activeRunID,null);
+});
+test('testSessionMismatchIsSkipped',async t=>{
+ const f=collectorFixture(t,{market:'kr',mode:'mismatch'});await f.store.start({symbols:[f.stock],sessions:20});
+ assert.ok(f.store.runs[0].cases.every(e=>e.status==='skipped'&&e.reason==='session_target_mismatch'&&e.inputSHA256===null));
+ assert.equal(f.calls.filter(c=>c.request.interval==='1m').length,20);assert.equal(f.writes.filter(c=>c[0]==='saveCase').length,0);
+});
+test('previous business day gap skips common input but older history shortage is model-specific',async t=>{
+ const gap=collectorFixture(t,{mode:'previous-gap'});await gap.store.start({symbols:[gap.stock],sessions:20});
+ assert.ok(gap.store.runs[0].cases.every(e=>e.reason==='missing_previous_close'));assert.equal(gap.calls.filter(c=>c.request.interval==='1m').length,0);
+ const short=collectorFixture(t,{dailyCount:2,mode:'partial'});await short.store.start({symbols:[short.stock],sessions:20});
+ const m=short.store.runs[0],e=m.cases[0],c=JSON.parse((await short.invoke('stock_backtest_archive',{request:{action:'loadCase',runID:m.runID,caseID:e.caseID}})).body);
+ assert.equal(e.status,'saved');assert.equal(B.predictReplay(c.input,'1d').reason,'insufficient_daily_history');
+ assert.equal(B.predictReplay(c.input,'1m').status,'forecast');assert.equal(B.predictReplay(c.input,'10m').reason,'insufficient_intraday_history');
+});
+test('inclusive duplicates dedup but conflicting rows and repeating cursors skip',async t=>{
+ for(const [mode,reason]of [['cursor','repeated_cursor'],['conflict','conflicting_duplicate']]){
+  const f=collectorFixture(t,{mode});await f.store.start({symbols:[f.stock],sessions:20});assert.ok(f.store.runs[0].cases.every(e=>e.reason===reason));
+ }
+});
+test('cancel, revisions, auth pauses, double starts, late replies and zero-query orphan resume',async t=>{
+ const f=collectorFixture(t);await f.store.ready;let release,entered;
+ const waiting=new Promise(resolve=>entered=resolve),reply=new Promise(resolve=>release=resolve);
+ const store=new B.BacktestStore({invoke:f.invoke,stockRequest:async r=>{const v=await f.stockRequest(r);if(r.type==='candles'){entered();await reply;}return v;},now:f.now,sleep:f.sleep});
+ const active=store.start({symbols:[f.stock],sessions:20});await waiting;
+ await assert.rejects(()=>store.start({symbols:[f.stock],sessions:20}),/already_running/);
+ store.configure({revision:1});release();await assert.rejects(()=>active,/cancelled/);
+ assert.equal(store.runs[0].status,'paused');assert.equal(f.writes.filter(w=>w[0]==='saveCase').length,0);
+ // Auth failures keep the frozen pending list, never skip it or automatically resume.
+ const auth=new B.BacktestStore({invoke:f.invoke,stockRequest:async()=>{throw Error('Stock HTTP 401');},now:f.now,sleep:f.sleep});
+ await assert.rejects(()=>auth.resume(store.runs[0].runID));assert.equal(auth.errorMessage,'authentication_paused');assert.equal(auth.runs.at(-1).status,'paused');
+ // Cancel after native placement: orphan bytes are retained and linked on explicit resume.
+ const g=collectorFixture(t);let owner;
+ const invoke=async(command,args)=>{const out=await g.invoke(command,args);if(args.request.action==='saveCase')owner.cancel();return out;};
+ owner=new B.BacktestStore({invoke,stockRequest:g.stockRequest,now:g.now,sleep:g.sleep});await assert.rejects(()=>owner.start({symbols:[g.stock],sessions:20}));
+ const orphan=owner.runs[0],first=orphan.cases[0];assert.equal(first.status,'pending');
+ const before=g.calls.length,bytes=(await g.invoke('stock_backtest_archive',{request:{action:'loadCase',runID:orphan.runID,caseID:first.caseID}})).body;
+ const resumed=new B.BacktestStore({invoke:g.invoke,stockRequest:g.stockRequest,now:g.now,sleep:g.sleep});await resumed.resume(orphan.runID);
+ assert.equal(g.calls.length-before,19*5);assert.ok(g.calls.slice(before,before+19).every(c=>c.request.type==='calendar')); // 19 pending dates: calendar + daily + 3 minute pages; orphan queried zero times.
+ assert.equal((await g.invoke('stock_backtest_archive',{request:{action:'loadCase',runID:orphan.runID,caseID:first.caseID}})).body,bytes);
+});
+
+test('raw rows include proof, reserve the full next page and enforce eight-page cap',async t=>{
+ for(const [mode,pages]of [['bounds',7],['short-pages',8]]){
+  const f=collectorFixture(t,{mode});await f.store.start({symbols:[f.stock],sessions:20});
+  const m=f.store.runs[0],c=JSON.parse((await f.invoke('stock_backtest_archive',{request:{action:'loadCase',runID:m.runID,caseID:m.cases[0].caseID}})).body);
+  assert.equal(c.source.minutePages.length,pages);assert.equal(f.calls.length,20*(pages+2));assert.ok(c.input.minutes.length<=1400);
+ }
+ const missing=collectorFixture(t,{mode:'proof-missing'});await missing.store.start({symbols:[missing.stock],sessions:20});assert.ok(missing.store.runs[0].cases.every(e=>e.reason==='session_target_mismatch'));
+});
+test('observable owner covers calendar freeze, subscribe/reopen and late init listing',async t=>{
+ const f=collectorFixture(t);let release,entered;const waiting=new Promise(resolve=>entered=resolve),reply=new Promise(resolve=>release=resolve);
+ const store=new B.BacktestStore({invoke:f.invoke,stockRequest:async r=>{entered();await reply;return f.stockRequest(r);},now:f.now,sleep:f.sleep});
+ const notifications=[],unsubscribe=store.subscribe(s=>notifications.push({id:s.activeRunID,busy:s.busy,progress:{...s.progress}}));
+ const running=store.start({symbols:[f.stock],sessions:60});await waiting;
+ assert.ok(store.activeRunID);assert.ok(store.busy);assert.equal(store.progress.total,60);const id=store.activeRunID;
+ let reopenedID;const reopened=store.subscribe(s=>{reopenedID=s.activeRunID;});assert.equal(reopenedID,id);
+ assert.ok(notifications.some(s=>s.id===id&&s.busy));store.cancel();release();await assert.rejects(()=>running,/cancelled/);
+ assert.equal(store.activeRunID,null);assert.equal(store.busy,false);assert.equal(notifications.at(-1).id,null);assert.equal(f.manifests.size,0);unsubscribe();reopened();
+ const g=collectorFixture(t,{mode:'partial'});let listResolve;
+ const list=new Promise(resolve=>listResolve=resolve),invoke=async(c,a)=>a.request.action==='list'?list:g.invoke(c,a);
+ const raced=new B.BacktestStore({invoke,stockRequest:g.stockRequest,now:g.now,sleep:g.sleep});await raced.start({symbols:[g.stock],sessions:20});
+ listResolve({type:'manifests',manifests:[]});await raced.ready;assert.equal(raced.runs.length,1);assert.equal(raced.runs[0].status,'completed');
+});
+test('native public adapter bypasses display gate and retains full offsets/duplicates',async t=>{
+ const f=collectorFixture(t,{market:'kr'}),native=[];
+ const invoke=async(command,args)=>{
+  if(command!=='stock_request')return f.invoke(command,args);
+  const r=args.request;native.push(copy(r));assert.ok(['calendar','candles'].includes(r.kind));
+  const reply=await f.stockRequest(r.kind==='calendar'?{type:'calendar',market:r.market,date:r.date}:{type:'candles',stock:{market:r.market,symbol:r.symbol},interval:r.interval,before:r.before,count:r.count,adjusted:r.adjusted});
+  if(reply.type==='calendar')return {data:{result:reply.value},fetchedAt:reply.requestedAt};
+  const candles=reply.values.map(b=>({timestamp:new Date(b.end).toISOString(),openPrice:String(b.open),highPrice:String(b.high),lowPrice:String(b.low),closePrice:String(b.close),volume:String(b.volume)}));
+  return {data:{result:{candles,nextBefore:reply.nextBefore}},fetchedAt:reply.requestedAt};
+ };
+ const store=new B.BacktestStore({invoke,now:f.now,sleep:f.sleep});await store.start({symbols:[f.stock],sessions:20});
+ assert.ok(store.runs[0].cases.every(e=>e.status==='saved'));assert.equal(native.length,101);assert.ok(native.every(r=>r.kind==='calendar'||r.interval!=='10m'&&r.adjusted===true&&r.count===200));
+});

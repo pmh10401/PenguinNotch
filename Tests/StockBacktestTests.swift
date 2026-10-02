@@ -491,10 +491,10 @@ final class StockBacktestTests: XCTestCase {
         let m = archiveManifest(c)
         try archive.create(m); _ = try archive.saveCase(runID: m.runID, body: wireBody)
         _ = try archive.saveResult(runID: m.runID, body: resultBody(c.input.caseID, hash: wireHash))
-        var reads = 0
-        archive.fault = { stage in if stage == "read:" + c.input.caseID + ".json" { reads += 1 } }
+        let reads = BacktestReadCounter()
+        archive.fault = { stage in if stage == "read:" + c.input.caseID + ".json" { reads.increment() } }
         try archive.updateProgress(runID: m.runID, entries: m.cases, status: .paused)
-        XCTAssertEqual(reads, 2)
+        XCTAssertEqual(reads.value, 2)
         let manifestURL = path.appending(path: m.runID.uuidString.lowercased()).appending(path: "manifest.json")
         let original = try Data(contentsOf: manifestURL)
         var skipped = m.cases; skipped[0].status = .skipped; skipped[0].reason = "synthetic"
@@ -519,12 +519,12 @@ final class StockBacktestTests: XCTestCase {
         _ = try archive.saveResult(runID: m.runID, body: rb)
         let run = path.appending(path: m.runID.uuidString.lowercased())
         try Data("{}".utf8).write(to: run.appending(path: "cases").appending(path: second.input.caseID + ".json"))
-        var reads = 0
-        archive.fault = { stage in if stage.hasPrefix("read:us_") { reads += 1 } }
+        let reads = BacktestReadCounter()
+        archive.fault = { stage in if stage.hasPrefix("read:us_") { reads.increment() } }
         XCTAssertEqual(try archive.loadCase(runID: m.runID, caseID: c.input.caseID).body, wireBody)
-        XCTAssertEqual(reads, 1); reads = 0
+        XCTAssertEqual(reads.value, 1); reads.reset()
         XCTAssertEqual(try archive.loadResult(runID: m.runID, caseID: c.input.caseID), rb)
-        XCTAssertEqual(reads, 2)
+        XCTAssertEqual(reads.value, 2)
         XCTAssertThrowsError(try archive.loadManifest(runID: m.runID))
         XCTAssertThrowsError(try archive.saveCase(runID: m.runID, body: wireBody))
         XCTAssertThrowsError(try archive.updateProgress(runID: m.runID, entries: m.cases, status: .paused))
@@ -557,4 +557,262 @@ final class StockBacktestTests: XCTestCase {
         }
     }
 
+
+    @MainActor
+    func testCollectorsUseOnlyFrozenPublicInputs() async throws {
+        let path = try temporaryArchive(), fixture = BacktestPublicFixture()
+        let archive = StockBacktestArchive(directory: path)
+        let store = fixture.store(archive)
+        XCTAssertEqual(fixture.calls.count, 0)
+        try await store.start(symbols: [fixture.stock], sessions: 60)
+        let m = try XCTUnwrap(store.runs.first)
+        XCTAssertEqual(m.status, .completed); XCTAssertEqual(m.cases.count, 60)
+        XCTAssertTrue(m.cases.allSatisfy { $0.status == .saved })
+        XCTAssertEqual(fixture.calls.filter { if case .calendar = $0.0 { return true }; return false }.count, 60)
+        XCTAssertEqual(fixture.calls.filter { if case .candles(_, "1d", _, _, _) = $0.0 { return true }; return false }.count, 60)
+        XCTAssertEqual(fixture.calls.count, 300)
+        for (a, b) in zip(fixture.calls, fixture.calls.dropFirst()) { XCTAssertGreaterThanOrEqual(b.1 - a.1, 250) }
+        var originals: [String: Data] = [:]
+        for e in m.cases {
+            let stored = try archive.loadCase(runID: m.runID, caseID: e.caseID), c = try StockBacktest.decodeCase(stored.body)
+            originals[e.caseID] = stored.body
+            XCTAssertEqual(c.source.minutePages.count, 3); XCTAssertEqual(c.input.minutes.count, 330)
+            XCTAssertEqual(c.input.dailyCloses.count, 61); XCTAssertEqual(c.input.previousClose, Decimal(string: "100.01"))
+            XCTAssertEqual(fixture.day(c.input.dailyCloses[0].date), fixture.previous(e.tradingDay))
+            XCTAssertTrue(c.input.minutes.allSatisfy { $0.end <= c.input.cutoff })
+            XCTAssertFalse(c.input.minutes.contains { $0.end == c.input.sessionEnd })
+            XCTAssertEqual(c.target.actualClose, 100)
+        }
+        let count = fixture.calls.count
+        try await store.resume(runID: m.runID)
+        XCTAssertEqual(fixture.calls.count, count)
+        for e in m.cases { XCTAssertEqual(try archive.loadCase(runID: m.runID, caseID: e.caseID).body, originals[e.caseID]) }
+        XCTAssertEqual(store.progress, .init(completed: 60, total: 60)); XCTAssertNil(store.activeRunID)
+    }
+    @MainActor
+    func testSessionMismatchIsSkipped() async throws {
+        let f = BacktestPublicFixture(market: .kr, mode: "mismatch"), archive = StockBacktestArchive(directory: try temporaryArchive())
+        let store = f.store(archive); try await store.start(symbols: [f.stock], sessions: 20)
+        XCTAssertTrue(store.runs[0].cases.allSatisfy { $0.status == .skipped && $0.reason == "session_target_mismatch" && $0.inputSHA256 == nil })
+        XCTAssertEqual(f.calls.filter { if case .candles(_, "1m", _, _, _) = $0.0 { return true }; return false }.count, 20)
+    }
+    @MainActor
+    func testCollectorPreviousDayGapAndPartialModelShortage() async throws {
+        let gap = BacktestPublicFixture(mode: "previous-gap"), store = gap.store(.init(directory: try temporaryArchive()))
+        try await store.start(symbols: [gap.stock], sessions: 20)
+        XCTAssertTrue(store.runs[0].cases.allSatisfy { $0.reason == "missing_previous_close" })
+        XCTAssertEqual(gap.calls.count, 40)
+        let f = BacktestPublicFixture(mode: "partial", dailyCount: 2), archive = StockBacktestArchive(directory: try temporaryArchive()), short = f.store(archive)
+        try await short.start(symbols: [f.stock], sessions: 20)
+        let m = short.runs[0], e = m.cases[0], c = try StockBacktest.decodeCase(archive.loadCase(runID: m.runID, caseID: e.caseID).body)
+        XCTAssertEqual(e.status, .saved)
+        XCTAssertEqual(StockBacktest.predict(input: c.input, interval: .day).reason, "insufficient_daily_history")
+        XCTAssertEqual(StockBacktest.predict(input: c.input, interval: .minute).status, .forecast)
+        XCTAssertEqual(StockBacktest.predict(input: c.input, interval: .tenMinutes).reason, "insufficient_intraday_history")
+    }
+    @MainActor
+    func testCollectorCursorConflictsAndRawBounds() async throws {
+        for (mode, reason) in [("cursor", "repeated_cursor"), ("conflict", "conflicting_duplicate")] {
+            let f = BacktestPublicFixture(mode: mode), store = f.store(.init(directory: try temporaryArchive()))
+            try await store.start(symbols: [f.stock], sessions: 20)
+            XCTAssertTrue(store.runs[0].cases.allSatisfy { $0.reason == reason })
+        }
+        let f = BacktestPublicFixture(mode: "bounds"), archive = StockBacktestArchive(directory: try temporaryArchive()), store = f.store(archive)
+        try await store.start(symbols: [f.stock], sessions: 20)
+        let m = store.runs[0], c = try StockBacktest.decodeCase(archive.loadCase(runID: m.runID, caseID: m.cases[0].caseID).body)
+        XCTAssertEqual(c.source.minutePages.count, 7); XCTAssertLessThanOrEqual(c.input.minutes.count, 1_400)
+        XCTAssertEqual(f.calls.count, 20 * 9) // calendar, daily, seven minute pages = 1,400 raw rows, including proof.
+    }
+    @MainActor
+    func testCollectorActiveFreezeCancelLateRepliesAndRevision() async throws {
+        for changeRevision in [false, true] {
+            let f = BacktestPublicFixture(), archive = StockBacktestArchive(directory: try temporaryArchive())
+            var release: CheckedContinuation<Void, Never>?, entered = false, revision = 0
+            let store = StockBacktestStore(archive: archive, request: { request in
+                entered = true
+                await withCheckedContinuation { release = $0 }
+                return try await f.request(request)
+            }, now: { f.now }, sleep: { f.clock += Int64($0) }, revision: { revision }, provider: { .toss })
+            let active = Task { try await store.start(symbols: [f.stock], sessions: 60) }
+            while !entered { await Task.yield() }
+            XCTAssertNotNil(store.activeRunID); XCTAssertEqual(store.progress.total, 60)
+            do { try await store.start(symbols: [f.stock], sessions: 20); XCTFail("double start accepted") } catch {}
+            if changeRevision { revision += 1 } else { store.cancel() }
+            release?.resume()
+            do { try await active.value; XCTFail("late reply accepted") } catch {}
+            XCTAssertEqual(store.errorMessage, "collection_cancelled"); XCTAssertNil(store.activeRunID)
+            XCTAssertEqual(try archive.list(), [])
+        }
+    }
+    @MainActor
+    func testCollectorPausedAuthenticationAndOrphanResume() async throws {
+        let f = BacktestPublicFixture(), archive = StockBacktestArchive(directory: try temporaryArchive())
+        var attempts = 0
+        let store = StockBacktestStore(archive: archive, request: { request in
+            if case .candles = request { attempts += 1; throw TossInvestAPI.Failure.http(401) }
+            return try await f.request(request)
+        }, now: { f.now }, sleep: { f.clock += Int64($0) }, provider: { .toss })
+        do { try await store.start(symbols: [f.stock], sessions: 20); XCTFail("auth accepted") } catch {}
+        let m = try XCTUnwrap(store.runs.first)
+        XCTAssertEqual(m.status, .paused); XCTAssertEqual(attempts, 1); XCTAssertEqual(store.errorMessage, "authentication_paused")
+        XCTAssertTrue(m.cases.allSatisfy { $0.status == .pending })
+        // Place a valid synthetic orphan from the frozen entry. Resume must connect its exact bytes, without its calendar/candles.
+        let e = m.cases[0], c = try f.caseData(e), encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        let body = try encoder.encode(c); _ = try archive.saveCase(runID: m.runID, body: body)
+        let resumed = f.store(archive), before = f.calls.count
+        try await resumed.resume(runID: m.runID)
+        XCTAssertEqual(f.calls.count - before, 19 * 5)
+        XCTAssertTrue(f.calls.dropFirst(before).prefix(19).allSatisfy { if case .calendar = $0.0 { return true }; return false })
+        XCTAssertEqual(try archive.loadCase(runID: m.runID, caseID: e.caseID).body, body)
+        XCTAssertEqual(resumed.runs[0].cases[0].inputSHA256, StockBacktestArchive.hash(body))
+    }
+    @MainActor
+    func testCollectorArchiveIOOffMainAndInitialListCannotOverwriteStart() async throws {
+        let path = try temporaryArchive(), f = BacktestPublicFixture(mode: "partial")
+        var archive = StockBacktestArchive(directory: path)
+        archive.fault = { _ in XCTAssertFalse(Thread.isMainThread) }
+        let store = f.store(archive)
+        try await store.start(symbols: [f.stock], sessions: 20)
+        await Task.yield()
+        XCTAssertEqual(store.runs.count, 1); XCTAssertEqual(store.runs[0].status, .completed)
+    }
+    func testCollectorPublicPageOffsetEncodingStrictRowsAndDuplicates() async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [BacktestPublicEndpoint.self]
+        let session = URLSession(configuration: configuration); defer { session.invalidateAndCancel() }
+        BacktestPublicEndpoint.reset()
+        let stock = WatchedStock.parse("KR:005930")!, before = "2026-09-25T15:30:00+09:00"
+        let reply = try await TossInvestAPI.backtestPage(token: "SYNTHETIC_PUBLIC", stock: stock, interval: "1m", before: before, session: session)
+        guard case .candles(let values, let next, _) = reply else { return XCTFail("wrong reply") }
+        XCTAssertEqual(values.count, 2); XCTAssertEqual(next, "2026-09-25T15:29:00+09:00")
+        let request = try XCTUnwrap(BacktestPublicEndpoint.requests.first), url = try XCTUnwrap(request.url)
+        XCTAssertEqual(url.path, "/api/v1/candles"); XCTAssertTrue(url.absoluteString.contains("%2B09:00"))
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+        XCTAssertEqual(items.first { $0.name == "before" }?.value, before)
+        XCTAssertEqual(items.first { $0.name == "count" }?.value, "200"); XCTAssertEqual(items.first { $0.name == "adjusted" }?.value, "true")
+        for mode in ["timestamp", "ohlc", "volume", "order", "oversize", "numeric", "boolean"] {
+            BacktestPublicEndpoint.reset(mode: mode)
+            do { _ = try await TossInvestAPI.backtestPage(token: "SYNTHETIC_PUBLIC", stock: stock, interval: "1d", before: before, session: session); XCTFail("invalid page accepted: " + mode) } catch {}
+        }
+        XCTAssertTrue(BacktestPublicEndpoint.requests.allSatisfy { $0.url?.path == "/api/v1/candles" })
+    }
+}
+
+private final class BacktestReadCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var value: Int { lock.withLock { count } }
+    func increment() { lock.withLock { count += 1 } }
+    func reset() { lock.withLock { count = 0 } }
+}
+
+@MainActor
+private final class BacktestPublicFixture {
+    var clock: Int64 = 1_790_373_600_000 // 2026-09-25 22:00Z
+    var now: Date { StockBacktest.date(clock) }
+    let market: WatchedStock.Market
+    let mode: String
+    let dailyCount: Int
+    var calls: [(StockBacktestRequest, Int64)] = []
+    var stock: WatchedStock { WatchedStock.parse(market == .kr ? "KR:005930" : "AAPL")! }
+    init(market: WatchedStock.Market = .us, mode: String = "", dailyCount: Int = 61) {
+        self.market = market; self.mode = mode; self.dailyCount = dailyCount
+    }
+    func store(_ archive: StockBacktestArchive) -> StockBacktestStore {
+        StockBacktestStore(archive: archive, request: { try await self.request($0) }, now: { self.now }, sleep: { self.clock += Int64($0) }, provider: { .toss })
+    }
+    func day(_ time: Int64) -> String {
+        var c = Calendar(identifier: .gregorian); c.timeZone = StockQuoteCodec.timeZone(for: market)
+        return StockBacktest.day(StockBacktest.date(time), calendar: c)
+    }
+    func midnight(_ day: String, market: WatchedStock.Market? = nil) -> Date {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = StockQuoteCodec.timeZone(for: market ?? self.market); f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: day)!
+    }
+    func previous(_ day: String) -> String {
+        var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(secondsFromGMT: 0)!
+        var d = ISO8601DateFormatter().date(from: day + "T12:00:00Z")!
+        repeat { d = c.date(byAdding: .day, value: -1, to: d)! } while [1,7].contains(c.component(.weekday, from: d))
+        return StockBacktest.day(d, calendar: c)
+    }
+    func trading(_ day: String, market: WatchedStock.Market? = nil) -> TradingSession {
+        let m = market ?? self.market, at = midnight(day, market: m)
+        return TradingSession(startTime: at.addingTimeInterval(m == .kr ? 9 * 3600 : 9.5 * 3600), endTime: at.addingTimeInterval(m == .kr ? 15.5 * 3600 : 16 * 3600))
+    }
+    func calendar(_ day: String, market: WatchedStock.Market) -> MarketSessions {
+        func body(_ day: String) -> MarketSessionDay {
+            let r = trading(day, market: market)
+            return MarketSessionDay(integrated: market == .kr ? IntegratedMarket(regularMarket: r) : nil,
+                regularMarket: market == .us ? r : nil, dayMarket: nil, preMarket: nil, afterMarket: nil)
+        }
+        return MarketSessions(today: body(day), previousBusinessDay: body(previous(day)), nextBusinessDay: nil)
+    }
+    func bar(_ end: Date, _ price: Decimal) -> StockCandle { StockCandle(end: end, open: price, high: price + 1, low: price - 1, close: price, volume: 0) }
+    func request(_ request: StockBacktestRequest) async throws -> StockBacktestReply {
+        calls.append((request, clock))
+        switch request {
+        case .calendar(let market, let date): return .calendar(value: calendar(date, market: market), requestedAt: clock)
+        case .candles(let stock, let interval, let before, let count, let adjusted):
+            XCTAssertEqual(count, 200); XCTAssertTrue(adjusted); XCTAssertTrue(["1m", "1d"].contains(interval))
+            let bound = StockBacktestStore.timestamp(before)!, date = day(bound), trading = trading(date)
+            if interval == "1d" {
+                var d = date, values = [bar(midnight(d), 100)]
+                for n in 0..<dailyCount { d = previous(d); if mode != "previous-gap" || n != 0 { values.append(bar(midnight(d), 100 + Decimal(n+1)/100)) } }
+                return .candles(values: values, nextBefore: nil, requestedAt: clock)
+            }
+            XCTAssertEqual(stock.market, market)
+            let end = Int64(trading.endTime.timeIntervalSince1970 * 1000), start = Int64(trading.startTime.timeIntervalSince1970 * 1000)
+            var values: [StockCandle] = [], time = bound
+            let step: Int64 = mode == "bounds" ? 1_000 : 60_000
+            while time >= start + 60_000 && values.count < 200 {
+                values.append(bar(StockBacktest.date(time), 100 + Decimal(end-time)/60_000/1_000)); time -= step
+            }
+            if mode == "mismatch", bound == end { values[0] = bar(StockBacktest.date(bound), 101) }
+            var next = Int64(values.last!.end.timeIntervalSince1970 * 1000) > start + 60_000 ? ISO8601DateFormatter().string(from: values.last!.end) : nil
+            if mode == "cursor", bound == end - 3_600_000 { next = before }
+            if mode == "conflict", bound != end, bound != end - 3_600_000 { values[0] = bar(StockBacktest.date(bound), 102) }
+            if mode == "partial" { values = Array(values.prefix(11)); next = nil }
+            return .candles(values: values, nextBefore: next, requestedAt: clock)
+        }
+    }
+    func caseData(_ e: StockBacktestManifest.Entry) throws -> StockBacktestCase {
+        let r = trading(e.tradingDay), start = Int64(r.startTime.timeIntervalSince1970 * 1000), end = Int64(r.endTime.timeIntervalSince1970 * 1000), cutoff = end - 3_600_000
+        let minutes = (0..<330).map { n -> StockBacktestInput.Minute in
+            let t = start + Int64(n+1)*60_000, p = 100 + Decimal(end-t)/60_000/1_000
+            return .init(end: t, open: p, high: p+1, low: p-1, close: p, volume: 0)
+        }
+        let input = StockBacktestInput(version: 1, caseID: e.caseID, stockID: e.stockID, market: market.rawValue, currency: "USD", tradingDay: e.tradingDay,
+            sessionStart: start, sessionEnd: end, cutoff: cutoff, inputBarEnd: cutoff, inputPrice: minutes.last!.close, previousClose: 100.01,
+            priceBasis: StockBacktest.priceBasis, dailyCloses: [.init(date: Int64(midnight(previous(e.tradingDay)).timeIntervalSince1970*1000), price: 100.01)], minutes: minutes)
+        return .init(version: 1, input: input, target: .init(actualClose: 100, candleAt: Int64(midnight(e.tradingDay).timeIntervalSince1970*1000), fetchedAt: clock),
+            source: .init(provider: "toss", calendarFetchedAt: clock, dailyFetchedAt: clock, minutePages: [.init(before: ISO8601DateFormatter().string(from: r.endTime), nextBefore: nil, fetchedAt: clock)]))
+    }
+}
+private final class BacktestPublicEndpoint: URLProtocol {
+    private static let lock = NSLock()
+    private static var mode = ""
+    private static var recorded: [URLRequest] = []
+    static var requests: [URLRequest] { lock.withLock { recorded } }
+    static func reset(mode: String = "") { lock.withLock { Self.mode = mode; recorded = [] } }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        let mode = Self.lock.withLock { Self.recorded.append(request); return Self.mode }
+        var row: [String: Any] = ["timestamp":"2026-09-25T15:30:00+09:00", "openPrice":"100", "highPrice":"101", "lowPrice":"99", "closePrice":"100", "volume":"0"]
+        if mode == "timestamp" { row["timestamp"] = "2026-09-25" }
+        if mode == "ohlc" { row["highPrice"] = "1" }
+        if mode == "volume" { row["volume"] = "-1" }
+        if mode == "numeric" { row["closePrice"] = "100garbage" }
+        if mode == "boolean" { row["closePrice"] = true }
+        var rows = [row, row]
+        if mode == "oversize" { rows = Array(repeating: row, count: 201) }
+        if mode == "order" {
+            var older = row; older["timestamp"] = "2026-09-25T15:29:00+09:00"
+            rows = [row, older, row]
+        }
+        let body = try! JSONSerialization.data(withJSONObject: ["result":["candles":rows,"nextBefore":"2026-09-25T15:29:00+09:00"]])
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body); client?.urlProtocolDidFinishLoading(self)
+    }
 }

@@ -241,7 +241,19 @@ impl StockRequest {
         matches!(self.kind, Kind::Accounts | Kind::AccountOverview)
     }
     fn validated(mut self, settings: &StockSettings) -> Result<Self> {
-        if (!self.viewer() && !settings.enabled) || settings.provider != self.provider() {
+        let historical_public = match self.kind {
+            Kind::Calendar => self.date.is_some(), // Date syntax is validated below.
+            Kind::Candles => {
+                self.before.is_some()
+                    && matches!(self.interval, Some(Interval::Minute | Interval::Day))
+                    && self.count == Some(200)
+                    && self.adjusted == Some(true)
+            }
+            _ => false,
+        };
+        if (!self.viewer() && !settings.enabled && !historical_public)
+            || settings.provider != self.provider()
+        {
             return Err("Stock provider is disabled or has changed".into());
         }
         if self.kind == Kind::Holdings && !settings.forecasts_enabled {
@@ -2311,6 +2323,43 @@ mod tests {
         assert!(s.validated().is_err());
         assert!(serde_json::from_value::<StockSettings>(json!({"apiKey":"hidden"})).is_err());
         assert!(serde_json::from_value::<StockSettings>(json!({"displayInterval":"3"})).is_err());
+    }
+
+    #[test]
+    fn bounded_public_history_works_with_display_off_only() {
+        let mut hidden = settings(Provider::Toss);
+        hidden.enabled = false;
+        hidden.forecasts_enabled = false;
+        for value in [
+            json!({"kind":"calendar","market":"kr","date":"2026-09-25"}),
+            json!({"kind":"candles","symbol":"AAPL","interval":"1m","count":200,"before":"2026-09-25T20:00:00Z","adjusted":true}),
+            json!({"kind":"candles","symbol":"005930","market":"kr","interval":"1d","count":200,"before":"2026-09-25T15:30:00+09:00","adjusted":true}),
+        ] {
+            let raw: StockRequest = serde_json::from_value(value).unwrap();
+            assert!(raw.clone().validated(&hidden).is_ok());
+            hidden.provider = Provider::Finnhub;
+            assert!(raw.validated(&hidden).is_err());
+            hidden.provider = Provider::Toss;
+        }
+        for value in [
+            json!({"kind":"calendar","market":"us"}),
+            json!({"kind":"calendar","market":"us","date":"2026-02-30"}),
+            json!({"kind":"candles","symbol":"AAPL","interval":"1m","count":200,"adjusted":true}),
+            json!({"kind":"candles","symbol":"AAPL","interval":"10m","count":200,"before":"2026-09-25T20:00:00Z","adjusted":true}),
+            json!({"kind":"candles","symbol":"AAPL","interval":"1m","count":199,"before":"2026-09-25T20:00:00Z","adjusted":true}),
+            json!({"kind":"candles","symbol":"AAPL","interval":"1m","count":200,"before":"bad","adjusted":true}),
+            json!({"kind":"candles","symbol":"AAPL","interval":"1m","count":200,"before":"2026-09-25T20:00:00Z","adjusted":false}),
+            json!({"kind":"prices","symbols":["AAPL"]}),
+            json!({"kind":"names","symbols":["AAPL"]}),
+            json!({"kind":"holdings","accountSeq":7}),
+        ] {
+            let raw: StockRequest = serde_json::from_value(value).unwrap();
+            assert!(raw.validated(&hidden).is_err());
+        }
+        assert!(serde_json::from_value::<StockRequest>(
+            json!({"kind":"calendar","market":"us","date":"2026-09-25","token":"fake"})
+        )
+        .is_err());
     }
 
     #[test]

@@ -251,6 +251,30 @@ enum TossInvestAPI {
         return candles.values.sorted { $0.end < $1.end }
     }
 
+    /// A single bounded public page; strict decoding retains inclusive duplicates for the collector.
+    static func backtestPage(token: String, stock: WatchedStock, interval: String, before: String,
+                             session: URLSession = .shared) async throws -> StockBacktestReply {
+        guard ["1m", "1d"].contains(interval), let bound = StockBacktestStore.timestamp(before),
+              WatchedStock.parse(stock.id) == stock else { throw Failure.invalidResponse }
+        let requestedAt = Int64(Date().timeIntervalSince1970 * 1000)
+        let data = try await candleData(token: token, symbol: stock.symbol, interval: interval, count: 200,
+                                       before: before, adjusted: true, session: session)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let result = object["result"] as? [String: Any], let raw = result["candles"] as? [[String: Any]],
+              raw.allSatisfy({ row in
+                  (row["timestamp"] as? String).map(StockBacktest.cursor) == true
+                    && ["openPrice", "highPrice", "lowPrice", "closePrice", "volume"].allSatisfy { key in
+                        if let text = row[key] as? String { return Double(text)?.isFinite == true }
+                        if let number = row[key] as? NSNumber { return CFGetTypeID(number) != CFBooleanGetTypeID() && number.doubleValue.isFinite }
+                        return false
+                    }
+              }),
+              let values = StockQuoteCodec.candles(from: data),
+              let next = result["nextBefore"], next is NSNull || (next as? String).map(StockBacktest.cursor) == true else { throw Failure.invalidResponse }
+        try StockBacktestStore.validate(values, before: bound)
+        return .candles(values: values, nextBefore: next as? String, requestedAt: requestedAt)
+    }
+
     private static func candleData(token: String, symbol: String, interval: String, count: Int,
                                    before: String? = nil, adjusted: Bool? = nil,
                                    session: URLSession) async throws -> Data {
