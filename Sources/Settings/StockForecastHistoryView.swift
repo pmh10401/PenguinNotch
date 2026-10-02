@@ -11,6 +11,7 @@ struct StockForecastHistoryView: View {
     @State private var stockID = ""
     @State private var day = ""
     @State private var model = ""
+    @State private var comparisonModels: Set<String>?
     @State private var capture = ""
     @State private var days = 30
     @State private var source: String
@@ -38,12 +39,13 @@ struct StockForecastHistoryView: View {
         return StockBacktest.day(date, calendar: calendar)
     }
     private var cutoff: Date { days == 0 ? .distantPast : Date().addingTimeInterval(-Double(days) * 86400) }
-    private var rows: [StockEvaluationRow] {
+    private var rows: [StockEvaluationRow] { comparisonRows.filter { model.isEmpty || $0.model == model } }
+    private var comparisonRows: [StockEvaluationRow] {
         let rows = StockEvaluation.filtered(StockEvaluation.rows(journal: journal.records.filter { $0.createdAt >= cutoff }, analyses: analyses.analyses.filter { $0.completedAt >= cutoff }),
             stockID: stockID.isEmpty ? nil : stockID, day: day.isEmpty ? nil : day, capture: capture.isEmpty ? nil : capture)
         return rows.filter { r in
-            (model.isEmpty || r.model == model) && (source.isEmpty
-                || source == "codex" && savedAnalyses.contains { a in a.forecastModel == r.model && r.references.contains { $0.referenceID == a.id.uuidString } }
+            (source.isEmpty
+                || source == "codex" && analyses.analyses.contains { a in a.forecastModel == r.model && r.references.contains { $0.referenceID == a.id.uuidString } }
                 || source != "codex" && (r.source.rawValue == source || r.references.contains { $0.source.rawValue == source }))
         }
     }
@@ -59,7 +61,7 @@ struct StockForecastHistoryView: View {
                 Text(L10n.t("Historical replay")).tag(true)
             }.pickerStyle(.segmented)
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 14) {
                     if replay { StockBacktestView(store: backtests) } else { savedHistory }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(2)
             }
@@ -108,9 +110,9 @@ struct StockForecastHistoryView: View {
             if rows.isEmpty { Text(L10n.t("No saved predictions in this filter")) }
             ForEach(EvaluationSummaryView.groups(rows), id: \.id) { own in EvaluationSummaryView(rows: own.rows) }
             // Comparisons keep recording times separate even when all timing filters are selected.
-            ForEach(Set(rows.map(\.capture)).sorted(), id: \.self) { capture in
-                let cohort = rows.filter { $0.capture == capture }
-                EvaluationComparisonView(comparison: StockEvaluation.compare(cohort, selectedModels: Set(cohort.map(\.model))))
+            ForEach(Set(comparisonRows.map(\.capture)).sorted(), id: \.self) { capture in
+                let cohort = comparisonRows.filter { $0.capture == capture }
+                EvaluationComparisonView(rows: cohort, models: Set(cohort.map(\.model)).sorted(), selectedModels: $comparisonModels)
             }
             ForEach(EvaluationSummaryView.groups(rows), id: \.id) { group in
               ForEach(group.rows, id: \.referenceID) { row in
@@ -217,7 +219,7 @@ struct ForecastComparisonView: View {
         let comparison = StockForecastComparison(records)
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("Compare identical prediction inputs")).font(.headline)
-            Text(L10n.t("Only completed records shared by every listed model are compared. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns."))
+            Text(L10n.t("Only completed records shared by every selected comparison model are compared, independently of the display model filter. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns."))
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if comparison.rows.isEmpty {
                 ContentUnavailableView(L10n.t("No saved predictions in this filter"), systemImage: "chart.bar.xaxis")

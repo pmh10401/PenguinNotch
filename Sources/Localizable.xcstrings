@@ -1,6 +1,26 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Comparison models": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "비교 모델"
+          }
+        }
+      }
+    },
+    "Regular session is 60 minutes or less; excluded.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정규장 길이가 60분 이하라 제외했습니다."
+          }
+        }
+      }
+    },
     "Stock settings": {
       "localizations": {
         "en": {
@@ -60147,7 +60167,7 @@
     "This older record has no saved daily-candle evidence. Its original prices and result are retained.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "이전 기록에는 근거 일봉을 저장하지 않았습니다. 원래의 가격과 결과는 유지됩니다."}}}},
     "GBM assumes zero expected return from the input price to the close. Daily volatility sizes the price range; historical returns are context, not a trend prediction. No news or AI API is used.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "GBM은 입력 가격부터 종가까지의 기대수익률을 0으로 가정합니다. 일간 변동성으로 예상 가격 범위를 계산하며 과거 수익률은 추세 예측이 아닌 참고 정보입니다. 뉴스나 AI API는 사용하지 않습니다."}}}},
     "Compare identical prediction inputs": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "동일한 입력의 예측 비교"}}}},
-    "Only completed records shared by every listed model are compared. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "나열된 모든 모형에서 공통으로 채점된 기록만 비교합니다. 종목, 체결 시각, 입력 가격, 일봉, 정규장 시간, 기록 방식이 같아야 합니다. 짝이 없는 기록은 두 오차 지표에서 제외합니다."}}}},
+    "Only completed records shared by every selected comparison model are compared, independently of the display model filter. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "표시 모델 필터와 별개로, 선택한 모든 비교 모델이 공유하는 평가 완료 기록만 비교합니다. 종목, 체결 시각, 입력 가격, 일봉 근거, 정규장, 기록 방식이 같아야 합니다. 짝이 없는 기록은 두 오차 열 모두에서 제외합니다."}}}},
     "Saved / pending": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "저장 / 대기"}}}},
     "Paired samples": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "동일 조건 표본"}}}},
     "No completed records with matching inputs yet. Missing evidence or a pending close cannot be treated as a match.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "입력이 일치하고 채점이 끝난 기록이 아직 없습니다. 근거가 없거나 종가를 기다리는 기록은 일치한 표본으로 간주하지 않습니다."}}}},

@@ -1,9 +1,92 @@
+import AppKit
 import Foundation
 import XCTest
 import Darwin
 @testable import PenguinNotch
 
 final class StockBacktestTests: XCTestCase {
+    @MainActor
+    func testFinalShortCalendarIdentityPreservesFrozenDenominator() async throws {
+        let f = BacktestPublicFixture(mode: "partial", dailyCount: 2)
+        f.shortDay = "2026-09-24"
+        let archive = StockBacktestArchive(directory: try temporaryArchive()), store = f.store(archive)
+        try await store.start(symbols: [f.stock], sessions: 20)
+        let m = try XCTUnwrap(store.runs.first)
+        XCTAssertEqual(m.cases.count, 20); XCTAssertEqual(m.status, .completed)
+        let short = try XCTUnwrap(m.cases.first { $0.tradingDay == f.shortDay })
+        XCTAssertEqual(short.status, .skipped); XCTAssertEqual(short.reason, "session_too_short")
+        XCTAssertEqual(m.cases.first { $0.tradingDay == "2026-09-25" }?.status, .saved)
+        XCTAssertFalse(f.calls.contains { if case .candles(_, _, let before, _, _) = $0.0 { return f.day(StockBacktestStore.timestamp(before)!) == f.shortDay }; return false })
+        let receipt = try await store.loadReceipt(runID: m.runID, caseID: m.cases[0].caseID)
+        let summary = try StockEvaluation.replaySummary(manifest: m, receipts: [receipt], selectedModels: Set(m.models))
+        XCTAssertEqual(summary.requested, 20); XCTAssertEqual(summary.skipped, 1); XCTAssertEqual(summary.acquired, 19)
+        XCTAssertEqual(summary.unavailable, 18)
+        var reads = archive
+        let counter = BacktestReadCounter()
+        reads.fault = { phase in if phase.hasPrefix("read:"), phase.hasSuffix(".json"), phase != "read:manifest.json" { counter.increment() } }
+        let viewer = f.store(reads)
+        for _ in 0..<10_000 { if !viewer.runs.isEmpty { break }; await Task.yield() }
+        XCTAssertEqual(viewer.runs.count, 1); counter.reset()
+        let compact = try await viewer.loadReceipt(runID: m.runID, caseID: m.cases[0].caseID)
+        XCTAssertEqual(counter.value, 3, "strict selected case/result binding reads only selected payloads")
+        for _ in 0..<10 { _ = try StockEvaluation.replaySummary(manifest: m, receipts: [compact], selectedModels: Set(m.models)) }
+        XCTAssertEqual(counter.value, 3, "collapsed summary redraw does not reopen raw evidence")
+        let raw = try await viewer.loadCase(runID: m.runID, caseID: m.cases[0].caseID)
+        XCTAssertFalse(raw.rawDetail.isEmpty); XCTAssertEqual(counter.value, 6, "explicit raw open performs selected reads")
+        var unrelated = m; unrelated.runID = UUID()
+        XCTAssertThrowsError(try StockEvaluation.replaySummary(manifest: unrelated, receipts: [compact], selectedModels: Set(m.models)))
+    }
+    @MainActor
+    func testFinalWorkspaceSleepCancelsWaitAndDiscardsLateReply() async throws {
+        for waiting in [true, false] {
+            let f = BacktestPublicFixture(mode: "partial"), archive = StockBacktestArchive(directory: try temporaryArchive())
+            var interrupted = false
+            let store = StockBacktestStore(archive: archive, request: { request in
+                let reply = try await f.request(request)
+                if !waiting, case .candles = request, !interrupted {
+                    interrupted = true
+                    NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+                }
+                return reply
+            }, now: { f.now }, sleep: { ms in
+                f.clock += Int64(ms)
+                if waiting, f.calls.contains(where: { if case .candles = $0.0 { return true }; return false }), !interrupted {
+                    interrupted = true
+                    NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+                }
+            }, provider: { .toss })
+            do { try await store.start(symbols: [f.stock], sessions: 20); XCTFail("continued after suspend") } catch {}
+            XCTAssertTrue(interrupted); XCTAssertEqual(store.errorMessage, "collection_cancelled")
+            let m = try XCTUnwrap(store.runs.first); XCTAssertEqual(m.status, .paused)
+            XCTAssertEqual(m.cases.count, 20); XCTAssertTrue(m.cases.allSatisfy { $0.status == .pending })
+            XCTAssertEqual(f.calls.filter { if case .candles = $0.0 { return true }; return false }.count, 1)
+            try await store.resume(runID: m.runID)
+            XCTAssertEqual(store.runs.first?.status, .completed)
+        }
+    }
+
+    @MainActor
+    func testFinalShortResumeAndInvalidCalendarRemainFailClosed() async throws {
+        let f = BacktestPublicFixture(mode: "partial", dailyCount: 2)
+        var refuse = true
+        let store = StockBacktestStore(archive: .init(directory: try temporaryArchive()), request: { r in
+            if refuse, case .candles = r { throw TossInvestAPI.Failure.http(401) }
+            return try await f.request(r)
+        }, now: { f.now }, sleep: { f.clock += Int64($0) }, provider: { .toss })
+        do { try await store.start(symbols: [f.stock], sessions: 20); XCTFail("auth accepted") } catch {}
+        let m = try XCTUnwrap(store.runs.first); XCTAssertEqual(m.status, .paused)
+        f.shortDay = "2026-09-24"; f.shortMinutes = 30; refuse = false
+        try await store.resume(runID: m.runID)
+        XCTAssertEqual(store.runs.first?.cases.count, 20)
+        XCTAssertEqual(store.runs.first?.cases.first(where: { $0.tradingDay == f.shortDay })?.reason, "session_too_short")
+        for minutes in [0.0, -1, 1440] {
+            let malformed = BacktestPublicFixture(); malformed.shortDay = "2026-09-25"; malformed.shortMinutes = minutes
+            let rejected = malformed.store(.init(directory: try temporaryArchive()))
+            do { try await rejected.start(symbols: [malformed.stock], sessions: 20); XCTFail("invalid calendar accepted") } catch {}
+            XCTAssertTrue(rejected.runs.isEmpty); XCTAssertEqual(rejected.errorMessage, "collection_failed")
+        }
+    }
+
     private struct Fixture: Decodable {
         struct Sample: Decodable {
             let name: String
@@ -880,6 +963,8 @@ private final class BacktestPublicFixture {
     let market: WatchedStock.Market
     let mode: String
     let dailyCount: Int
+    var shortMinutes = 60.0
+    var shortDay: String?
     var calls: [(StockBacktestRequest, Int64)] = []
     var stock: WatchedStock { WatchedStock.parse(market == .kr ? "KR:005930" : "AAPL")! }
     init(market: WatchedStock.Market = .us, mode: String = "", dailyCount: Int = 61) {
@@ -908,7 +993,8 @@ private final class BacktestPublicFixture {
     }
     func calendar(_ day: String, market: WatchedStock.Market) -> MarketSessions {
         func body(_ day: String) -> MarketSessionDay {
-            let r = trading(day, market: market)
+            var r = trading(day, market: market)
+            if day == shortDay { r = TradingSession(startTime: r.startTime, endTime: r.startTime.addingTimeInterval(shortMinutes * 60)) }
             return MarketSessionDay(integrated: market == .kr ? IntegratedMarket(regularMarket: r) : nil,
                 regularMarket: market == .us ? r : nil, dayMarket: nil, preMarket: nil, afterMarket: nil)
         }

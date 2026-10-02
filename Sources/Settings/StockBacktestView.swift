@@ -8,8 +8,13 @@ struct StockBacktestView: View {
     @State private var stockID = ""
     @State private var day = ""
     @State private var model = ""
-    @State private var loaded: [StockBacktestLoadedCase] = []
-    @State private var receipts: [String: StockBacktestLoadedCase] = [:]
+    @State private var receipts: [String: StockBacktestReceipt] = [:]
+    @State private var receiptRun: UUID?
+    @State private var generation = UUID()
+    @State private var completeKey = ""
+    @State private var comparisonModels: Set<String>?
+    @State private var rawCase: String?
+    @State private var rawDetail: String?
     @State private var loading = false
     @State private var launching = false
     @State private var message: String?
@@ -76,30 +81,38 @@ struct StockBacktestView: View {
             } else { Text(L10n.t("No historical replay runs.")) }
         }
         .task(id: loadKey) {
-            loaded = []; message = nil
-            guard let run else { return }
+            let token = UUID(); generation = token; completeKey = ""; rawCase = nil; rawDetail = nil; message = nil
+            guard let run else { receipts = [:]; loading = false; return }
+            if receiptRun != run.runID { receipts = [:]; receiptRun = run.runID }
             loading = true
-            defer { loading = false }
+            defer { if generation == token { loading = false } }
+            var next: [String: StockBacktestReceipt] = [:]
             for entry in run.cases {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, generation == token else { return }
                 do {
-                    let receipt: StockBacktestLoadedCase
+                    let receipt: StockBacktestReceipt
                     if let cached = receipts[entry.caseID], cached.entry == entry { receipt = cached }
-                    else { receipt = try await store.loadCase(runID: run.runID, caseID: entry.caseID) }
-                    guard !Task.isCancelled else { return }; receipts[entry.caseID] = receipt; loaded.append(receipt)
-                } catch { if !Task.isCancelled { message = "archive_unavailable" } }
+                    else { receipt = try await store.loadReceipt(runID: run.runID, caseID: entry.caseID) }
+                    guard !Task.isCancelled, generation == token else { return }
+                    guard receipt.entry == entry else { throw CocoaError(.fileReadCorruptFile) }
+                    next[entry.caseID] = receipt
+                    if next.count % 32 == 0 { receipts = next; await Task.yield() }
+                } catch { if !Task.isCancelled, generation == token { message = "archive_unavailable" } }
             }
+            guard !Task.isCancelled, generation == token else { return }
+            receipts = next
+            if message == nil { completeKey = loadKey }
         }
-        .onChange(of: selected) { _, _ in receipts = [:]; market = ""; stockID = ""; day = ""; model = "" }
+        .onChange(of: selected) { _, _ in generation = UUID(); completeKey = ""; receipts = [:]; rawCase = nil; rawDetail = nil; comparisonModels = nil; market = ""; stockID = ""; day = ""; model = "" }
         .onChange(of: store.runs.count) { _, _ in if selected == nil { selected = store.runs.last?.runID } }
         .onAppear { if selected == nil { selected = store.runs.last?.runID } }
         .fileExporter(isPresented: $exporting, document: document, contentType: .commaSeparatedText,
-                      defaultFilename: "PenguinNotch-replay-evaluation") { if case .failure = $0 { message = "Could not export forecast history." } }
+                      defaultFilename: "PenguinNotch-replay-evaluation") { document = ForecastCSVDocument(text: ""); if case .failure = $0 { message = "Could not export forecast history." } }
     }
 
     @ViewBuilder private func results(_ run: StockBacktestManifest) -> some View {
         let models = model.isEmpty ? Set(run.models) : [model]
-        if let summary = try? StockEvaluation.replaySummary(manifest: run, loaded: loaded, selectedModels: models,
+        if let summary = try? StockEvaluation.replaySummary(manifest: run, receipts: Array(receipts.values), selectedModels: models,
             market: market.isEmpty ? nil : market, stockID: stockID.isEmpty ? nil : stockID, day: day.isEmpty ? nil : day) {
             Text("\(L10n.t("Acquired / requested")): \(summary.acquired)/\(summary.requested) · \(L10n.t("Pending")): \(summary.pending) · \(L10n.t("Skipped")): \(summary.skipped) · \(L10n.t("Unavailable")): \(summary.unavailable)")
                 .font(.caption)
@@ -107,21 +120,54 @@ struct StockBacktestView: View {
                 EvaluationSummaryView(rows: summary.rows.filter { $0.model == model.model })
                 Text("\(model.model) · \(L10n.t("Evaluated")): \(model.success) · \(L10n.t("Skipped")): \(model.skipped) · \(L10n.t("Unavailable")): \(model.unavailable)").font(.caption)
             }
-            EvaluationComparisonView(comparison: summary.comparison)
+            let comparisonRows = receipts.values.flatMap(\.rows).filter { row in
+                (market.isEmpty || WatchedStock.parse(row.stockID)?.market.rawValue == market) && (stockID.isEmpty || row.stockID == stockID)
+                    && (day.isEmpty || StockForecastHistoryView.targetDay(StockBacktest.date(row.sessionStart), stockID: row.stockID) == day)
+            }
+            EvaluationComparisonView(rows: comparisonRows, models: run.models, selectedModels: $comparisonModels)
             let entries = run.cases.filter { (market.isEmpty || WatchedStock.parse($0.stockID)?.market.rawValue == market)
                 && (stockID.isEmpty || $0.stockID == stockID) && (day.isEmpty || $0.tradingDay == day) }
-            ForEach(entries, id: \.caseID) { entry in
-                DisclosureGroup("\(entry.stockID) · \(entry.tradingDay) · \(replayMessage(entry.status.rawValue))\(entry.reason.map { " · " + replayMessage($0) } ?? "")") {
-                    if let c = loaded.first(where: { $0.entry.caseID == entry.caseID }) {
-                        Text("\(L10n.t("Reference")): \(c.referenceID)").font(.caption)
-                        Text(c.rawDetail).font(.caption.monospaced()).textSelection(.enabled)
-                    } else { Text(L10n.t("Unavailable")) }
+            LazyVStack(alignment: .leading) {
+                ForEach(entries, id: \.caseID) { entry in
+                    DisclosureGroup(isExpanded: Binding(get: { rawCase == entry.caseID }, set: { open in
+                        rawCase = open ? entry.caseID : nil; rawDetail = nil
+                    })) {
+                        if let rawDetail { Text(rawDetail).font(.caption.monospaced()).textSelection(.enabled) }
+                        else { ProgressView(L10n.t("Loading saved results…")) }
+                    } label: {
+                        Text("\(entry.stockID) · \(entry.tradingDay) · \(replayMessage(entry.status.rawValue))\(entry.reason.map { " · " + replayMessage($0) } ?? "")")
+                    }
                 }
             }
+            .task(id: rawCase) {
+                guard let id = rawCase else { return }
+                let token = generation
+                do {
+                    let c = try await store.loadCase(runID: run.runID, caseID: id)
+                    guard !Task.isCancelled, generation == token, rawCase == id else { return }
+                    guard c.entry == entries.first(where: { $0.caseID == id }) else { throw CocoaError(.fileReadCorruptFile) }
+                    rawDetail = c.rawDetail
+                } catch { if !Task.isCancelled, generation == token { rawDetail = replayMessage("archive_unavailable") } }
+            }
             Button(L10n.t("Export evaluation CSV")) {
-                let details = Dictionary(uniqueKeysWithValues: loaded.filter { c in entries.contains { $0.caseID == c.entry.caseID } }.map { ($0.referenceID, $0.rawDetail) })
-                document = ForecastCSVDocument(text: EvaluationSummaryView.csv(rows: summary.rows, details: details)); exporting = true
-            }.disabled(loading)
+                guard completeKey == loadKey, !loading else { return }
+                let key = loadKey, token = generation
+                loading = true
+                Task {
+                    defer { if generation == token { loading = false } }
+                    do {
+                        var details: [String: String] = [:]
+                        for entry in entries {
+                            let c = try await store.loadCase(runID: run.runID, caseID: entry.caseID)
+                            guard generation == token, loadKey == key, completeKey == key else { return }
+                            guard c.entry == entry else { throw CocoaError(.fileReadCorruptFile) }
+                            details[c.referenceID] = c.rawDetail
+                        }
+                        guard generation == token, loadKey == key else { return }
+                        document = ForecastCSVDocument(text: EvaluationSummaryView.csv(rows: summary.rows, details: details)); exporting = true
+                    } catch { if generation == token { completeKey = ""; message = "archive_unavailable" } }
+                }
+            }.disabled(loading || completeKey != loadKey || message != nil)
         } else { Text(replayMessage("archive_unavailable")).foregroundStyle(.orange) }
     }
     private func execute(_ operation: @escaping @MainActor () async throws -> Void) {
@@ -132,6 +178,7 @@ struct StockBacktestView: View {
 
 func replayMessage(_ key: String) -> String {
     switch key {
+    case "session_too_short": L10n.t("Regular session is 60 minutes or less; excluded.")
     case "archive_unavailable": L10n.t("History could not be read. Original records are preserved; writes are blocked.")
     case "collection_cancelled": L10n.t("Replay paused. Resume is explicit.")
     case "authentication_paused": L10n.t("Replay paused. Check the selected provider credentials.")
@@ -195,9 +242,20 @@ struct EvaluationSummaryView: View {
 }
 
 struct EvaluationComparisonView: View {
-    let comparison: StockEvaluationComparison
+    let rows: [StockEvaluationRow]
+    let models: [String]
+    @Binding var selectedModels: Set<String>?
     var body: some View {
+        let chosen = selectedModels ?? Set(models)
+        let comparison = StockEvaluation.compare(rows, selectedModels: chosen)
         DisclosureGroup(L10n.t("Compare identical prediction inputs")) {
+            Text(L10n.t("Comparison models")).font(.headline)
+            ForEach(models, id: \.self) { model in
+                Toggle(model, isOn: Binding(get: { chosen.contains(model) }, set: { on in
+                    var selection = chosen; if on { selection.insert(model) } else { selection.remove(model) }; selectedModels = selection
+                }))
+            }
+            Text(L10n.t("Only completed records shared by every selected comparison model are compared, independently of the display model filter. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns."))
             Text("\(L10n.t("Paired samples")): \(comparison.pairedCount)")
             Text("\(L10n.t("Excluded conflicts / missing evidence")): \(comparison.excludedConflicts)/\(comparison.excludedMissingEvidence)")
             ForEach(comparison.rows, id: \.model) { row in

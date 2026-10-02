@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import CryptoKit
@@ -647,6 +648,25 @@ struct StockBacktestLoadedCase: Sendable {
     let rawDetail: String
 }
 
+struct StockBacktestReceipt: Sendable {
+    struct Outcome: Sendable { let model: String; let status: StockBacktestOutcome.Status; let reason: String? }
+    let runID: UUID
+    let referenceID: String
+    let entry: StockBacktestManifest.Entry
+    let inputSHA256: String?
+    let resultSHA256: String?
+    let rows: [StockEvaluationRow]
+    let outcomes: [Outcome]?
+    init(runID: UUID, loaded c: StockBacktestLoadedCase) throws {
+        self.runID = runID; referenceID = c.referenceID; entry = c.entry; inputSHA256 = c.inputSHA256; resultSHA256 = c.resultSHA256
+        if let result = c.result {
+            guard let data = c.caseData, let hash = c.inputSHA256 else { throw CocoaError(.fileReadCorruptFile) }
+            rows = try StockEvaluation.replayRows(runID: runID, caseData: data, result: result, inputSHA256: hash)
+            outcomes = result.outcomes.map { Outcome(model: $0.model, status: $0.status, reason: $0.reason) }
+        } else { rows = []; outcomes = nil }
+    }
+}
+
 @MainActor
 final class StockBacktestStore: ObservableObject {
     struct Progress: Equatable { var completed = 0; var total = 0 }
@@ -701,6 +721,8 @@ final class StockBacktestStore: ObservableObject {
                 self.errorMessage = "archive_unavailable"
             }
         }
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)
+            .sink { [weak self] _ in self?.cancel() }.store(in: &cancellables)
         preferences?.$stockSettingsRevision.dropFirst().sink { [weak self] _ in self?.cancel() }.store(in: &cancellables)
     }
     func cancel() { generation = UUID(); pageTask?.cancel() }
@@ -712,23 +734,29 @@ final class StockBacktestStore: ObservableObject {
         return try await Task.detached { try operation(archive) }.value
     }
     /// Pending/skipped and immutable source-only saved cases have no scored result.
-    func loadCase(runID: UUID, caseID: String) async throws -> StockBacktestLoadedCase {
+    func loadCase(runID: UUID, caseID: String, includeRaw: Bool = true) async throws -> StockBacktestLoadedCase {
         try Task.checkCancellation()
         let loaded = try await io { archive in
             let e = try archive.loadEntry(runID: runID, caseID: caseID)
             let c = e.status == .saved ? try archive.loadCase(runID: runID, caseID: caseID) : nil
             let body = e.status == .saved && e.resultSHA256 != nil ? try archive.loadResult(runID: runID, caseID: caseID) : nil
             let result = try body.map(StockBacktestArchive.decodeResult)
-            let detail: [String: Any] = ["entry": try StockBacktest.jsonObject(JSONEncoder().encode(e)),
-                "caseBody": c.map { String(decoding: $0.body, as: UTF8.self) as Any } ?? NSNull(),
-                "resultBody": body.map { String(decoding: $0, as: UTF8.self) as Any } ?? NSNull()]
-            let raw = try JSONSerialization.data(withJSONObject: detail, options: [.sortedKeys, .withoutEscapingSlashes])
+            var raw = Data()
+            if includeRaw {
+                let detail: [String: Any] = ["entry": try StockBacktest.jsonObject(JSONEncoder().encode(e)),
+                    "caseBody": c.map { String(decoding: $0.body, as: UTF8.self) as Any } ?? NSNull(),
+                    "resultBody": body.map { String(decoding: $0, as: UTF8.self) as Any } ?? NSNull()]
+                raw = try JSONSerialization.data(withJSONObject: detail, options: [.sortedKeys, .withoutEscapingSlashes])
+            }
             return StockBacktestLoadedCase(referenceID: "\(runID.uuidString.lowercased())/\(caseID)" + (c.map { "/" + $0.sha256 } ?? ""), entry: e, caseData: try c.map { try StockBacktest.decodeCase($0.body) }, result: result,
                 inputSHA256: c?.sha256, resultSHA256: body.map(StockBacktestArchive.hash), caseBody: c?.body,
                 resultBody: body, rawDetail: String(decoding: raw, as: UTF8.self))
         }
         try Task.checkCancellation()
         return loaded
+    }
+    func loadReceipt(runID: UUID, caseID: String) async throws -> StockBacktestReceipt {
+        try await StockBacktestReceipt(runID: runID, loaded: loadCase(runID: runID, caseID: caseID, includeRaw: false))
     }
     private func produceResult(runID: UUID, entry: StockBacktestManifest.Entry, models: [String], token: UUID, revision: Int) async throws -> (input: String, result: String) {
         try check(token, revision)
@@ -792,7 +820,7 @@ final class StockBacktestStore: ObservableObject {
     private func session(_ value: TradingSession?, market: WatchedStock.Market, fetchedAt: Int64) throws -> Session? {
         guard let value else { return nil }
         let start = Self.milliseconds(value.startTime), end = Self.milliseconds(value.endTime)
-        guard StockBacktest.time(start), StockBacktest.time(end), end - start > 3_600_000,
+        guard StockBacktest.time(start), StockBacktest.time(end), end > start,
               Self.day(start, market) == Self.day(end - 1, market) else { throw TossInvestAPI.Failure.invalidResponse }
         return Session(start: start, end: end, fetchedAt: fetchedAt)
     }
@@ -936,6 +964,7 @@ final class StockBacktestStore: ObservableObject {
     }
     private func collectCase(stock: WatchedStock, entry: StockBacktestManifest.Entry, session: Session,
                              request: @escaping Request, token: UUID, revision: Int) async throws -> StockBacktestCase {
+        guard session.end - session.start > 3_600_000 else { throw Skipped(reason: "session_too_short") }
         let cutoff = session.end - 3_600_000, endCursor = Self.iso(session.end)
         guard case .candles(let daily, let dailyNext, let dailyAt) = try await fetch(.candles(stock: stock, interval: "1d", before: endCursor, count: 200, adjusted: true),
             using: request, token: token, revision: revision) else { throw TossInvestAPI.Failure.invalidResponse }

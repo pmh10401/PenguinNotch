@@ -140,3 +140,13 @@ test('Task6 replay warning and selection labels have exact Korean copy on both p
     assert.equal(strings[key].localizations.ko.stringUnit.value,S.t('ko',key));
   }
 });
+
+
+test('final forecast comparison controls and short-session reasons preserve EN/KO meanings',()=>{
+ const S=require('../penguinnotch/ui/stocks.js');
+ for(const key of ['Comparison models','session_too_short','Excluded conflicts / missing evidence','Previous','Next']){
+  assert.notEqual(S.t('ko',key),key,key);assert.equal(S.t('en',key),key);
+ }
+ const controls=S.comparisonControls(['A','B','C'],['A','B'],'ko');
+ assert.match(controls,/비교 모델/);assert.match(controls,/value="A" checked/);assert.match(controls,/value="B" checked/);assert.doesNotMatch(controls,/value="C" checked/);
+});

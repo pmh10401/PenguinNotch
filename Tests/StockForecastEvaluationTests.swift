@@ -7,6 +7,34 @@ import Darwin
 @testable import PenguinNotch
 
 final class StockForecastEvaluationTests: XCTestCase {
+    @MainActor
+    func testFinalCompactReplayReceiptsAndComparisonControls() async throws {
+        let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/stock-forecast-evaluation-v1.json")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: fixtureURL)) as? [String: Any])
+        let cases = try XCTUnwrap(object["replayCases"] as? [[String: Any]])
+        let body = try JSONSerialization.data(withJSONObject: cases[0]["caseData"]!)
+        let c = try StockBacktest.decodeCase(body), hash = StockBacktestArchive.hash(body), runID = UUID()
+        let r = StockBacktestResult(version: 1, caseID: c.input.caseID, inputSHA256: hash, calculationVersion: "replay-v1", computedAt: c.target.fetchedAt,
+            outcomes: StockChartInterval.allCases.map { StockBacktest.predict(input: c.input, interval: $0) })
+        let entry = StockBacktestManifest.Entry(caseID: c.input.caseID, stockID: c.input.stockID, tradingDay: c.input.tradingDay, status: .saved,
+            inputSHA256: hash, resultSHA256: String(repeating: "b", count: 64), reason: nil)
+        let loaded = StockBacktestLoadedCase(referenceID: runID.uuidString, entry: entry, caseData: c, result: r, inputSHA256: hash,
+            resultSHA256: entry.resultSHA256, caseBody: body, resultBody: try JSONEncoder().encode(r), rawDetail: "ORIGINAL")
+        let compact = try StockBacktestReceipt(runID: runID, loaded: loaded)
+        XCTAssertEqual(compact.rows.count, 3); XCTAssertEqual(compact.outcomes?.count, 3)
+        XCTAssertEqual(compact.inputSHA256, hash)
+        let fields = Set(Mirror(reflecting: compact).children.compactMap(\.label))
+        XCTAssertTrue(fields.isDisjoint(with: ["caseData", "caseBody", "resultBody", "rawDetail", "result"]))
+        var rows = compact.rows; rows[2].actualClose = nil
+        XCTAssertEqual(StockEvaluation.compare(rows, selectedModels: Set(rows.prefix(2).map(\.model))).pairedCount, 1)
+        XCTAssertEqual(StockEvaluation.compare(rows, selectedModels: Set(rows.map(\.model))).pairedCount, 0)
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let ui = try String(contentsOf: root.appending(path: "Sources/Settings/StockBacktestView.swift"), encoding: .utf8)
+        XCTAssertTrue(ui.contains("LazyVStack")); XCTAssertTrue(ui.contains("store.loadReceipt(")); XCTAssertTrue(ui.contains(".task(id: rawCase)"))
+        XCTAssertTrue(ui.contains("completeKey != loadKey"))
+        XCTAssertTrue(ui.contains("@Binding var selectedModels: Set<String>?"))
+    }
+
     func testTask6UnifiedHistoryContract() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let settings = try String(contentsOf: root.appending(path: "Sources/Settings/StockSettings.swift"), encoding: .utf8)

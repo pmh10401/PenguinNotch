@@ -1,11 +1,11 @@
 import Foundation
 
-enum StockEvaluationSource: String, Codable, Hashable {
+enum StockEvaluationSource: String, Codable, Hashable, Sendable {
     case recorded, pairedCalculation, replay
 }
 
-struct StockEvaluationRow: Codable, Equatable {
-    struct Reference: Codable, Hashable {
+struct StockEvaluationRow: Codable, Equatable, Sendable {
+    struct Reference: Codable, Hashable, Sendable {
         let referenceID: String
         let source: StockEvaluationSource
     }
@@ -122,6 +122,11 @@ enum StockEvaluation {
     /// Acquisition denominators come from the manifest, never from invented forecast rows.
     static func replaySummary(manifest: StockBacktestManifest, loaded: [StockBacktestLoadedCase], selectedModels: Set<String>,
                               market: String? = nil, stockID: String? = nil, day: String? = nil) throws -> ReplaySummary {
+        try replaySummary(manifest: manifest, receipts: loaded.map { try StockBacktestReceipt(runID: manifest.runID, loaded: $0) },
+                          selectedModels: selectedModels, market: market, stockID: stockID, day: day)
+    }
+    static func replaySummary(manifest: StockBacktestManifest, receipts loaded: [StockBacktestReceipt], selectedModels: Set<String>,
+                              market: String? = nil, stockID: String? = nil, day: String? = nil) throws -> ReplaySummary {
         guard selectedModels.isSubset(of: Set(manifest.models)), Set(loaded.map { $0.entry.caseID }).count == loaded.count else {
             throw CocoaError(.fileReadCorruptFile)
         }
@@ -133,14 +138,14 @@ enum StockEvaluation {
         var rows: [StockEvaluationRow] = [], skips: [String: Int] = [:], unavailable = 0
         for e in entries where e.status == .saved {
             guard let c = byID[e.caseID] else { unavailable += 1; continue }
-            guard c.entry == e, c.inputSHA256 == e.inputSHA256 else { throw CocoaError(.fileReadCorruptFile) }
-            guard let r = c.result else { unavailable += 1; continue }
+            guard c.runID == manifest.runID, c.entry == e, c.inputSHA256 == e.inputSHA256 else { throw CocoaError(.fileReadCorruptFile) }
+            guard let outcomes = c.outcomes else { unavailable += 1; continue }
             guard c.resultSHA256 == e.resultSHA256, e.resultSHA256 != nil,
-                  Set(r.outcomes.map(\.model)) == Set(manifest.models), let data = c.caseData, let hash = c.inputSHA256 else {
+                  Set(outcomes.map(\.model)) == Set(manifest.models) else {
                 throw CocoaError(.fileReadCorruptFile)
             }
-            rows += try replayRows(runID: manifest.runID, caseData: data, result: r, inputSHA256: hash)
-            for o in r.outcomes where o.status == .skipped { skips[o.model, default: 0] += 1 }
+            rows += c.rows
+            for o in outcomes where o.status == .skipped { skips[o.model, default: 0] += 1 }
         }
         rows = rows.filter { selectedModels.contains($0.model) }
         let pending = entries.filter { $0.status == .pending }.count

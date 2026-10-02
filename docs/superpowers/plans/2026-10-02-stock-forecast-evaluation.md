@@ -10,7 +10,7 @@
 
 **Spec:** [승인된 설계](../specs/2026-10-02-stock-forecast-evaluation-design.md), 설계 커밋 `6b40e1c`. 2026-10-02 사용자의 “진행”으로 설계 검토 단계가 승인됐고 이후 승인 범위의 Task1–6 구현·각 독립 검토를 완료했다.
 
-**Status:** 개발 소스 1.25.0 / Mac66 / Windows r58의 Task7 오프라인 검증·문서·CI와 로컬 전달을 준비했다. Swift 전체 2,260개/8 skip/두 테스트의 17 assertion 실패 뒤 승인된 노트·Retina fixture 수정과 관련 8개 GREEN을 확인했으며 전체 검사를 반복하지 않았다. Rust245 통과/4 ignored·실패0과 최신 GNU all-target 컴파일을 확인했다. 정식 배포는 1.24.1을 유지한다. Step3의 선택적 실자료 probe는 안전한 비대화형 인증이 입증되지 않아 미수행이다. Step4의 문서는 준비하되 새 Task7 검토·전체 브랜치 독립 검토·공개 코드 Grok 검토는 controller가 후속 수행한다. 해당 단계는 검토 완료 전까지 체크하지 않는다. [S19](../../wiki/sources.md#s19)는 공개 fixture 검증과 미검증 범위를 구분한다.
+**Status:** 개발 소스 1.25.0 / Mac66 / Windows r58의 Task7 오프라인 검증·문서·CI와 로컬 전달을 준비했다. Swift 전체 2,260개/8 skip/두 테스트의 17 assertion 실패 뒤 승인된 노트·Retina fixture 수정과 관련 8개 GREEN을 확인했으며 전체 검사를 반복하지 않았다. Rust245 통과/4 ignored·실패0과 최신 GNU all-target 컴파일을 확인했다. 정식 배포는 1.24.1을 유지한다. Step3의 선택적 실자료 probe는 안전한 비대화형 인증이 입증되지 않아 미수행이다. Task7 검토·전체 브랜치 독립 검토·공개 코드 Grok 검토는 완료했고 F1–F6와 M2가 통합됐다. 단일 수정 wave 이후 controller가 기준 `45b1e5894667537bfa2c0797be8a33af9c4965a7` 이후 범위를 정확히 한 번 재검토하고 잔여 사항을 판단한다. 최종 수락 전까지 해당 단계는 체크하지 않는다. [S19](../../wiki/sources.md#s19)는 공개 fixture 검증과 미검증 범위를 구분한다.
 
 ## Global Constraints
 

@@ -616,6 +616,24 @@ enter paired comparisons; available and paired counts remain distinct. There is
 no ranking, automatic model adoption, replay LLM call or new account request.
 Manual Codex execution remains macOS-only.
 
+In the collapsed comparison panel, use **Comparison models** checkboxes independently
+of the display model filter. Select A+B and clear C to retain the A/B intersection;
+newly arriving models do not change an explicit selection. Conflict and missing-evidence
+exclusion counts remain visible. Replay summaries retain compact verified receipts;
+original JSON is read only when explicitly opening a case or exporting. One raw case
+is retained at a time, Windows pages show up to 100 cases, and CSV is unavailable until
+the selected read generation is complete. Export retains all original evidence and
+pending/skipped denominators for the selected filters.
+
+A valid official session of 60 minutes or less remains in the frozen requested dates
+as `session_too_short`; its candles are not requested. A short previous session still
+supplies its verified calendar identity. Invalid or unproved calendars fail closed.
+macOS pauses acquisition on the workspace sleep notification. Windows conservatively
+pauses at the next acquisition checkpoint after a gap longer than five seconds,
+including a delayed response; explicit **Resume replay** is required. This fallback
+can also pause slow requests and cannot detect interruptions of five seconds or less.
+Physical sleep/suspend delivery has not been tested. Hiding Settings keeps collection active.
+
 Replay files are separate from existing JSON/SQLite/CloseEstimates:
 `~/Library/Application Support/PenguinNotch/Forecasts/Backtests/<runUUID>/` on macOS,
 `%APPDATA%\penguinnotch\Forecasts\Backtests\<runUUID>\` on Windows. Each run keeps

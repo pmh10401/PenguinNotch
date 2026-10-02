@@ -149,7 +149,7 @@ function regular(day,market){
   if(!r)return null;
   if(!cursor(r.startTime)||!cursor(r.endTime))throw Error('Invalid calendar session');
   const start=Date.parse(r.startTime),end=Date.parse(r.endTime);
-  if(!time(start)||!time(end)||end-start<=3600000||S.dayKey(start,market)!==S.dayKey(end-1,market))throw Error('Invalid calendar session');
+  if(!time(start)||!time(end)||end<=start||S.dayKey(start,market)!==S.dayKey(end-1,market))throw Error('Invalid calendar session');
   return {start,end};
 }
 // Native transport owns the shared credentials/token/retry bounds. Bypass the live display gate.
@@ -172,7 +172,7 @@ class BacktestStore {
   constructor({invoke=root.__TAURI__?.core?.invoke,stockRequest,now=Date.now,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}){
     this.invoke=invoke;this.stockRequest=stockRequest||((r)=>publicRequest(this.invoke,r));this.now=now;this.sleep=sleep;
     this.runs=[];this.activeRunID=null;this.progress={completed:0,total:0};this.errorMessage=null;
-    this.listeners=new Set();this.generation=0;this.archiveRevision=0;this.revision=0;this.provider='toss';this.busy=false;this.lastRequestAt=null;
+    this.listeners=new Set();this.generation=0;this.archiveRevision=0;this.revision=0;this.provider='toss';this.busy=false;this.lastRequestAt=null;this.checkpointAt=null;
     const archiveRevision=this.archiveRevision;
     this.ready=archive('list',{},this.invoke).then(r=>{
       // Listing is independent of collection; current known rows win over the initial snapshot.
@@ -189,7 +189,10 @@ class BacktestStore {
     if(provider!==this.provider||revision!==this.revision)this.cancel();
     this.provider=provider;this.revision=revision;
   }
-  check(generation,revision){if(generation!==this.generation||revision!==this.revision||this.provider!=='toss')throw Error('collection_cancelled');}
+  check(generation,revision){
+    // ponytail: checkpoint gap over 5s pauses conservatively; native suspend delivery can replace this fallback.
+    const at=this.now();if(this.busy&&this.checkpointAt!==null&&at-this.checkpointAt>5000)this.cancel();this.checkpointAt=at;
+    if(generation!==this.generation||revision!==this.revision||this.provider!=='toss')throw Error('collection_cancelled');}
   async request(request,generation,revision){
     // A display/watchlist save advances native GEN. Retry that same frozen public request once;
     // provider/key changes cancel our generation first. Native auth/HTTP retries remain native-owned.
@@ -212,8 +215,11 @@ class BacktestStore {
   publish(m){this.archiveRevision++;const index=this.runs.findIndex(r=>r.runID===m.runID);if(index<0)this.runs.push(m);else this.runs[index]=m;
     this.progress={completed:m.cases.filter(e=>e.status!=='pending').length,total:m.cases.length};this.emit();}
   // Readonly original bytes + the same loadCase receipt; no typed reserialization hash.
-  async loadCase(runID,caseID){
-    const m=(await archive('loadManifest',{runID},this.invoke)).manifest,e=m.cases.find(e=>e.caseID===caseID);
+  async auditRun(runID){return (await archive('loadManifest',{runID},this.invoke)).manifest;}
+  async loadCase(runID,caseID,manifest=null,includeRaw=true){
+    // This read snapshot never authorizes writes; native selected reads validate their own strict header/hash/model binding.
+    const m=manifest??await this.auditRun(runID);if(!validManifest(m)||m.runID.toLowerCase()!==runID.toLowerCase())throw Error('Invalid replay binding');
+    const e=m.cases.find(e=>e.caseID===caseID);
     if(!e)throw Error('Invalid replay binding');
     const c=e.status==='saved'?await archive('loadCase',{runID,caseID},this.invoke):null;
     const r=e.status==='saved'&&e.resultSHA256!==null?await archive('loadResult',{runID,caseID},this.invoke):null;
@@ -221,7 +227,7 @@ class BacktestStore {
     if(c&&(c.sha256!==e.inputSHA256||caseData.input.stockID!==e.stockID||caseData.input.tradingDay!==e.tradingDay)
       ||r&&(r.sha256!==e.resultSHA256||!result||result.inputSHA256!==c.sha256||JSON.stringify([...result.outcomes.map(o=>o.model)].sort())!==JSON.stringify([...m.models].sort())))throw Error('Invalid replay binding');
     return {referenceID:`${runID.toLowerCase()}/${caseID}${c?'/'+c.sha256:''}`,entry:e,caseData,result,inputSHA256:c?.sha256??null,resultSHA256:r?.sha256??null,caseBody:c?.body??null,resultBody:r?.body??null,
-      rawDetail:JSON.stringify({entry:e,caseBody:c?.body??null,resultBody:r?.body??null})};
+      rawDetail:includeRaw?JSON.stringify({entry:e,caseBody:c?.body??null,resultBody:r?.body??null}):null};
   }
   async produceResult(m,e,generation,revision){
     this.check(generation,revision);
@@ -243,7 +249,7 @@ class BacktestStore {
     const stocks=Array.isArray(symbols)?symbols.map(s=>S.parseStock(typeof s==='string'?s:S.stockID(s))):[];
     if(![20,60,120].includes(sessions)||!stocks.length||stocks.length>30||stocks.some(s=>!s||s.symbol.includes('..'))||!unique(stocks.map(S.stockID)))throw Error('Invalid collection inputs');
     if(this.provider!=='toss')throw Error('Toss provider required');
-    this.busy=true;const generation=++this.generation,revision=this.revision,started=this.now();this.errorMessage=null;
+    this.checkpointAt=this.now();this.busy=true;const generation=++this.generation,revision=this.revision,started=this.now();this.errorMessage=null;
     const runID=root.crypto.randomUUID();this.activeRunID=runID;this.progress={completed:0,total:stocks.length*sessions};this.emit();
     let m=null;
     try{
@@ -274,7 +280,7 @@ class BacktestStore {
   }
   async resume(runID){
     if(this.busy)throw Error('collection_already_running');if(!uuid(runID))throw Error('Invalid run ID');
-    this.busy=true;const generation=++this.generation,revision=this.revision;this.errorMessage=null;this.activeRunID=runID;this.progress={completed:0,total:0};this.emit();let m=null;
+    this.checkpointAt=this.now();this.busy=true;const generation=++this.generation,revision=this.revision;this.errorMessage=null;this.activeRunID=runID;this.progress={completed:0,total:0};this.emit();let m=null;
     try{
       m=(await archive('loadManifest',{runID},this.invoke)).manifest;this.check(generation,revision);this.publish(m);
       if(m.status==='completed')return;
@@ -333,7 +339,7 @@ class BacktestStore {
     this.check(generation,revision);await archive('updateProgress',{runID:m.runID,entries:m.cases,status:'completed'},this.invoke);this.check(generation,revision);Object.assign(m,(await archive('loadManifest',{runID:m.runID},this.invoke)).manifest);this.check(generation,revision);this.publish(m);
   }
   async collectCase(stock,e,calendar,generation,revision){
-    const {start,end}=calendar.session,cutoff=end-3600000;
+    const {start,end}=calendar.session;if(end-start<=3600000)fail('session_too_short');const cutoff=end-3600000;
     const daily=await this.request({type:'candles',stock,interval:'1d',before:iso(end),count:200,adjusted:true},generation,revision);
     checkedBars(daily.values,iso(end));
     if(!(daily.nextBefore===null||cursor(daily.nextBefore)))fail('invalid_cursor');
@@ -381,6 +387,12 @@ function replayRows(runID,caseData,result,inputSHA256){
     lowerClose:o.forecast.lowerClose,upperClose:o.forecast.upperClose,riseProbability:o.forecast.riseProbability,actualClose:caseData.target.actualClose,
     references:[{referenceID:key,source:'replay'}]}));
 }
+// Only compact verified scores/status/hash references live in the UI. Original evidence is loaded on open/export.
+function compactReceipt(runID,c){
+  const rows=c.result?replayRows(runID,c.caseData,c.result,c.inputSHA256):[];
+  return {runID:runID.toLowerCase(),referenceID:c.referenceID,entry:c.entry,inputSHA256:c.inputSHA256,resultSHA256:c.resultSHA256,rows,
+    outcomes:c.result?.outcomes.map(({model,status,reason})=>({model,status,reason}))??null};
+}
 function evaluationCalibration(rows){
   return S.probabilityBinsForRows(S.coalescedEvaluationRows(rows).filter(r=>positive(r.actualClose)&&positive(r.previousClose)
     &&typeof r.riseProbability==='number'&&Number.isFinite(r.riseProbability)&&r.riseProbability>=0&&r.riseProbability<=1));
@@ -395,12 +407,12 @@ function replaySummary(manifest,loaded,selectedModels,{market,stockID,day}={}){
   const entries=manifest.cases.filter(e=>(!market||S.parseStock(e.stockID).market===market)&&(!stockID||e.stockID===stockID)&&(!day||e.tradingDay===day));
   const byID=new Map(loaded.map(c=>[c.entry.caseID,c])),skips=new Map();let rows=[],unavailable=0;
   for(const e of entries.filter(e=>e.status==='saved')){
-    const c=byID.get(e.caseID);if(!c){unavailable++;continue;}
-    if(!validEntry(c.entry)||Object.keys(e).some(k=>c.entry[k]!==e[k])||c.inputSHA256!==e.inputSHA256)throw Error('Invalid replay binding');
-    if(!c.result){unavailable++;continue;}
-    if(c.resultSHA256!==e.resultSHA256||!e.resultSHA256||JSON.stringify(c.result.outcomes.map(o=>o.model).sort())!==JSON.stringify([...manifest.models].sort()))throw Error('Invalid replay binding');
-    rows.push(...replayRows(manifest.runID,c.caseData,c.result,c.inputSHA256));
-    for(const o of c.result.outcomes.filter(o=>o.status==='skipped'))skips.set(o.model,(skips.get(o.model)||0)+1);
+    let c=byID.get(e.caseID);if(c&&Object.hasOwn(c,'caseData'))c=compactReceipt(manifest.runID,c);if(!c){unavailable++;continue;}
+    if(c.runID!==manifest.runID.toLowerCase()||!validEntry(c.entry)||Object.keys(e).some(k=>c.entry[k]!==e[k])||c.inputSHA256!==e.inputSHA256)throw Error('Invalid replay binding');
+    if(!c.outcomes){unavailable++;continue;}
+    if(c.resultSHA256!==e.resultSHA256||!e.resultSHA256||JSON.stringify(c.outcomes.map(o=>o.model).sort())!==JSON.stringify([...manifest.models].sort()))throw Error('Invalid replay binding');
+    rows.push(...c.rows);
+    for(const o of c.outcomes.filter(o=>o.status==='skipped'))skips.set(o.model,(skips.get(o.model)||0)+1);
   }
   rows=rows.filter(r=>models.includes(r.model));const pending=entries.filter(e=>e.status==='pending').length;
   return {rows,requested:entries.length,acquired:entries.filter(e=>e.status==='saved').length,pending,skipped:entries.filter(e=>e.status==='skipped').length,
@@ -476,23 +488,30 @@ function retainReplayWindow(win,store,visibility,error=()=>{}){
   return {ready,show(){hidden=false;visibility(true);},dispose:unsubscribe};
 }
 function mountBacktests(element,store,language=()=> 'en',symbols=()=>[]){
-  let selected='',sessions=60,filters={market:'',stockID:'',day:'',model:''},loaded=[],loadError='',loading=false,visible=true,signature='',generation=0;
+  let selected='',sessions=60,filters={market:'',stockID:'',day:'',model:''},loaded=[],loadError='',loading=false,visible=true,signature='',generation=0,completeSignature='',comparisonModels=null,page=0,exporting=false;
+  const raw=new Map(); // One explicitly opened original body at a time.
   const receipts=new Map();
   const tr=k=>S.esc(S.t(typeof language==='function'?language():language,k));
   const lang=()=>typeof language==='function'?language():language;
   const selectedRun=()=>store.runs.find(r=>r.runID===selected);
   async function load(){
+    if(!visible)return;
     const run=selectedRun(),key=JSON.stringify([run?.runID,run?.cases]);if(key===signature)return;
-    signature=key;const token=++generation;loaded=[];loadError='';loading=!!run;render();if(!run)return;
+    signature=key;completeSignature='';raw.clear();const token=++generation;loaded=[];loadError='';loading=!!run;render();if(!run)return;
+    let audited;
+    try{audited=await store.auditRun(run.runID);if(token!==generation)return;
+      if(JSON.stringify([audited.runID,audited.cases])!==key||JSON.stringify(audited.models)!==JSON.stringify(run.models))throw Error('Stale replay generation');
+    }catch(_){if(token===generation){loadError='archive_unavailable';loading=false;render();}return;}
     const next=[];
-    for(const entry of run.cases){
+    for(const entry of audited.cases){
       if(token!==generation)return;
       const id=entry.caseID;
-      try{let c=receipts.get(id);if(!c||JSON.stringify(c.entry)!==JSON.stringify(entry)){c=await store.loadCase(run.runID,entry.caseID);if(token!==generation)return;receipts.set(id,c);}next.push(c);}
+      try{let c=receipts.get(id);if(!c||JSON.stringify(c.entry)!==JSON.stringify(entry)){c=compactReceipt(run.runID,await store.loadCase(run.runID,entry.caseID,audited,false));if(token!==generation)return;receipts.set(id,c);}next.push(c);}
       catch(_){if(token===generation)loadError='archive_unavailable';}
+      if(next.length%32===0){loaded=next.slice();render();await new Promise(resolve=>setTimeout(resolve,0));}
     }
     if(token!==generation)return;
-    loaded=next;loading=false;render();
+    loaded=next;loading=false;if(!loadError)completeSignature=key;render();
   }
   function render(){
     if(!visible)return;
@@ -508,27 +527,50 @@ function mountBacktests(element,store,language=()=> 'en',symbols=()=>[]){
       element.innerHTML+=`<div class="stock-actions">${filter('market','Market',['us','kr'])}${filter('stockID','Stock',run.symbols)}${filter('day','Target day',[...new Set(run.cases.map(e=>e.tradingDay))].sort())}${filter('model','Model',run.models)}</div>`;
       try{
         const summary=replaySummary(run,loaded,filters.model?[filters.model]:run.models,filters);
-        element.innerHTML+=`<p>${tr('Acquired / requested')}: ${summary.acquired}/${summary.requested} · ${tr('Pending')}: ${summary.pending} · ${tr('Skipped')}: ${summary.skipped} · ${tr('Unavailable')}: ${summary.unavailable}</p>${loading?`<p role="status">${tr('Loading saved results…')}</p>`:''}${evaluationSummaryHTML(summary.rows,lang())}${summary.models.map(m=>`<p>${S.esc(m.model)} · ${tr('Evaluated')}: ${m.success} · ${tr('Skipped')}: ${m.skipped} · ${tr('Unavailable')}: ${m.unavailable}</p>`).join('')}<details data-stock-disclosure="replay-comparison"><summary>${tr('Compare identical prediction inputs')} · ${summary.comparison.pairedCount}</summary>${summary.comparison.rows.map(r=>`<p>${S.esc(r.model)} · MAPE ${evaluationPercent(r.paired.mape)} · Brier ${r.paired.brier??'—'}</p>`).join('')}<p>${tr('Excluded conflicts / missing evidence')}: ${summary.comparison.excludedConflicts}/${summary.comparison.excludedMissingEvidence}</p></details>`;
-        element.innerHTML+=entries.map(e=>{const c=loaded.find(c=>c.entry.caseID===e.caseID);return `<details data-stock-disclosure="replay-case:${S.esc(e.caseID)}"><summary>${S.esc(e.stockID)} · ${e.tradingDay} · ${tr(e.status)}${e.reason?' · '+tr(e.reason):''}</summary><p>${tr('Reference')}: ${S.esc(c?.referenceID||run.runID+'/'+e.caseID)}</p>${c?`<pre class="stock-raw">${S.esc(c.rawDetail)}</pre>`:`<p>${tr(e.status==='saved'?'Unavailable':'Pending')}</p>`}</details>`;}).join('');
-        element.innerHTML+='<button id="backtest-export">'+tr('Export evaluation CSV')+'</button>';
-        element.querySelector('#backtest-export').onclick=()=>downloadEvaluationCSV(summary.rows,Object.fromEntries(loaded.filter(c=>entries.some(e=>e.caseID===c.entry.caseID)).map(c=>[c.referenceID,c.rawDetail])));
+        const chosen=comparisonModels??run.models,comparison=replaySummary(run,loaded,chosen,filters).comparison;
+        const byID=new Map(loaded.map(c=>[c.entry.caseID,c]));
+        element.innerHTML+=`<p>${tr('Acquired / requested')}: ${summary.acquired}/${summary.requested} · ${tr('Pending')}: ${summary.pending} · ${tr('Skipped')}: ${summary.skipped} · ${tr('Unavailable')}: ${summary.unavailable}</p>${loading?`<p role="status">${tr('Loading saved results…')}</p>`:''}${evaluationSummaryHTML(summary.rows,lang())}${summary.models.map(m=>`<p>${S.esc(m.model)} · ${tr('Evaluated')}: ${m.success} · ${tr('Skipped')}: ${m.skipped} · ${tr('Unavailable')}: ${m.unavailable}</p>`).join('')}<details data-stock-disclosure="replay-comparison"><summary>${tr('Compare identical prediction inputs')} · ${comparison.pairedCount}</summary>${S.comparisonControls(run.models,chosen,lang(),'data-replay-comparison')}${comparison.rows.map(r=>`<p>${S.esc(r.model)} · MAPE ${evaluationPercent(r.paired.mape)} · Brier ${r.paired.brier??'—'}</p>`).join('')}<p>${tr('Excluded conflicts / missing evidence')}: ${comparison.excludedConflicts}/${comparison.excludedMissingEvidence}</p></details>`;
+        // Bounded keyed rows; collapsed cases contain no original JSON or minute-row DOM.
+        page=Math.min(page,Math.max(0,Math.ceil(entries.length/100)-1));
+        element.innerHTML+=entries.slice(page*100,(page+1)*100).map(e=>{const c=byID.get(e.caseID),body=raw.get(e.caseID);return `<details data-stock-disclosure="replay-case:${S.esc(e.caseID)}" data-replay-case="${S.esc(e.caseID)}"><summary>${S.esc(e.stockID)} · ${e.tradingDay} · ${tr(e.status)}${e.reason?' · '+tr(e.reason):''}</summary><p>${tr('Reference')}: ${S.esc(c?.referenceID||run.runID+'/'+e.caseID)}</p><div data-raw-body>${body?`<pre class="stock-raw">${S.esc(body)}</pre>`:''}</div></details>`;}).join('');
+        if(entries.length>100)element.innerHTML+=`<button id="backtest-prev" ${page?'':'disabled'}>${tr('Previous')}</button> ${page+1}/${Math.ceil(entries.length/100)} <button id="backtest-next" ${(page+1)*100<entries.length?'':'disabled'}>${tr('Next')}</button>`;
+        const snapshot=JSON.stringify([run.runID,run.cases]);
+        const ready=()=>!loading&&!loadError&&!exporting&&completeSignature===snapshot&&JSON.stringify([selectedRun()?.runID,selectedRun()?.cases])===snapshot;
+        element.innerHTML+=`<button id="backtest-export" ${ready()?'':'disabled'}>${tr('Export evaluation CSV')}</button>`;
+        element.querySelector('#backtest-export').onclick=async()=>{
+          if(!ready())return;const token=generation;exporting=true;render();
+          try{const details={};for(const e of entries){const c=await store.loadCase(run.runID,e.caseID,run);if(token!==generation||completeSignature!==snapshot)return;details[c.referenceID]=c.rawDetail;}
+            if(token===generation&&completeSignature===snapshot)downloadEvaluationCSV(summary.rows,details);
+          }catch(_){if(token===generation){loadError='archive_unavailable';completeSignature='';}}
+          finally{exporting=false;render();}
+        };
+        element.querySelectorAll('[data-replay-comparison]').forEach(e=>e.onchange=()=>{comparisonModels=new Set(chosen);if(e.checked)comparisonModels.add(e.value);else comparisonModels.delete(e.value);comparisonModels=[...comparisonModels];render();});
+        element.querySelectorAll('[data-replay-case]').forEach(node=>node.ontoggle=async()=>{
+          if(!node.isConnected)return;const id=node.dataset.replayCase;if(!node.open){raw.delete(id);node.querySelector('[data-raw-body]').textContent='';return;}
+          if(raw.has(id))return;raw.clear();element.querySelectorAll('[data-replay-case]').forEach(other=>{if(other!==node){other.open=false;other.querySelector('[data-raw-body]').textContent='';}});
+          const token=generation;
+          try{const c=await store.loadCase(run.runID,id,run);if(token!==generation||!node.open||!node.isConnected)return;
+            raw.set(id,c.rawDetail);const pre=document.createElement('pre');pre.className='stock-raw';pre.textContent=c.rawDetail;node.querySelector('[data-raw-body]').replaceChildren(pre);
+          }catch(_){if(token===generation&&node.isConnected)node.querySelector('[data-raw-body]').textContent=S.t(lang(),'archive_unavailable');}
+        });
+        const prev=element.querySelector('#backtest-prev'),next=element.querySelector('#backtest-next');if(prev)prev.onclick=()=>{page--;raw.clear();render();};if(next)next.onclick=()=>{page++;raw.clear();render();};
       }catch(_){element.innerHTML+=`<p role="alert" class="stock-error">${tr('archive_unavailable')}</p>`;}
     }else element.innerHTML+=`<p>${tr('No historical replay runs.')}</p>`;
     element.querySelector('#backtest-sessions').onchange=e=>sessions=+e.target.value;
     element.querySelector('#backtest-start').onclick=()=>{void store.start({symbols:stocks,sessions}).catch(()=>{});};
     element.querySelector('#backtest-cancel').onclick=()=>store.cancel();
-    element.querySelector('#backtest-run').onchange=e=>{selected=e.target.value;receipts.clear();filters={market:'',stockID:'',day:'',model:''};void load();render();};
+    element.querySelector('#backtest-run').onchange=e=>{selected=e.target.value;completeSignature='';comparisonModels=null;page=0;raw.clear();receipts.clear();filters={market:'',stockID:'',day:'',model:''};void load();render();};
     const resume=element.querySelector('#backtest-resume');if(resume)resume.onclick=()=>{void store.resume(selected).catch(()=>{});};
-    element.querySelectorAll('[data-replay-filter]').forEach(e=>e.onchange=()=>{filters[e.dataset.replayFilter]=e.value;render();});
+    element.querySelectorAll('[data-replay-filter]').forEach(e=>e.onchange=()=>{filters[e.dataset.replayFilter]=e.value;page=0;raw.clear();render();});
     restore();
     const next=focused?.id?element.querySelector('#'+focused.id):focused?[...element.querySelectorAll('details[data-stock-disclosure]')].find(node=>node.dataset.stockDisclosure===focused.disclosure)?.querySelector(':scope > summary'):null;
     next?.focus({preventScroll:true});
   }
-  const unsubscribe=store.subscribe(()=>{render();void load();});
-  return {render(){render();void load();},show(value){visible=value;if(value){render();void load();}},dispose(){generation++;receipts.clear();unsubscribe();}};
+  const unsubscribe=store.subscribe(()=>{if(!selected&&store.runs.length)selected=store.runs.at(-1).runID;void load();render();});
+  return {render(){render();void load();},show(value){visible=value;if(!value){generation++;signature='';completeSignature='';loading=false;raw.clear();}else{render();void load();}},dispose(){generation++;raw.clear();receipts.clear();unsubscribe();}};
 }
 
-const api={mountBacktests,retainReplayWindow,REPLAY_WARNING,evaluationGroups,evaluationSummaryHTML,groupedEvaluationCSV,downloadEvaluationCSV,PRICE_BASIS,validInput,validCase,predictReplay,validManifest,validResult,archive,BacktestStore,replayRows,evaluationCalibration,filteredEvaluationRows,replaySummary,evaluationCSV};
+const api={compactReceipt,mountBacktests,retainReplayWindow,REPLAY_WARNING,evaluationGroups,evaluationSummaryHTML,groupedEvaluationCSV,downloadEvaluationCSV,PRICE_BASIS,validInput,validCase,predictReplay,validManifest,validResult,archive,BacktestStore,replayRows,evaluationCalibration,filteredEvaluationRows,replaySummary,evaluationCSV};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 root.PenguinNotchBacktests=api;
 })(globalThis);

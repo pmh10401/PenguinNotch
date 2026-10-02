@@ -393,7 +393,7 @@ async function task6ReplayUI(page){
   await page.locator('[data-stock-disclosure^="replay-case:"] summary').click();
   assert.match(await page.locator('.stock-raw').textContent(),/insufficient_daily_history/);
   // A late failed read from the previous selection cannot contaminate the current run.
-  await page.evaluate(()=>{window.originalCaseLoader=stockBacktestStore.loadCase.bind(stockBacktestStore);stockBacktestStore.loadCase=(run,id)=>run==='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'?new Promise((_,reject)=>window.rejectStaleLoad=()=>reject(Error('public stale read'))):originalCaseLoader(run,id);});
+  await page.evaluate(()=>{window.originalCaseLoader=stockBacktestStore.loadCase.bind(stockBacktestStore);stockBacktestStore.loadCase=(run,id,...rest)=>run==='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'?new Promise((_,reject)=>window.rejectStaleLoad=()=>reject(Error('public stale read'))):originalCaseLoader(run,id,...rest);});
   await page.locator('#backtest-run').selectOption('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   await page.locator('#backtest-run').selectOption('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   await page.waitForFunction(()=>document.getElementById('stock-replay').textContent.includes('Skipped: 1')&&!document.getElementById('stock-replay').textContent.includes('Loading saved results'));
@@ -453,6 +453,101 @@ async function task6ReviewFixUI(page,check){
   },{manifest,sample,result,hash,resultHash});
   await page.locator('#tab-stocks').click();await page.locator('#stock-tab-history').click();await page.locator('#stock-history-replay').click();
   await page.waitForFunction(()=>document.querySelectorAll('.stock-evaluation').length===3&&!document.getElementById('stock-replay').textContent.includes('Loading saved results'));
+  if(check==='final'){
+    const multi=await page.evaluate(async({manifest,sample,result,hash,resultHash})=>{
+      const m=structuredClone(manifest),bodies=new Map(),ops=[];m.symbols=[];m.cases=[];
+      for(let n=0;n<5;n++){
+        const stockID='us:F'+n,caseID='us_F'+n+'_'+sample.input.tradingDay,c=structuredClone(sample),r=structuredClone(result);
+        c.input.stockID=stockID;c.input.caseID=caseID;r.caseID=caseID;m.symbols.push(stockID);
+        m.cases.push({...manifest.cases[0],stockID,caseID});bodies.set(caseID,{c,r});
+      }
+      const owner=new PenguinNotchBacktests.BacktestStore({invoke:async(_,args)=>{
+        const q=args.request;ops.push(q.action);
+        if(q.action==='list')return {type:'manifests',manifests:[m]};if(q.action==='loadManifest')return {type:'manifest',manifest:m};
+        const b=bodies.get(q.caseID);if(q.action==='loadCase')return {type:'body',body:JSON.stringify(b.c),sha256:hash};
+        if(q.action==='loadResult')return {type:'body',body:JSON.stringify(b.r),sha256:resultHash};throw Error('unexpected public UI write');
+      }});await owner.ready;
+      const host=document.createElement('div');document.body.append(host);const view=PenguinNotchBacktests.mountBacktests(host,owner);
+      for(let n=0;n<100&&host.querySelector('#backtest-export')?.disabled;n++)await new Promise(r=>setTimeout(r,10));
+      const before=ops.length;owner.emit();view.render();await Promise.resolve();
+      const receipt={ops,extra:ops.length-before,raw:host.querySelectorAll('.stock-raw').length,cases:host.querySelectorAll('[data-replay-case]').length,exportReady:!host.querySelector('#backtest-export').disabled};
+      view.show(false);owner.emit();await Promise.resolve();receipt.hiddenExtra=ops.length-before;view.dispose();host.remove();return receipt;
+    },{manifest,sample,result,hash,resultHash});
+    assert.equal(multi.ops.filter(a=>a==='loadManifest').length,1);
+    assert.equal(multi.ops.filter(a=>a==='loadCase').length,5);assert.equal(multi.ops.filter(a=>a==='loadResult').length,5);
+    assert.equal(multi.raw,0);assert.equal(multi.cases,5);assert.equal(multi.extra,0);assert.equal(multi.hiddenExtra,0);assert.equal(multi.exportReady,true);
+    assert.equal(await page.locator('.stock-raw').count(),0,'collapsed original evidence has no raw DOM');
+    assert.equal(await page.evaluate(()=>calls.filter(c=>c.cmd==='stock_backtest_archive'&&c.args.request.action==='loadManifest').length),1,'one full audit per summary read generation');
+    const caseReads=await page.evaluate(()=>calls.filter(c=>c.cmd==='stock_backtest_archive'&&c.args.request.action==='loadCase').length);
+    await page.evaluate(()=>stockBacktestStore.emit());
+    assert.equal(await page.evaluate(()=>calls.filter(c=>c.cmd==='stock_backtest_archive'&&c.args.request.action==='loadCase').length),caseReads,'closed repeated render does not read raw');
+    const raw=page.locator('[data-replay-case]');await raw.locator('summary').click();
+    await page.waitForSelector('.stock-raw');assert.match(await page.locator('.stock-raw').textContent(),/minutePages/);
+    assert.equal(await page.evaluate(()=>calls.filter(c=>c.cmd==='stock_backtest_archive'&&c.args.request.action==='loadCase').length),caseReads+1);
+    await raw.locator('summary').click();await page.waitForFunction(()=>document.querySelectorAll('.stock-raw').length===0);
+    // A new read generation is delayed at the actual selected evidence loader.
+    await page.evaluate(({manifest,sample,result,hash,resultHash})=>{
+      window.originalLoader=stockBacktestStore.loadCase.bind(stockBacktestStore);
+      window.delayedReads=[];stockBacktestStore.loadCase=(...args)=>new Promise(resolve=>{window.releaseFinalRead=()=>originalLoader(...args).then(resolve);delayedReads.push(releaseFinalRead);});
+      const m={...manifest,runID:'cccccccc-cccc-4ccc-8ccc-cccccccccccc'};replayManifests.push(m);
+      replayBodies[m.runID+'/'+sample.input.caseID]={loadCase:{body:JSON.stringify(sample)+' \n',sha256:hash},loadResult:{body:JSON.stringify(result)+' \n',sha256:resultHash}};
+      stockBacktestStore.runs=replayManifests;stockBacktestStore.emit();
+      window.exported=[];URL.createObjectURL=blob=>{window.exported.push(blob.text());return 'blob:PUBLIC-FIXTURE';};
+      HTMLAnchorElement.prototype.click=function(){};
+    },{manifest,sample,result,hash,resultHash});
+    await page.locator('#backtest-run').selectOption('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    await page.waitForFunction(()=>typeof releaseFinalRead==='function');
+    assert.equal(await page.locator('#backtest-export').isEnabled(),false,'delayed generation cannot export');
+    await page.locator('#backtest-run').selectOption(runID);
+    await page.waitForFunction(()=>typeof releaseFinalRead==='function');
+    // Resolve current selected read, then finish exporting every original byte.
+    await page.waitForFunction(()=>delayedReads.length===2);
+    assert.equal(await page.locator('#backtest-export').isEnabled(),false,'new selection is also loading');
+    await page.evaluate(()=>{delayedReads[1]();stockBacktestStore.loadCase=originalLoader;});
+    await page.waitForFunction(()=>!document.getElementById('backtest-export').disabled);
+    await page.evaluate(async()=>{await delayedReads[0]();await Promise.resolve();});
+    assert.equal(await page.evaluate(()=>exported.length),0,'stale completed read never downloads');
+    await page.locator('#backtest-export').click();await page.waitForFunction(()=>exported.length===1);
+    const csv=await page.evaluate(async()=>await exported[0]);assert.match(csv,/minutePages/);assert.match(csv,/replay-v1/);
+    // C has an unavailable outcome; A+B use the actual controls and remain independent of display filters.
+    await page.evaluate(({models,result})=>{
+      const r=structuredClone(result);r.outcomes[2]={model:models[2],status:'skipped',reason:'insufficient_intraday_history',forecast:null};
+      replayBodies['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/'+r.caseID].loadResult.body=JSON.stringify(r);
+      const m=replayManifests[0];m.cases[0].resultSHA256='d'.repeat(64);
+      replayBodies[m.runID+'/'+r.caseID].loadResult.sha256='d'.repeat(64);stockBacktestStore.emit();
+    },{models,result});
+    await page.waitForFunction(()=>!document.getElementById('backtest-export').disabled);
+    const comparison=page.locator('[data-stock-disclosure="replay-comparison"]');await comparison.locator(':scope > summary').click();
+    assert.match(await comparison.locator(':scope > summary').textContent(),/0/);
+    await comparison.locator('input').nth(2).uncheck();
+    assert.match(await comparison.locator(':scope > summary').textContent(),/1/);
+    await page.locator('#backtest-model').selectOption(models[2]);
+    assert.equal(await comparison.locator('input').nth(2).isChecked(),false);
+    assert.match(await comparison.locator(':scope > summary').textContent(),/1/);
+    // Saved records: explicit A+B, C pending, new model D does not erase the chosen subset.
+    const f=require('../../Tests/Fixtures/stock-forecast-evaluation-v1.json');
+    const base=f.records[0],records=['A','B','C'].map(model=>({...structuredClone(base),model,actualClose:model==='C'?null:base.actualClose}));
+    await page.evaluate(records=>{stockSettingsStore.history={version:1,trends:[],forecasts:records};stockSettingsView.render();},records);
+    await page.locator('#stock-history-saved').click();
+    const saved=page.locator('[data-stock-disclosure="comparison"]');await saved.locator(':scope > summary').click();
+    await saved.locator('input[value="C"]').uncheck();
+    assert.match(await saved.textContent(),/n=1/);
+    await page.locator('#stock-history-filter-model').selectOption('C');assert.match(await saved.textContent(),/n=1/);
+    await page.evaluate(record=>{stockSettingsStore.history.forecasts.push({...record,model:'D',actualClose:null});stockSettingsView.render();},base);
+    assert.equal(await saved.locator('input[value="D"]').isChecked(),false);assert.match(await saved.textContent(),/n=1/);
+    await page.evaluate(record=>{stockSettingsStore.history.forecasts.push({...record,model:'A',evidence:null,createdAt:record.createdAt+1,quoteAt:record.quoteAt+1});stockSettingsView.render();},base);
+    assert.match(await saved.textContent(),/Excluded conflicts \/ missing evidence.*0\/1/s);
+    const helpEN='Only completed records shared by every selected comparison model are compared, independently of the display model filter. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns.';
+    const helpKO='표시 모델 필터와 별개로, 선택한 모든 비교 모델이 공유하는 평가 완료 기록만 비교합니다. 종목, 체결 시각, 입력 가격, 일봉 근거, 정규장, 기록 방식이 같아야 합니다. 짝이 없는 기록은 두 오차 열 모두에서 제외합니다.';
+    const nativeStrings=JSON.parse(fs.readFileSync(path.join(root,'../../../Sources/Localizable.xcstrings'),'utf8'));
+    assert.equal(nativeStrings.strings[helpEN].localizations.ko.stringUnit.value,helpKO,'native Korean uses the exact same selected-model and pairing contract');
+    assert.ok(fs.readFileSync(path.join(root,'../../../Sources/Settings/StockBacktestView.swift'),'utf8').includes('Text(L10n.t("'+helpEN+'"))'),'native selected comparison calls that exact localized help');
+    assert.equal(await saved.getByText(helpEN,{exact:true}).count(),1,'English help names selected comparison models and retains pairing constraints');
+    await page.evaluate(()=>setUiLanguage('ko'));assert.match(await saved.textContent(),/충돌 \/ 근거 누락 제외/);
+    assert.equal(await saved.getByText(helpKO,{exact:true}).count(),1,'Korean help names selected comparison models and retains pairing constraints');
+    console.log('PASS final F1/F2/F3/F4/M2 actual settings controls, audit/read counts, lazy raw, delayed export and explicit subset');
+    return;
+  }
   if(check==='focus'){
     const summary=page.locator('.stock-evaluation details > summary').first();await summary.focus();
     const key=await summary.evaluate(e=>e.parentElement.dataset.stockDisclosure);

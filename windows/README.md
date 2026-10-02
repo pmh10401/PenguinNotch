@@ -153,6 +153,24 @@ require the selected models' identical frozen inputs and targets; available and
 paired denominators are separate. No ranking, automatic adoption, replay LLM call
 or new account request is added.
 
+In the collapsed comparison panel, use **Comparison models** checkboxes independently
+of the display model filter. Select A+B and clear C to retain the A/B intersection;
+newly arriving models do not change an explicit selection. Conflict and missing-evidence
+exclusion counts remain visible. Replay summaries retain compact verified receipts;
+original JSON is read only when explicitly opening a case or exporting. One raw case
+is retained at a time, Windows pages show up to 100 cases, and CSV is unavailable until
+the selected read generation is complete. Export retains all original evidence and
+pending/skipped denominators for the selected filters.
+
+A valid official session of 60 minutes or less remains in the frozen requested dates
+as `session_too_short`; its candles are not requested. A short previous session still
+supplies its verified calendar identity. Invalid or unproved calendars fail closed.
+macOS pauses acquisition on the workspace sleep notification. Windows conservatively
+pauses at the next acquisition checkpoint after a gap longer than five seconds,
+including a delayed response; explicit **Resume replay** is required. This fallback
+can also pause slow requests and cannot detect interruptions of five seconds or less.
+Physical sleep/suspend delivery has not been tested. Hiding Settings keeps collection active.
+
 Runs live in `%APPDATA%\penguinnotch\Forecasts\Backtests\<runUUID>\`, separately
 from SQLite and earlier history. The manifest binds original case/result bytes by
 SHA-256; corruption preserves originals and blocks writes. Evaluation CSV retains

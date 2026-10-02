@@ -623,3 +623,86 @@ test('Task6 fix1 cancelled retry is bounded and provider/key cancellation cannot
     assert.equal(calls,1,'provider/key changes stop before the paced retry');
   }
 });
+
+test('final F5 interruption during spacing or a late public reply pauses until explicit resume',async t=>{
+ for(const at of ['wait','reply']){
+  const f=collectorFixture(t,{mode:'partial'});let clock=f.now(),interrupted=false;
+  const owner=new B.BacktestStore({invoke:f.invoke,now:()=>clock,
+   sleep:async ms=>{clock+=ms;if(at==='wait'&&!interrupted){interrupted=true;clock+=1800000;}},
+   stockRequest:async r=>{const reply=await f.stockRequest(r);if(at==='reply'&&!interrupted){interrupted=true;clock+=1800000;}return reply;}});
+  await owner.ready;await assert.rejects(()=>owner.start({symbols:[f.stock],sessions:20}));
+  assert.equal(owner.errorMessage,'collection_cancelled');assert.equal(f.calls.length,1);
+ }
+});
+test('final F6 short official target retains dates and denominator; previous short identity is usable',async t=>{
+ const f=collectorFixture(t,{mode:'partial'}),shortDay='2026-09-24';
+ const owner=new B.BacktestStore({invoke:f.invoke,now:f.now,sleep:f.sleep,stockRequest:async r=>{
+  const reply=await f.stockRequest(r);if(r.type==='calendar')for(const key of ['today','previousBusinessDay']){
+   const session=reply.value[key].regularMarket;if(S.dayKey(Date.parse(session.startTime),'us')===shortDay)session.endTime=new Date(Date.parse(session.startTime)+3600000).toISOString();
+  }return reply;
+ }});await owner.ready;await owner.start({symbols:[f.stock],sessions:20});
+ const m=owner.runs[0];assert.equal(m.status,'completed');assert.equal(m.cases.length,20);
+ const skipped=m.cases.find(e=>e.tradingDay===shortDay);assert.equal(skipped.status,'skipped');assert.equal(skipped.reason,'session_too_short');
+ assert.equal(m.cases.find(e=>e.tradingDay==='2026-09-25').status,'saved');
+ assert.equal(f.calls.filter(c=>c.request.type==='candles'&&S.dayKey(Date.parse(c.request.before),'us')===shortDay).length,0);
+});
+test('final F1 compact receipts keep verified rows/status/hashes without raw minute arrays',async t=>{
+ const f=collectorFixture(t,{mode:'partial'});await f.store.start({symbols:[f.stock],sessions:20});
+ const m=f.store.runs[0],raw=await f.store.loadCase(m.runID,m.cases[0].caseID),compact=B.compactReceipt(m.runID,raw);
+ assert.equal(compact.inputSHA256,raw.inputSHA256);assert.equal(compact.rows.length,2);
+ for(const key of ['caseData','caseBody','resultBody','rawDetail','result'])assert.equal(Object.hasOwn(compact,key),false);
+ const summary=B.replaySummary(m,[compact],m.models);assert.equal(summary.acquired,20);assert.equal(summary.unavailable,19);
+});
+
+test('final F2 one audit generation plus linear selected reads never authorizes native writes',async t=>{
+ const f=collectorFixture(t,{mode:'partial'});await f.store.start({symbols:[f.stock],sessions:20});
+ f.writes.length=0;const m=await f.store.auditRun(f.store.runs[0].runID),receipts=[];
+ for(const entry of m.cases)receipts.push(B.compactReceipt(m.runID,await f.store.loadCase(m.runID,entry.caseID,m,false)));
+ assert.equal(f.writes.filter(([action])=>action==='loadManifest').length,1);
+ assert.equal(f.writes.filter(([action])=>action==='loadCase').length,20);
+ assert.equal(f.writes.filter(([action])=>action==='loadResult').length,20);
+ assert.equal(B.replaySummary(m,receipts,m.models).unavailable,0);
+ const before=f.writes.length;
+ const bad=copy(m);bad.cases[0].inputSHA256='f'.repeat(64);
+ await assert.rejects(()=>f.store.loadCase(m.runID,bad.cases[0].caseID,bad));
+ assert.ok(f.writes.slice(before).every(([action])=>action.startsWith('load')));
+});
+test('final F5 suspension after a saved case discards late reply; explicit resume preserves it',async t=>{
+ const f=collectorFixture(t,{mode:'partial'});let offset=0,interrupted=false;
+ const owner=new B.BacktestStore({invoke:f.invoke,now:()=>f.now()+offset,sleep:f.sleep,stockRequest:async r=>{
+  const reply=await f.stockRequest(r);
+  if(r.type==='candles'&&!interrupted&&[...f.manifests.values()][0]?.cases.some(e=>e.status==='saved')){interrupted=true;offset=1800000;}
+  return reply;
+ }});await owner.ready;await assert.rejects(()=>owner.start({symbols:[f.stock],sessions:20}));
+ const m=owner.runs[0],first=m.cases[0];assert.equal(m.status,'paused');assert.equal(first.status,'saved');assert.equal(m.cases[1].status,'pending');
+ const original=await owner.loadCase(m.runID,first.caseID);
+ await owner.resume(m.runID);assert.equal(owner.runs[0].status,'completed');
+ const reused=await owner.loadCase(m.runID,first.caseID);assert.equal(reused.caseBody,original.caseBody);assert.equal(reused.resultBody,original.resultBody);
+});
+test('final F6 malformed calendars still fail closed before any frozen manifest',async t=>{
+ for(const mode of ['reversed','cross-day','ambiguous']){
+  const f=collectorFixture(t);const owner=new B.BacktestStore({invoke:f.invoke,now:f.now,sleep:f.sleep,stockRequest:async r=>{
+   const reply=await f.stockRequest(r);if(r.type==='calendar'){
+    const regular=reply.value.today.regularMarket;
+    regular.endTime=mode==='ambiguous'?'invalid':new Date(Date.parse(regular.startTime)+(mode==='reversed'?-1:86400000)).toISOString();
+   }return reply;
+  }});await owner.ready;await assert.rejects(()=>owner.start({symbols:[f.stock],sessions:20}));assert.equal(owner.runs.length,0);
+  assert.equal(f.writes.some(([action])=>action==='create'),false);
+ }
+});
+
+test('final F6 resume freezes positive 30-minute exclusions without shortening the run',async t=>{
+ const f=collectorFixture(t,{mode:'partial'});let auth=true,short=false;
+ const owner=new B.BacktestStore({invoke:f.invoke,now:f.now,sleep:f.sleep,stockRequest:async r=>{
+  if(auth&&r.type==='candles')throw Error('Stock HTTP 401');
+  const reply=await f.stockRequest(r);if(short&&r.type==='calendar')for(const key of ['today','previousBusinessDay']){
+   const session=reply.value[key].regularMarket;if(S.dayKey(Date.parse(session.startTime),'us')==='2026-09-24')session.endTime=new Date(Date.parse(session.startTime)+1800000).toISOString();
+  }return reply;
+ }});await owner.ready;await assert.rejects(()=>owner.start({symbols:[f.stock],sessions:20}));
+ const id=owner.runs[0].runID;auth=false;short=true;await owner.resume(id);const m=owner.runs[0];
+ assert.equal(owner.runs[0].status,'completed');assert.equal(owner.runs[0].cases.length,20);
+ assert.equal(owner.runs[0].cases.find(e=>e.tradingDay==='2026-09-24').reason,'session_too_short');
+ const receipts=[];for(const entry of m.cases)receipts.push(B.compactReceipt(m.runID,await owner.loadCase(m.runID,entry.caseID,m,false)));
+ const summary=B.replaySummary(m,receipts,m.models);assert.equal(summary.requested,20);assert.equal(summary.skipped,1);assert.equal(summary.acquired,19);
+ assert.throws(()=>B.replaySummary({...m,runID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'},receipts,m.models));
+});

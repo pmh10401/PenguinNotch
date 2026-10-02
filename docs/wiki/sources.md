@@ -295,3 +295,12 @@ cargo check --locked --offline --manifest-path windows/Cargo.toml --workspace --
 ```
 
 Swift 실패 원본·집중 GREEN·정확한 명령/종료 코드·로그/해시·겹치는 Node/browser 근거는 로컬 Task7 report에 보존합니다. 전용 Xcode/Rust 캐시는 삭제하지 않고 종료 후 controller에 반환합니다.
+
+
+## S20
+
+검증일: 2026-10-03 · 수정 기준: `45b1e5894667537bfa2c0797be8a33af9c4965a7` · 정식 버전 1.24.1 유지
+
+- 최종 통합 검토의 F1–F6와 M2를 하나의 수정 wave로 처리합니다. 작은 검증 receipt·명시적 원문 읽기, generation당 audit 1회와 기존 selected-read 검사, 완결 generation CSV, 독립 비교 모델 체크박스·제외 건수, 잠자기 일시 중단, 짧은 공식 세션의 제외 분모를 다룹니다. 기존 손상 전체-list/write/resume 정책과 native 저장 검증은 유지합니다.
+- 공개 fixture의 Swift backtest/evaluation와 네이티브 화면 밖 렌더, Node 및 실제 설정 페이지의 모의 IPC 검사 근거는 `.superpowers/sdd/2026-10-02-stock-forecast-evaluation/final-fix-report.md`에 보존합니다. Rust 소스/IPC는 변경하지 않으며 S19의 검사 결과를 재사용합니다. 이 기록은 공급자 성능·모델 순위·실제 Windows 실행·physical suspend의 증거가 아닙니다.
+- Windows의 5초 초과 checkpoint 간격 감지는 느린 요청도 중단할 수 있으며 짧은 suspend는 놓칠 수 있습니다. 사용자 Resume가 필요합니다. controller가 기준 커밋 이후의 정확히 한 번의 scoped 재검토와 잔여 판단을 담당합니다.
