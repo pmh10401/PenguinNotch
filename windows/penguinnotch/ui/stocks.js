@@ -205,8 +205,12 @@ function chartEstimate(record,bars,interval,now) {
   if(!validForecast(record)||!record.evidence||record.createdAt>now||now>=record.sessionEnd||now-record.quoteAt>120000) return null;
   const session={start:record.sessionStart,end:record.sessionEnd};
   if(interval==='1d') return estimate(record.inputPrice,record.evidence.closes.map(c=>c.price),session,record.quoteAt);
-  const duration=interval==='1m'?60000:600000,completed=completedBars(bars,record.quoteAt,interval,session),last=completed.at(-1);
-  if(!last||record.quoteAt-last.end>duration+120000) return null;
+  return intradayEstimate(record.inputPrice,record.previousClose,bars,session,record.quoteAt,interval);
+}
+function intradayEstimate(price,previous,bars,trading,at,interval) {
+  if(!['1m','10m'].includes(interval)||!trading||!(trading.start<=at&&at<trading.end)) return null;
+  const duration=interval==='1m'?60000:600000,completed=completedBars(bars,at,interval,trading),last=completed.at(-1);
+  if(!last||at-last.end>duration+120000) return null;
   const returns=[];
   for(let i=completed.length-1;i>0;i--){
     if(Math.abs(completed[i].end-completed[i-1].end-duration)>=10) break;
@@ -215,7 +219,7 @@ function chartEstimate(record,bars,interval,now) {
   if(returns.length<10) return null;
   const mean=returns.reduce((n,r)=>n+r,0)/returns.length;
   const variance=returns.reduce((n,r)=>n+(r-mean)**2,0)/(returns.length-1);
-  return distribution(record.inputPrice,record.previousClose,variance*(record.sessionEnd-record.quoteAt)/duration,returns.length);
+  return distribution(price,previous,variance*(trading.end-at)/duration,returns.length);
 }
 function technical(bars,interval,market,fetchedAt,now,record=null) {
   if(!Number.isFinite(fetchedAt)||fetchedAt>now||now-fetchedAt>TTL[interval]+120000||!bars.length||!validBars(bars)) return null;
@@ -1096,7 +1100,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
   render();
   return {render,show(visible,moveFocus=true){store.visible=visible;settingsHidden=!visible;if(!visible){clearCredentialInputs();store.clearViewer(false);renderViewer();}void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();if(moveFocus)requestAnimationFrame(()=>element.querySelector('#stock-tab-'+activeTab)?.focus({preventScroll:true}));void store.tick();}}};
 }
-const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,evaluationRows,coalescedEvaluationRows,evaluationMetrics,evaluationComparison,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
+const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,intradayEstimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,evaluationRows,coalescedEvaluationRows,evaluationMetrics,evaluationComparison,score,compareModels,probabilityBins,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 else root.PenguinNotchStocks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

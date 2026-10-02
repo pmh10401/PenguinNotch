@@ -129,10 +129,19 @@ struct StockForecast {
             return estimate(price: record.inputPrice, completedCloses: evidence.closes.map(\.price),
                             trading: trading, now: record.quoteAt)
         }
+        return intradayEstimate(price: record.inputPrice, previous: record.previousClose, bars: minutes,
+                                trading: trading, at: record.quoteAt, interval: interval)
+    }
+
+    /// Pure intraday calculation shared by live charts and validated historical inputs.
+    static func intradayEstimate(price: Decimal, previous: Decimal, bars: [StockCandle],
+                                 trading: TradingSession, at: Date, interval: StockChartInterval) -> StockForecast? {
+        guard interval != .day, trading.contains(at), trading.duration > 0,
+              price > 0, previous > 0 else { return nil }
         let duration: TimeInterval = interval == .minute ? 60 : 600
-        let bars = StockQuoteCodec.completedRegularBars(minutes, trading: trading,
-                                                        through: record.quoteAt, interval: interval)
-        guard let last = bars.last, record.quoteAt.timeIntervalSince(last.end) <= duration + 120 else { return nil }
+        let bars = StockQuoteCodec.completedRegularBars(bars, trading: trading,
+                                                        through: at, interval: interval)
+        guard let last = bars.last, at.timeIntervalSince(last.end) <= duration + 120 else { return nil }
         var returns: [Double] = []
         for (next, prior) in zip(bars.dropFirst(), bars).reversed() {
             guard abs(next.end.timeIntervalSince(prior.end) - duration) < 0.01 else { break }
@@ -143,8 +152,8 @@ struct StockForecast {
         guard returns.count >= 10 else { return nil }
         let mean = returns.reduce(0, +) / Double(returns.count)
         let perBar = returns.reduce(0) { $0 + pow($1 - mean, 2) } / Double(returns.count - 1)
-        let remaining = trading.endTime.timeIntervalSince(record.quoteAt) / duration
-        return distribution(price: record.inputPrice, previous: record.previousClose,
+        let remaining = trading.endTime.timeIntervalSince(at) / duration
+        return distribution(price: price, previous: previous,
                             variance: perBar * remaining, observations: returns.count)
     }
 
