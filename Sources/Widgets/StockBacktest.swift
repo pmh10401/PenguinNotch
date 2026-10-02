@@ -212,9 +212,45 @@ enum StockBacktest {
         }
         return row
     }
+    /// Key-only scan before lossy Foundation parsing; stdlib still validates the JSON grammar.
+    static func jsonObject(_ data: Data) throws -> Any {
+        guard data.count <= 2 * 1024 * 1024, String(data: data, encoding: .utf8) != nil else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let bytes = Array(data)
+        var stack: [(opening: UInt8, keys: Set<String>)] = [], i = 0
+        let decoder = JSONDecoder()
+        while i < bytes.count {
+            switch bytes[i] {
+            case 123, 91: // object / array
+                guard stack.count < 512 else { throw CocoaError(.fileReadCorruptFile) }
+                stack.append((bytes[i], [])); i += 1
+            case 125, 93:
+                guard let frame = stack.popLast(), frame.opening == (bytes[i] == 125 ? 123 : 91) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                i += 1
+            case 34:
+                let start = i; i += 1
+                while i < bytes.count, bytes[i] != 34 { i += bytes[i] == 92 ? 2 : 1 }
+                guard i < bytes.count else { throw CocoaError(.fileReadCorruptFile) }
+                i += 1
+                var next = i
+                while next < bytes.count, [9, 10, 13, 32].contains(bytes[next]) { next += 1 }
+                if next < bytes.count, bytes[next] == 58 {
+                    guard stack.last?.opening == 123 else { throw CocoaError(.fileReadCorruptFile) }
+                    let key = try decoder.decode(String.self, from: Data(bytes[start..<i]))
+                    guard stack[stack.count - 1].keys.insert(key).inserted else { throw CocoaError(.fileReadCorruptFile) }
+                }
+            default: i += 1
+            }
+        }
+        guard stack.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+        return try JSONSerialization.jsonObject(with: data)
+    }
     /// JSON boundary for later callers; reject unknown fields before Codable can discard them.
     static func decodeCase(_ data: Data) throws -> StockBacktestCase {
-        let object = try JSONSerialization.jsonObject(with: data)
+        let object = try jsonObject(data)
         let body = try keys(object, ["version", "input", "target", "source"])
         let input = try keys(body["input"], ["version", "caseID", "stockID", "market", "currency", "tradingDay",
             "sessionStart", "sessionEnd", "cutoff", "inputBarEnd", "inputPrice", "previousClose", "priceBasis", "dailyCloses", "minutes"])
@@ -263,10 +299,6 @@ struct StockBacktestArchive {
     static let models = ["GBM daily zero drift v1 / replay v1", "GBM 1m zero drift v1 / replay v1", "GBM 10m zero drift v1 / replay v1"]
     private static func invalid() -> CocoaError { CocoaError(.fileReadCorruptFile) }
     static func hash(_ body: Data) -> String { SHA256.hash(data: body).map { String(format: "%02x", $0) }.joined() }
-    private static func object(_ body: Data) throws -> Any {
-        guard body.count <= limit, String(data: body, encoding: .utf8) != nil else { throw invalid() }
-        return try JSONSerialization.jsonObject(with: body)
-    }
     private static func digest(_ text: String?) -> Bool {
         text.map { $0.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil } ?? true
     }
@@ -284,7 +316,7 @@ struct StockBacktestArchive {
         return formatter.date(from: day).map { formatter.string(from: $0) == day } ?? false
     }
     static func decodeManifest(_ body: Data) throws -> StockBacktestManifest {
-        let row = try StockBacktest.keys(object(body), ["version", "runID", "createdAt", "collectionStartedAt", "collectionCompletedAt",
+        let row = try StockBacktest.keys(StockBacktest.jsonObject(body), ["version", "runID", "createdAt", "collectionStartedAt", "collectionCompletedAt",
             "protocolVersion", "codeVersion", "priceBasis", "cutoffMinutes", "sessions", "symbols", "models", "status", "cases"])
         guard let entries = row["cases"] as? [Any] else { throw invalid() }
         for entry in entries { _ = try StockBacktest.keys(entry, ["caseID", "stockID", "tradingDay", "status", "inputSHA256", "resultSHA256", "reason"]) }
@@ -313,7 +345,7 @@ struct StockBacktestArchive {
         return m
     }
     static func decodeResult(_ body: Data) throws -> StockBacktestResult {
-        let row = try StockBacktest.keys(object(body), ["version", "caseID", "inputSHA256", "calculationVersion", "computedAt", "outcomes"])
+        let row = try StockBacktest.keys(StockBacktest.jsonObject(body), ["version", "caseID", "inputSHA256", "calculationVersion", "computedAt", "outcomes"])
         guard let outcomes = row["outcomes"] as? [Any] else { throw invalid() }
         for value in outcomes {
             let outcome = try StockBacktest.keys(value, ["model", "status", "reason", "forecast"])
@@ -388,6 +420,7 @@ struct StockBacktestArchive {
         let fd = openat(dir, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         if fd < 0, errno == ENOENT { return nil }
         guard fd >= 0 else { throw Self.invalid() }; defer { Darwin.close(fd) }
+        try fault?("read:" + name)
         var info = stat()
         guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_nlink == 1,
               info.st_size >= 0, info.st_size <= Self.limit else { throw Self.invalid() }
@@ -426,17 +459,43 @@ struct StockBacktestArchive {
         }
         guard fsync(dir) == 0 else { throw Self.invalid() }
     }
-    private func run<T>(_ root: Int32, _ id: UUID, _ operation: (Int32, StockBacktestManifest) throws -> T) throws -> T {
+    private typealias Inventory = (cases: [String: String], results: [String: String])
+    private func withManifest<T>(_ root: Int32, _ id: UUID, _ operation: (Int32, StockBacktestManifest) throws -> T) throws -> T {
         let dir = try folder(root, id.uuidString.lowercased()); defer { Darwin.close(dir) }
         guard let body = try read(dir, "manifest.json") else { throw Self.invalid() }
         let m = try Self.decodeManifest(body); guard m.runID == id else { throw Self.invalid() }
-        try integrity(dir, m)
         return try operation(dir, m)
     }
-    private func integrity(_ dir: Int32, _ m: StockBacktestManifest) throws {
-        guard try names(dir).allSatisfy({ ["manifest.json", "cases", "results"].contains($0) || $0.hasPrefix(".tmp-") }) else { throw Self.invalid() }
-        for name in try names(dir) where name.hasPrefix(".tmp-") { _ = try read(dir, name) }
+    private func run<T>(_ root: Int32, _ id: UUID, _ operation: (Int32, StockBacktestManifest, Inventory) throws -> T) throws -> T {
+        try withManifest(root, id) { dir, m in try operation(dir, m, integrity(dir, m)) }
+    }
+    private func caseHash(_ body: Data, _ e: StockBacktestManifest.Entry) throws -> String {
+        let c = try StockBacktest.decodeCase(body), hash = Self.hash(body)
+        guard e.status != .skipped, c.input.caseID == e.caseID, c.input.stockID == e.stockID,
+              c.input.tradingDay == e.tradingDay, e.inputSHA256 == nil || e.inputSHA256 == hash else { throw Self.invalid() }
+        return hash
+    }
+    private func resultHash(_ body: Data, _ e: StockBacktestManifest.Entry, inputHash: String, models: [String]) throws -> String {
+        let r = try Self.decodeResult(body), hash = Self.hash(body)
+        guard e.status != .skipped, r.caseID == e.caseID, r.inputSHA256 == inputHash,
+              Set(r.outcomes.map(\.model)) == Set(models),
+              e.resultSHA256 == nil || e.resultSHA256 == hash else { throw Self.invalid() }
+        return hash
+    }
+    private func checkHashes(_ m: StockBacktestManifest, _ inventory: Inventory) throws {
+        for e in m.cases {
+            if let h = e.inputSHA256, h != inventory.cases[e.caseID] { throw Self.invalid() }
+            if let h = e.resultSHA256, h != inventory.results[e.caseID] { throw Self.invalid() }
+            if e.status == .skipped, inventory.cases[e.caseID] != nil || inventory.results[e.caseID] != nil { throw Self.invalid() }
+        }
+    }
+    private func integrity(_ dir: Int32, _ m: StockBacktestManifest) throws -> Inventory {
+        for name in try names(dir) {
+            guard ["manifest.json", "cases", "results"].contains(name) || name.hasPrefix(".tmp-") else { throw Self.invalid() }
+            if name.hasPrefix(".tmp-") { _ = try read(dir, name) }
+        }
         var caseHashes: [String: String] = [:], resultHashes: [String: String] = [:]
+        let entries = Dictionary(uniqueKeysWithValues: m.cases.map { ($0.caseID, $0) })
         for kind in ["cases", "results"] {
             let sub = try folder(dir, kind); defer { Darwin.close(sub) }
             for name in try names(sub) {
@@ -444,22 +503,17 @@ struct StockBacktestArchive {
                 if name.hasPrefix(".tmp-") { continue } // Crash leftovers are preserved, never used as evidence.
                 guard name.hasSuffix(".json") else { throw Self.invalid() }
                 let id = String(name.dropLast(5))
-                guard let entry = m.cases.first(where: { $0.caseID == id }), entry.status != .skipped else { throw Self.invalid() }
+                guard let entry = entries[id] else { throw Self.invalid() }
                 if kind == "cases" {
-                    _ = try Self.object(body); let c = try StockBacktest.decodeCase(body)
-                    guard c.input.caseID == id, c.input.stockID == entry.stockID, c.input.tradingDay == entry.tradingDay else { throw Self.invalid() }
-                    caseHashes[id] = Self.hash(body)
+                    caseHashes[id] = try caseHash(body, entry)
                 } else {
-                    let r = try Self.decodeResult(body)
-                    guard r.caseID == id, r.inputSHA256 == caseHashes[id], Set(r.outcomes.map(\.model)) == Set(m.models) else { throw Self.invalid() }
-                    resultHashes[id] = Self.hash(body)
+                    guard let inputHash = caseHashes[id] else { throw Self.invalid() }
+                    resultHashes[id] = try resultHash(body, entry, inputHash: inputHash, models: m.models)
                 }
             }
         }
-        for e in m.cases {
-            if let h = e.inputSHA256, h != caseHashes[e.caseID] { throw Self.invalid() }
-            if let h = e.resultSHA256, h != resultHashes[e.caseID] { throw Self.invalid() }
-        }
+        let inventory = (cases: caseHashes, results: resultHashes)
+        try checkHashes(m, inventory); return inventory
     }
     func list() throws -> [StockBacktestManifest] {
         var info = stat()
@@ -469,7 +523,7 @@ struct StockBacktestArchive {
         return try locked { root in
             try names(root).map { name in
                 guard let id = UUID(uuidString: name), name == id.uuidString.lowercased() else { throw Self.invalid() }
-                return try run(root, id) { _, m in m }
+                return try run(root, id) { _, m, _ in m }
             }.sorted { $0.createdAt < $1.createdAt }
         }
     }
@@ -478,7 +532,7 @@ struct StockBacktestArchive {
         try locked(create: true) { root in
             let id = manifest.runID.uuidString.lowercased()
             if try names(root).contains(id) {
-                try run(root, manifest.runID) { _, old in guard old == manifest else { throw Self.invalid() } }; return
+                try run(root, manifest.runID) { _, old, _ in guard old == manifest else { throw Self.invalid() } }; return
             }
             guard manifest.status == .ready, manifest.cases.allSatisfy({ $0.status == .pending }) else { throw Self.invalid() }
             let dir = try folder(root, id, create: true); defer { Darwin.close(dir) }
@@ -487,11 +541,11 @@ struct StockBacktestArchive {
         }
     }
     func loadManifest(runID: UUID) throws -> StockBacktestManifest {
-        try locked { root in try run(root, runID) { _, m in m } }
+        try locked { root in try run(root, runID) { _, m, _ in m } }
     }
     func saveCase(runID: UUID, body: Data) throws -> String {
-        _ = try Self.object(body); let c = try StockBacktest.decodeCase(body)
-        return try locked { root in try run(root, runID) { dir, m in
+        let c = try StockBacktest.decodeCase(body)
+        return try locked { root in try run(root, runID) { dir, m, _ in
             guard let e = m.cases.first(where: { $0.caseID == c.input.caseID }), e.status != .skipped,
                   e.stockID == c.input.stockID, e.tradingDay == c.input.tradingDay else { throw Self.invalid() }
             let sub = try folder(dir, "cases"); defer { Darwin.close(sub) }
@@ -501,14 +555,17 @@ struct StockBacktestArchive {
     }
     func loadCase(runID: UUID, caseID: String) throws -> (body: Data, sha256: String) {
         guard Self.safeCaseID(caseID) else { throw Self.invalid() }
-        return try locked { root in try run(root, runID) { dir, _ in
+        // Selected reads bind strict manifest identity and selected bytes; resume/writes still audit every payload.
+        return try locked { root in try withManifest(root, runID) { dir, m in
+            guard let e = m.cases.first(where: { $0.caseID == caseID }) else { throw Self.invalid() }
             let sub = try folder(dir, "cases"); defer { Darwin.close(sub) }
-            guard let body = try read(sub, caseID + ".json") else { throw Self.invalid() }; return (body, Self.hash(body))
+            guard let body = try read(sub, caseID + ".json") else { throw Self.invalid() }
+            return (body, try caseHash(body, e))
         } }
     }
     func saveResult(runID: UUID, body: Data) throws -> String {
         let r = try Self.decodeResult(body)
-        return try locked { root in try run(root, runID) { dir, m in
+        return try locked { root in try run(root, runID) { dir, m, _ in
             guard m.cases.contains(where: { $0.caseID == r.caseID && $0.status != .skipped }), Set(r.outcomes.map(\.model)) == Set(m.models) else { throw Self.invalid() }
             let cases = try folder(dir, "cases"); defer { Darwin.close(cases) }
             guard let input = try read(cases, r.caseID + ".json"), Self.hash(input) == r.inputSHA256 else { throw Self.invalid() }
@@ -519,13 +576,20 @@ struct StockBacktestArchive {
     }
     func loadResult(runID: UUID, caseID: String) throws -> Data? {
         guard Self.safeCaseID(caseID) else { throw Self.invalid() }
-        return try locked { root in try run(root, runID) { dir, m in
-            guard m.cases.contains(where: { $0.caseID == caseID }) else { throw Self.invalid() }
-            let sub = try folder(dir, "results"); defer { Darwin.close(sub) }; return try read(sub, caseID + ".json")
+        return try locked { root in try withManifest(root, runID) { dir, m in
+            guard let e = m.cases.first(where: { $0.caseID == caseID }) else { throw Self.invalid() }
+            let sub = try folder(dir, "results"); defer { Darwin.close(sub) }
+            guard let body = try read(sub, caseID + ".json") else {
+                guard e.resultSHA256 == nil else { throw Self.invalid() }; return nil
+            }
+            let cases = try folder(dir, "cases"); defer { Darwin.close(cases) }
+            guard let input = try read(cases, caseID + ".json") else { throw Self.invalid() }
+            _ = try resultHash(body, e, inputHash: caseHash(input, e), models: m.models)
+            return body
         } }
     }
     func updateProgress(runID: UUID, entries: [StockBacktestManifest.Entry], status: StockBacktestManifest.Status) throws {
-        try locked { root in try run(root, runID) { dir, old in
+        try locked { root in try run(root, runID) { dir, old, inventory in
             guard entries.count == old.cases.count else { throw Self.invalid() }
             for (a, b) in zip(old.cases, entries) {
                 guard a.caseID == b.caseID, a.stockID == b.stockID, a.tradingDay == b.tradingDay,
@@ -536,7 +600,7 @@ struct StockBacktestArchive {
                 next.collectionCompletedAt = Int64(Date().timeIntervalSince1970 * 1000)
             }
             guard old.status != .completed || next == old else { throw Self.invalid() }
-            let body = try encoded(next); try integrity(dir, next)
+            let body = try encoded(next); try checkHashes(next, inventory)
             if next != old { try write(dir, "manifest.json", body: body, replace: true) }
         } }
     }

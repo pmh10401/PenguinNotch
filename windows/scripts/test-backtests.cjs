@@ -144,3 +144,47 @@ test('independent target-proof/input metadata pages are valid but still bounded 
   const c=copy(samples[0].caseData);c.source.minutePages.push({before:'2026-09-25T20:00:00Z',nextBefore:'2026-09-25T19:59:00Z',fetchedAt:c.target.fetchedAt});
   assert.equal(B.validCase(c),true);c.source.minutePages=Array(9).fill(c.source.minutePages[0]);assert.equal(B.validCase(c),false);
 });
+
+
+function duplicateJSON(body,key,value,first,escaped=false){
+  const k=escaped?'"\\u'+key.charCodeAt(0).toString(16).padStart(4,'0')+key.slice(1)+'"':JSON.stringify(key);
+  const member=k+':'+JSON.stringify(value);
+  return first?'{'+member+','+body.slice(1):body.slice(0,-1)+','+member+'}';
+}
+test('duplicate decoded raw keys cannot reach native IPC or hide in raw native replies',async()=>{
+  const c=samples[0].caseData,r=result(),body=JSON.stringify(c),rb=JSON.stringify(r);
+  let calls=0;globalThis.__TAURI__={core:{invoke:async()=>{calls++;return {type:'receipt',sha256:'a'.repeat(64)};}}};
+  for(const first of [false,true])for(const escaped of [false,true]){
+    for(const field of ['token','accountSeq','quantity']){
+      const raw=duplicateJSON(body,'source',{...c.source,[field]:'SYNTHETIC_ONLY'},first,escaped);
+      assert.equal(Object.keys(JSON.parse(raw)).length,Object.keys(c).length);
+      await assert.rejects(()=>B.archive('saveCase',{runID,body:raw}));
+    }
+    const outcome={...r.outcomes[0],forecast:{...r.outcomes[0].forecast,quantity:'SYNTHETIC_ONLY'}};
+    const rawResult=duplicateJSON(rb,'outcomes',[outcome],first,escaped);
+    await assert.rejects(()=>B.archive('saveResult',{runID,body:rawResult}));
+    const rawInput=duplicateJSON(JSON.stringify(c.input),'caseID',c.input.caseID,first,escaped);
+    const nestedCase=body.replace(JSON.stringify(c.input),rawInput);
+    await assert.rejects(()=>B.archive('saveCase',{runID,body:nestedCase}));
+    const forecast=JSON.stringify(r.outcomes[0].forecast);
+    const rawForecast=duplicateJSON(forecast,'observations',60,first,escaped);
+    await assert.rejects(()=>B.archive('saveResult',{runID,body:rb.replace(forecast,rawForecast)}));
+  }
+  assert.equal(calls,0);
+  globalThis.__TAURI__.core.invoke=async()=>({type:'body',body:duplicateJSON(body,'source',c.source,false,true),sha256:'a'.repeat(64)});
+  await assert.rejects(()=>B.archive('loadCase',{runID,caseID:c.input.caseID}));
+  delete globalThis.__TAURI__;
+});
+test('raw scan handles escaped string punctuation and whitespace before decoded aliases',async()=>{
+  const c=copy(samples[0].caseData);
+  c.source.minutePages[0].before='2026-09-25T19:00:00.000Z';
+  const body=JSON.stringify(c).replace('"provider":','"pro\\u0076ider" \n\t:');
+  let calls=0;globalThis.__TAURI__={core:{invoke:async()=>{calls++;return {type:'receipt',sha256:'a'.repeat(64)};}}};
+  await B.archive('saveCase',{runID,body});
+  const alias=body.replace('"pro\\u0076ider" \n\t:', '"provider":"toss","pro\\u0076ider" \n\t:');
+  await assert.rejects(()=>B.archive('saveCase',{runID,body:alias}));
+  // Invalid semantic values must still be refused after strings with escaped quotes/braces are scanned.
+  const quoted=JSON.stringify({...c,source:{...c.source,provider:'x\\"}:[{'}});
+  await assert.rejects(()=>B.archive('saveCase',{runID,body:quoted}));
+  assert.equal(calls,1);delete globalThis.__TAURI__;
+});

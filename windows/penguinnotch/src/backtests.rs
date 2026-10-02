@@ -684,13 +684,14 @@ mod posix {
             io(Err(std::io::Error::last_os_error()))
         }
     }
-    pub fn open(dir: &File, name: &str, folder: bool, create: bool) -> Result<File> {
-        let name = c(name)?;
+    pub fn open(dir: &File, name: &str, folder: bool, create: bool) -> std::io::Result<File> {
+        let name = CString::new(name)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
         if folder && create {
             let r = unsafe { mkdirat(dir.as_raw_fd(), name.as_ptr(), 0o700) };
             if r != 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::AlreadyExists
             {
-                ret(r)?;
+                return Err(std::io::Error::last_os_error());
             }
         }
         let flags = NOFOLLOW
@@ -703,7 +704,7 @@ mod posix {
             };
         let fd = unsafe { openat(dir.as_raw_fd(), name.as_ptr(), flags, 0o600u32) };
         if fd < 0 {
-            return io(Err(std::io::Error::last_os_error()));
+            return Err(std::io::Error::last_os_error());
         }
         Ok(unsafe { File::from_raw_fd(fd) })
     }
@@ -761,7 +762,7 @@ mod posix {
         ret(unsafe { unlinkat(dir.as_raw_fd(), c(name)?.as_ptr(), 0) })
     }
     pub fn names(dir: &File) -> Result<Vec<String>> {
-        let copy = open(dir, ".", true, false)?;
+        let copy = io(open(dir, ".", true, false))?;
         let stream = unsafe { fdopendir(copy.as_raw_fd()) };
         check(!stream.is_null())?;
         std::mem::forget(copy); // fdopendir owns the descriptor after success.
@@ -812,7 +813,7 @@ fn single_link(file: &File) -> Result<()> {
     check(info.nNumberOfLinks == 1)
 }
 #[cfg(windows)]
-fn windows_open(path: &Path, directory: bool, create: bool) -> Result<File> {
+fn windows_open(path: &Path, directory: bool, create: bool) -> std::io::Result<File> {
     use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
     use windows::Win32::Storage::FileSystem::{
         FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
@@ -833,11 +834,12 @@ fn windows_open(path: &Path, directory: bool, create: bool) -> Result<File> {
     if create && !directory {
         options.create_new(true);
     }
-    let f = io(options.open(path))?;
-    let m = io(f.metadata())?;
-    check(m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 == 0 && m.is_dir() == directory)?;
+    let f = options.open(path)?;
+    let m = f.metadata()?;
+    check(m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 == 0 && m.is_dir() == directory)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     if !directory {
-        single_link(&f)?;
+        single_link(&f).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     }
     Ok(f)
 }
@@ -878,10 +880,10 @@ impl Directory {
                             Err(e) => return io(Err(e)),
                         }
                     }
-                    parents.push(windows_open(&partial, true, false)?);
+                    parents.push(io(windows_open(&partial, true, false))?);
                 }
             }
-            let file = windows_open(path, true, false)?;
+            let file = io(windows_open(path, true, false))?;
             Ok(Self {
                 file,
                 path: path.to_owned(),
@@ -894,7 +896,7 @@ impl Directory {
         let path = self.path.join(name);
         #[cfg(unix)]
         {
-            let file = posix::open(&self.file, name, true, create)?;
+            let file = io(posix::open(&self.file, name, true, create))?;
             Ok(Self { file, path })
         }
         #[cfg(windows)]
@@ -912,13 +914,15 @@ impl Directory {
             }
             parents.push(io(self.file.try_clone())?);
             Ok(Self {
-                file: windows_open(&path, true, false)?,
+                file: io(windows_open(&path, true, false))?,
                 path,
                 _parents: parents,
             })
         }
     }
     fn names(&self) -> Result<Vec<String>> {
+        #[cfg(test)]
+        tests::NAMES.with(|n| n.set(n.get() + 1));
         #[cfg(unix)]
         {
             posix::names(&self.file)
@@ -935,16 +939,21 @@ impl Directory {
                 .collect()
         }
     }
-    // ponytail: scan for absent files; preserve typed native open errors instead if large runs make scans costly.
     fn read(&self, name: &str) -> Result<Option<Vec<u8>>> {
-        if !self.names()?.iter().any(|n| n == name) {
-            return Ok(None);
-        }
         #[cfg(unix)]
-        let f = posix::open(&self.file, name, false, false)?;
+        let opened = posix::open(&self.file, name, false, false);
         #[cfg(windows)]
-        let f = windows_open(&self.path.join(name), false, false)?;
+        let opened = windows_open(&self.path.join(name), false, false);
+        let f = match opened {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return io(Err(e)),
+        };
         let m = io(f.metadata())?;
+        #[cfg(test)]
+        if name.ends_with(".json") && name != "manifest.json" {
+            tests::READS.with(|n| n.set(n.get() + 1));
+        }
         check(m.is_file() && m.len() <= LIMIT as u64)?;
         #[cfg(unix)]
         {
@@ -971,9 +980,9 @@ impl Directory {
             TEMP.fetch_add(1, Ordering::Relaxed)
         );
         #[cfg(unix)]
-        let mut f = posix::open(&self.file, &temp, false, true)?;
+        let mut f = io(posix::open(&self.file, &temp, false, true))?;
         #[cfg(windows)]
-        let mut f = windows_open(&self.path.join(&temp), false, true)?;
+        let mut f = io(windows_open(&self.path.join(&temp), false, true))?;
         let result = (|| {
             io(f.write_all(body))?;
             io(f.sync_all())?;
@@ -1052,17 +1061,68 @@ impl Directory {
         }
     }
 }
-fn manifest(dir: &Directory, id: &RunID) -> Result<Manifest> {
+fn manifest_header(dir: &Directory, id: &RunID) -> Result<Manifest> {
     let body = dir
         .read("manifest.json")?
         .ok_or("Missing replay manifest")?;
     let m: Manifest = decode(&body)?;
     m.validate()?;
     check(m.run_id == *id)?;
-    integrity(dir, &m)?;
     Ok(m)
 }
-fn integrity(dir: &Directory, m: &Manifest) -> Result<()> {
+struct Inventory {
+    cases: HashMap<String, String>,
+    results: HashMap<String, String>,
+}
+fn manifest(dir: &Directory, id: &RunID) -> Result<(Manifest, Inventory)> {
+    let m = manifest_header(dir, id)?;
+    let inventory = integrity(dir, &m)?;
+    Ok((m, inventory))
+}
+fn case_hash(body: &[u8], entry: &Entry) -> Result<String> {
+    let c: Case = decode(body)?;
+    c.validate()?;
+    check(
+        entry.status != EntryStatus::Skipped
+            && c.input.case_id == entry.case_id
+            && c.input.stock_id == entry.stock_id
+            && c.input.trading_day == entry.trading_day,
+    )?;
+    let h = hash(body);
+    check(entry.input_sha256.as_ref().is_none_or(|v| v == &h))?;
+    Ok(h)
+}
+fn result_hash(body: &[u8], entry: &Entry, input_hash: &str, models: &[String]) -> Result<String> {
+    let r: Calculation = decode(body)?;
+    r.validate()?;
+    check(
+        entry.status != EntryStatus::Skipped
+            && r.case_id == entry.case_id
+            && r.input_sha256 == input_hash
+            && r.outcomes.iter().map(|o| &o.model).collect::<HashSet<_>>()
+                == models.iter().collect::<HashSet<_>>(),
+    )?;
+    let h = hash(body);
+    check(entry.result_sha256.as_ref().is_none_or(|v| v == &h))?;
+    Ok(h)
+}
+fn check_hashes(m: &Manifest, inventory: &Inventory) -> Result<()> {
+    for e in &m.cases {
+        check(
+            e.input_sha256
+                .as_ref()
+                .is_none_or(|h| inventory.cases.get(&e.case_id) == Some(h))
+                && e.result_sha256
+                    .as_ref()
+                    .is_none_or(|h| inventory.results.get(&e.case_id) == Some(h))
+                && (e.status != EntryStatus::Skipped
+                    || !inventory.cases.contains_key(&e.case_id)
+                        && !inventory.results.contains_key(&e.case_id)),
+        )?;
+    }
+    Ok(())
+}
+fn integrity(dir: &Directory, m: &Manifest) -> Result<Inventory> {
     for name in dir.names()? {
         if name.starts_with(".tmp-") {
             dir.read(&name)?.ok_or("Missing replay temp")?;
@@ -1072,6 +1132,7 @@ fn integrity(dir: &Directory, m: &Manifest) -> Result<()> {
     }
     let mut cases = HashMap::new();
     let mut results = HashMap::new();
+    let entries: HashMap<_, _> = m.cases.iter().map(|e| (e.case_id.as_str(), e)).collect();
     for kind in ["cases", "results"] {
         let sub = dir.child(kind, false)?;
         for name in sub.names()? {
@@ -1080,45 +1141,18 @@ fn integrity(dir: &Directory, m: &Manifest) -> Result<()> {
                 continue;
             }
             let id = name.strip_suffix(".json").ok_or("Unexpected replay file")?;
-            let entry = m
-                .cases
-                .iter()
-                .find(|e| e.case_id == id)
-                .ok_or("Unknown replay case")?;
-            check(entry.status != EntryStatus::Skipped)?;
+            let entry = entries.get(id).ok_or("Unknown replay case")?;
             if kind == "cases" {
-                let c: Case = decode(&body)?;
-                c.validate()?;
-                check(
-                    c.input.case_id == id
-                        && c.input.stock_id == entry.stock_id
-                        && c.input.trading_day == entry.trading_day,
-                )?;
-                cases.insert(id.to_owned(), hash(&body));
+                cases.insert(id.to_owned(), case_hash(&body, entry)?);
             } else {
-                let r: Calculation = decode(&body)?;
-                r.validate()?;
-                check(
-                    r.case_id == id
-                        && cases.get(id) == Some(&r.input_sha256)
-                        && r.outcomes.iter().map(|o| &o.model).collect::<HashSet<_>>()
-                            == m.models.iter().collect::<HashSet<_>>(),
-                )?;
-                results.insert(id.to_owned(), hash(&body));
+                let h = cases.get(id).ok_or("Missing replay input")?;
+                results.insert(id.to_owned(), result_hash(&body, entry, h, &m.models)?);
             }
         }
     }
-    for e in &m.cases {
-        check(
-            e.input_sha256
-                .as_ref()
-                .is_none_or(|h| cases.get(&e.case_id) == Some(h))
-                && e.result_sha256
-                    .as_ref()
-                    .is_none_or(|h| results.get(&e.case_id) == Some(h)),
-        )?;
-    }
-    Ok(())
+    let inventory = Inventory { cases, results };
+    check_hashes(m, &inventory)?;
+    Ok(inventory)
 }
 fn string(body: Vec<u8>) -> Result<String> {
     String::from_utf8(body).map_err(|_| "Invalid replay UTF-8".into())
@@ -1149,14 +1183,14 @@ fn handle_at(path: &Path, request: ArchiveRequest) -> Result<ArchiveReply> {
                 continue;
             }
             check(uuid(&name) && name == name.to_ascii_lowercase())?;
-            manifests.push(manifest(&root.child(&name, false)?, &RunID(name))?);
+            manifests.push(manifest(&root.child(&name, false)?, &RunID(name))?.0);
         }
         manifests.sort_by_key(|m| m.created_at);
         return Ok(ArchiveReply::Manifests { manifests });
     }
     if let ArchiveRequest::Create { manifest: m } = request {
         if root.names()?.contains(&m.run_id.0) {
-            check(manifest(&root.child(&m.run_id.0, false)?, &m.run_id)? == m)?;
+            check(manifest(&root.child(&m.run_id.0, false)?, &m.run_id)?.0 == m)?;
         } else {
             check(
                 m.status == Status::Ready
@@ -1182,8 +1216,43 @@ fn handle_at(path: &Path, request: ArchiveRequest) -> Result<ArchiveReply> {
         _ => unreachable!(),
     };
     let dir = root.child(&id.0, false)?;
-    let old = manifest(&dir, id)?;
-    let loading_case = matches!(&request, ArchiveRequest::LoadCase { .. });
+    // Reads bind the strict manifest and selected evidence. Resume and all writes audit the whole run.
+    if let ArchiveRequest::LoadCase { case_id, .. } | ArchiveRequest::LoadResult { case_id, .. } =
+        &request
+    {
+        check(safe_case(case_id))?;
+        let m = manifest_header(&dir, id)?;
+        let e = m
+            .cases
+            .iter()
+            .find(|e| e.case_id == *case_id)
+            .ok_or("Unknown replay case")?;
+        let is_case = matches!(&request, ArchiveRequest::LoadCase { .. });
+        let name = format!("{case_id}.json");
+        let body = dir
+            .child(if is_case { "cases" } else { "results" }, false)?
+            .read(&name)?;
+        let sha256 = if let Some(body) = &body {
+            let h = if is_case {
+                case_hash(body, e)?
+            } else {
+                let input = dir
+                    .child("cases", false)?
+                    .read(&name)?
+                    .ok_or("Missing replay input")?;
+                result_hash(body, e, &case_hash(&input, e)?, &m.models)?
+            };
+            Some(h)
+        } else {
+            check(!is_case && e.result_sha256.is_none())?;
+            None
+        };
+        return Ok(ArchiveReply::Body {
+            body: body.map(string).transpose()?,
+            sha256,
+        });
+    }
+    let (old, inventory) = manifest(&dir, id)?;
     match request {
         ArchiveRequest::LoadManifest { .. } => Ok(ArchiveReply::Manifest { manifest: old }),
         ArchiveRequest::SaveCase { body, .. } => {
@@ -1236,19 +1305,6 @@ fn handle_at(path: &Path, request: ArchiveRequest) -> Result<ArchiveReply> {
                 sha256: hash(body.as_bytes()),
             })
         }
-        ArchiveRequest::LoadCase { case_id, .. } | ArchiveRequest::LoadResult { case_id, .. } => {
-            check(safe_case(&case_id) && old.cases.iter().any(|e| e.case_id == case_id))?;
-            let is_case = loading_case;
-            let body = dir
-                .child(if is_case { "cases" } else { "results" }, false)?
-                .read(&format!("{case_id}.json"))?;
-            check(!is_case || body.is_some())?;
-            let sha256 = body.as_ref().map(|b| hash(b));
-            Ok(ArchiveReply::Body {
-                body: body.map(string).transpose()?,
-                sha256,
-            })
-        }
         ArchiveRequest::UpdateProgress {
             entries, status, ..
         } => {
@@ -1269,7 +1325,7 @@ fn handle_at(path: &Path, request: ArchiveRequest) -> Result<ArchiveReply> {
             }
             check(old.status != Status::Completed || next == old)?;
             next.validate()?;
-            integrity(&dir, &next)?;
+            check_hashes(&next, &inventory)?;
             if next != old {
                 dir.write(
                     "manifest.json",
@@ -1312,6 +1368,10 @@ mod tests {
         }
     }
     thread_local! {static FAIL:std::cell::Cell<&'static str>=const{std::cell::Cell::new("")};}
+    thread_local! {
+        pub(super) static READS:std::cell::Cell<usize>=const{std::cell::Cell::new(0)};
+        pub(super) static NAMES:std::cell::Cell<usize>=const{std::cell::Cell::new(0)};
+    }
     pub(super) fn fail_at(stage: &str) -> Result<()> {
         check(!FAIL.with(|s| s.get() == stage))
     }
@@ -1378,6 +1438,327 @@ mod tests {
                 body,
             },
         )
+    }
+    fn duplicate(body: &str, key: &str, value: &Value, first: bool, escaped: bool) -> String {
+        let key = if escaped {
+            format!("\"\\u{:04x}{}\"", key.as_bytes()[0], &key[1..])
+        } else {
+            serde_json::to_string(key).unwrap()
+        };
+        let member = format!("{key}:{value}");
+        if first {
+            format!("{{{member},{}", &body[1..])
+        } else {
+            format!("{},{member}}}", &body[..body.len() - 1])
+        }
+    }
+    #[test]
+    fn raw_duplicate_case_result_and_manifest_preserve_bytes_and_block_writes() {
+        for first in [false, true] {
+            for escaped in [false, true] {
+                let t = Temp::new();
+                let root = t.root();
+                let m = create(&root);
+                let c: Value = serde_json::from_str(BODY).unwrap();
+                for field in ["token", "accountSeq", "quantity"] {
+                    let mut source = c["source"].clone();
+                    source[field] = json!("SYNTHETIC_ONLY");
+                    assert!(save(
+                        &root,
+                        &m,
+                        &duplicate(BODY, "source", &source, first, escaped)
+                    )
+                    .is_err());
+                }
+                let input = serde_json::to_string(&c["input"]).unwrap();
+                let nested = duplicate(&input, "caseID", &c["input"]["caseID"], first, escaped);
+                let mut without = c.clone();
+                without.as_object_mut().unwrap().remove("input");
+                let prefix = without.to_string();
+                let raw = format!("{},\"input\":{nested}}}", &prefix[..prefix.len() - 1]);
+                assert!(save(&root, &m, &raw).is_err());
+                save(&root, &m, BODY).unwrap();
+                let rb = result(&m, HASH);
+                let r: Value = serde_json::from_str(&rb).unwrap();
+                let mut outcomes = r["outcomes"].clone();
+                outcomes[0]["quantity"] = json!("SYNTHETIC_ONLY");
+                assert!(save_result(
+                    &root,
+                    &m,
+                    duplicate(&rb, "outcomes", &outcomes, first, escaped)
+                )
+                .is_err());
+                let outcome = r["outcomes"][0].to_string();
+                let nested = duplicate(
+                    &outcome,
+                    "model",
+                    &r["outcomes"][0]["model"],
+                    first,
+                    escaped,
+                );
+                assert!(save_result(&root, &m, rb.replace(&outcome, &nested)).is_err());
+                let run = root.join(&m.run_id.0);
+                let url = run.join("manifest.json");
+                let original = fs::read_to_string(&url).unwrap();
+                let mv: Value = serde_json::from_str(&original).unwrap();
+                let mut entries = mv["cases"].clone();
+                entries[0]["accountSeq"] = json!("SYNTHETIC_ONLY");
+                let ambiguous = duplicate(&original, "cases", &entries, first, escaped);
+                fs::write(&url, &ambiguous).unwrap();
+                for request in [
+                    ArchiveRequest::LoadManifest {
+                        run_id: m.run_id.clone(),
+                    },
+                    ArchiveRequest::List {},
+                    ArchiveRequest::SaveCase {
+                        run_id: m.run_id.clone(),
+                        body: BODY.into(),
+                    },
+                    ArchiveRequest::SaveResult {
+                        run_id: m.run_id.clone(),
+                        body: rb,
+                    },
+                    ArchiveRequest::UpdateProgress {
+                        run_id: m.run_id.clone(),
+                        entries: m.cases.clone(),
+                        status: Status::Paused,
+                    },
+                ] {
+                    assert!(handle_at(&root, request).is_err());
+                }
+                assert_eq!(fs::read(&url).unwrap(), ambiguous.as_bytes());
+                assert_eq!(
+                    fs::read(
+                        run.join("cases")
+                            .join(format!("{}.json", m.cases[0].case_id))
+                    )
+                    .unwrap(),
+                    BODY.as_bytes()
+                );
+                assert_eq!(fs::read_dir(run.join("results")).unwrap().count(), 0);
+            }
+        }
+    }
+    #[test]
+    fn maximum_run_progress_reads_each_payload_once() {
+        // Public-shaped synthetic data, direct temp setup avoids quadratic API population.
+        let t = Temp::new();
+        let root = t.root();
+        let mut m = m();
+        let template = m.cases[0].clone();
+        m.sessions = 120;
+        m.cases.clear();
+        m.symbols = (0..30).map(|n| format!("us:S{n:02}")).collect();
+        let base: Value = serde_json::from_str(BODY).unwrap();
+        let mut bodies = Vec::new();
+        for symbol in &m.symbols {
+            for day in 0..120i64 {
+                let delta = day * 86_400_000;
+                let date = (NaiveDate::from_ymd_opt(2026, 9, 25).unwrap()
+                    + chrono::Duration::days(day))
+                .to_string();
+                let id = format!("us_{}_{}", symbol.strip_prefix("us:").unwrap(), date);
+                let mut c = base.clone();
+                c["input"]["stockID"] = json!(symbol);
+                c["input"]["caseID"] = json!(id);
+                c["input"]["tradingDay"] = json!(date);
+                for path in [
+                    "/input/sessionStart",
+                    "/input/sessionEnd",
+                    "/input/cutoff",
+                    "/input/inputBarEnd",
+                    "/input/minutes/0/end",
+                    "/target/candleAt",
+                    "/target/fetchedAt",
+                    "/source/calendarFetchedAt",
+                    "/source/dailyFetchedAt",
+                    "/source/minutePages/0/fetchedAt",
+                ] {
+                    let value = c.pointer_mut(path).unwrap();
+                    *value = json!(value.as_i64().unwrap() + delta);
+                }
+                // Noon UTC stays on the intended Eastern day across the DST transition.
+                c["target"]["candleAt"] = json!(1790337600000i64 + delta);
+                let body = c.to_string();
+                decode::<Case>(body.as_bytes())
+                    .unwrap()
+                    .validate()
+                    .unwrap_or_else(|error| panic!("{id}: {error}"));
+                let h = hash(body.as_bytes());
+                let mut e = template.clone();
+                e.case_id = id;
+                e.stock_id = symbol.clone();
+                e.trading_day = date;
+                let rb=serde_json::to_string(&json!({"version":1,"caseID":e.case_id,"inputSHA256":h,"calculationVersion":"replay-v1",
+                "computedAt":1790366460000i64+delta,"outcomes":[{"model":MODELS[0],"status":"skipped",
+                "reason":"insufficient_daily_history","forecast":null}]})).unwrap();
+                bodies.push((e.case_id.clone(), body, rb));
+                m.cases.push(e);
+            }
+        }
+        handle_at(
+            &root,
+            ArchiveRequest::Create {
+                manifest: m.clone(),
+            },
+        )
+        .unwrap();
+        let run = root.join(&m.run_id.0);
+        for (id, body, rb) in bodies {
+            fs::write(run.join("cases").join(format!("{id}.json")), body).unwrap();
+            fs::write(run.join("results").join(format!("{id}.json")), rb).unwrap();
+        }
+        READS.with(|n| n.set(0));
+        NAMES.with(|n| n.set(0));
+        let start = std::time::Instant::now();
+        handle_at(
+            &root,
+            ArchiveRequest::UpdateProgress {
+                run_id: m.run_id,
+                entries: m.cases,
+                status: Status::Paused,
+            },
+        )
+        .unwrap();
+        let reads = READS.with(|n| n.get());
+        let names = NAMES.with(|n| n.get());
+        println!("Maximum synthetic run: 3600 cases + 3600 results, {reads} payload reads, {names} enumerations, status update {:?}",start.elapsed());
+        assert_eq!(reads, 7200);
+        assert_eq!(names, 3);
+    }
+    #[test]
+    fn progress_audits_once_and_rejects_skipping_orphan_evidence() {
+        let t = Temp::new();
+        let root = t.root();
+        let m = create(&root);
+        save(&root, &m, BODY).unwrap();
+        save_result(&root, &m, result(&m, HASH)).unwrap();
+        READS.with(|n| n.set(0));
+        NAMES.with(|n| n.set(0));
+        handle_at(
+            &root,
+            ArchiveRequest::UpdateProgress {
+                run_id: m.run_id.clone(),
+                entries: m.cases.clone(),
+                status: Status::Paused,
+            },
+        )
+        .unwrap();
+        assert_eq!(READS.with(|n| n.get()), 2);
+        assert_eq!(NAMES.with(|n| n.get()), 3);
+        let url = root.join(&m.run_id.0).join("manifest.json");
+        let original = fs::read(&url).unwrap();
+        let mut skipped = m.cases.clone();
+        skipped[0].status = EntryStatus::Skipped;
+        skipped[0].reason = Some("synthetic".into());
+        assert!(handle_at(
+            &root,
+            ArchiveRequest::UpdateProgress {
+                run_id: m.run_id.clone(),
+                entries: skipped,
+                status: Status::Paused
+            }
+        )
+        .is_err());
+        let mut bad = m.cases.clone();
+        bad[0].status = EntryStatus::Saved;
+        bad[0].input_sha256 = Some("0".repeat(64));
+        assert!(handle_at(
+            &root,
+            ArchiveRequest::UpdateProgress {
+                run_id: m.run_id.clone(),
+                entries: bad,
+                status: Status::Paused
+            }
+        )
+        .is_err());
+        assert_eq!(fs::read(&url).unwrap(), original);
+    }
+    #[test]
+    fn selected_reads_bind_selected_files_but_full_audit_blocks_writes() {
+        let t = Temp::new();
+        let root = t.root();
+        let mut m = m();
+        let second = BODY.replace("TEST", "TEST2");
+        m.symbols.push("us:TEST2".into());
+        let mut e = m.cases[0].clone();
+        e.stock_id = "us:TEST2".into();
+        e.case_id = e.case_id.replace("TEST", "TEST2");
+        m.cases.push(e);
+        handle_at(
+            &root,
+            ArchiveRequest::Create {
+                manifest: m.clone(),
+            },
+        )
+        .unwrap();
+        save(&root, &m, BODY).unwrap();
+        save(&root, &m, &second).unwrap();
+        let rb = result(&m, HASH);
+        save_result(&root, &m, rb.clone()).unwrap();
+        let run = root.join(&m.run_id.0);
+        fs::write(
+            run.join("cases")
+                .join(format!("{}.json", m.cases[1].case_id)),
+            b"{}",
+        )
+        .unwrap();
+        READS.with(|n| n.set(0));
+        NAMES.with(|n| n.set(0));
+        assert!(
+            matches!(handle_at(&root,ArchiveRequest::LoadCase{run_id:m.run_id.clone(),case_id:m.cases[0].case_id.clone()}).unwrap(),ArchiveReply::Body{body:Some(body),..} if body==BODY)
+        );
+        assert_eq!(READS.with(|n| n.get()), 1);
+        assert_eq!(NAMES.with(|n| n.get()), 0);
+        READS.with(|n| n.set(0));
+        assert!(
+            matches!(handle_at(&root,ArchiveRequest::LoadResult{run_id:m.run_id.clone(),case_id:m.cases[0].case_id.clone()}).unwrap(),ArchiveReply::Body{body:Some(body),..} if body==rb)
+        );
+        assert_eq!(READS.with(|n| n.get()), 2);
+        for request in [
+            ArchiveRequest::LoadManifest {
+                run_id: m.run_id.clone(),
+            },
+            ArchiveRequest::SaveCase {
+                run_id: m.run_id.clone(),
+                body: BODY.into(),
+            },
+            ArchiveRequest::UpdateProgress {
+                run_id: m.run_id.clone(),
+                entries: m.cases.clone(),
+                status: Status::Paused,
+            },
+        ] {
+            assert!(handle_at(&root, request).is_err());
+        }
+        fs::write(
+            run.join("results")
+                .join(format!("{}.json", m.cases[0].case_id)),
+            rb.replace(HASH, &"0".repeat(64)),
+        )
+        .unwrap();
+        assert!(handle_at(
+            &root,
+            ArchiveRequest::LoadResult {
+                run_id: m.run_id.clone(),
+                case_id: m.cases[0].case_id.clone()
+            }
+        )
+        .is_err());
+        fs::write(
+            run.join("cases")
+                .join(format!("{}.json", m.cases[0].case_id)),
+            b"{}",
+        )
+        .unwrap();
+        assert!(handle_at(
+            &root,
+            ArchiveRequest::LoadCase {
+                run_id: m.run_id.clone(),
+                case_id: m.cases[0].case_id.clone()
+            }
+        )
+        .is_err());
     }
     #[test]
     fn crash_after_case_save_resumes_without_overwrite_and_common_hash() {
@@ -1821,6 +2202,18 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn typed_missing_reads_preserve_dangling_symlink_and_nonregular_refusal() {
+        use std::os::unix::fs::symlink;
+        let t = Temp::new();
+        let dir = Directory::root(&t.0, false).unwrap();
+        assert!(dir.read("missing.json").unwrap().is_none());
+        symlink(t.0.join("missing.json"), t.0.join("dangling.json")).unwrap();
+        assert!(dir.read("dangling.json").is_err());
+        fs::create_dir(t.0.join("directory.json")).unwrap();
+        assert!(dir.read("directory.json").is_err());
+    }
     #[cfg(unix)]
     #[test]
     fn kernel_write_and_rename_failures_preserve_original_files() {

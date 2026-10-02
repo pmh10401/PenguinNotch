@@ -427,4 +427,134 @@ final class StockBacktestTests: XCTestCase {
         XCTAssertEqual(try archive.loadCase(runID: m.runID, caseID: sample.input.caseID).body, wireBody)
     }
 
+    private func duplicateJSON(_ body: Data, key: String, value: Any, first: Bool, escaped: Bool = false) throws -> Data {
+        let text = try XCTUnwrap(String(data: body, encoding: .utf8))
+        let keyText = escaped ? "\"\\u" + String(format: "%04x", key.utf8.first!) + key.dropFirst() + "\""
+            : try XCTUnwrap(String(data: JSONEncoder().encode(key), encoding: .utf8))
+        let valueText = try XCTUnwrap(String(data: JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]), encoding: .utf8))
+        let member = keyText + ":" + valueText
+        return Data((first ? "{" + member + "," + text.dropFirst() : text.dropLast() + "," + member + "}").utf8)
+    }
+    func testDuplicateRawCaseAndResultKeysRejectWithoutWriting() throws {
+        let c = try StockBacktest.decodeCase(wireBody), m = archiveManifest(c), path = try temporaryArchive()
+        let archive = StockBacktestArchive(directory: path); try archive.create(m)
+        let caseObject = try JSONSerialization.jsonObject(with: wireBody) as! [String: Any]
+        let source = caseObject["source"] as! [String: Any]
+        let rb = try resultBody(c.input.caseID, hash: wireHash)
+        let resultObject = try JSONSerialization.jsonObject(with: rb) as! [String: Any]
+        let run = path.appending(path: m.runID.uuidString.lowercased())
+        let originalManifest = try Data(contentsOf: run.appending(path: "manifest.json"))
+        for first in [false, true] {
+            for escaped in [false, true] {
+                for field in ["token", "accountSeq", "quantity"] {
+                    var badSource = source; badSource[field] = "SYNTHETIC_ONLY"
+                    let ambiguous = try duplicateJSON(wireBody, key: "source", value: badSource, first: first, escaped: escaped)
+                    XCTAssertThrowsError(try archive.saveCase(runID: m.runID, body: ambiguous))
+                    // A duplicate inside a nested page, without changing the surrounding dictionary.
+                    let page = (source["minutePages"] as! [[String: Any]])[0]
+                    let pageBody = try JSONSerialization.data(withJSONObject: page, options: [.sortedKeys])
+                    let repeated = try duplicateJSON(pageBody, key: "before", value: page["before"]!, first: first, escaped: escaped)
+                    let sourceBody = Data(("{\"provider\":\"toss\",\"calendarFetchedAt\":1790366460000,\"dailyFetchedAt\":1790366460000,\"minutePages\":[" + String(decoding: repeated, as: UTF8.self) + "]}").utf8)
+                    var nested = caseObject; nested.removeValue(forKey: "source")
+                    let withoutSource = try JSONSerialization.data(withJSONObject: nested)
+                    let nestedBody = Data((String(decoding: withoutSource.dropLast(), as: UTF8.self) + ",\"source\":" + String(decoding: sourceBody, as: UTF8.self) + "}").utf8)
+                    XCTAssertThrowsError(try archive.saveCase(runID: m.runID, body: nestedBody))
+                }
+                var badOutcome = (resultObject["outcomes"] as! [[String: Any]])[0]
+                badOutcome["quantity"] = "SYNTHETIC_ONLY"
+                let ambiguousResult = try duplicateJSON(rb, key: "outcomes", value: [badOutcome], first: first, escaped: escaped)
+                // Case is absent during rejected case inputs, then present for actual result writes.
+                _ = try archive.saveCase(runID: m.runID, body: wireBody)
+                XCTAssertThrowsError(try archive.saveResult(runID: m.runID, body: ambiguousResult))
+                let outcomeBody = try JSONSerialization.data(withJSONObject: (resultObject["outcomes"] as! [[String: Any]])[0])
+                let repeatedOutcome = try duplicateJSON(outcomeBody, key: "model", value: m.models[0], first: first, escaped: escaped)
+                var resultWithoutOutcomes = resultObject; resultWithoutOutcomes.removeValue(forKey: "outcomes")
+                let resultPrefix = try JSONSerialization.data(withJSONObject: resultWithoutOutcomes)
+                let nestedResult = Data((String(decoding: resultPrefix.dropLast(), as: UTF8.self) + ",\"outcomes\":[" + String(decoding: repeatedOutcome, as: UTF8.self) + "]}").utf8)
+                XCTAssertThrowsError(try archive.saveResult(runID: m.runID, body: nestedResult))
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: run.appending(path: "manifest.json")), originalManifest)
+        XCTAssertEqual(try archive.loadCase(runID: m.runID, caseID: c.input.caseID).body, wireBody)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: run.appending(path: "results").path), [])
+    }
+    func testRawKeyScanUsesDecodedAliasesAndObjectScopes() throws {
+        let valid = Data(#"{"a":"quote\" slash\\ } : [","rows":[{"same":1},{"same":2}],"pro\u0076ider":"toss"}"#.utf8)
+        XCTAssertNoThrow(try StockBacktest.jsonObject(valid))
+        let alias = Data("{\"provider\":1,\"pro\\u0076ider\" \n\t:2}".utf8)
+        XCTAssertThrowsError(try StockBacktest.jsonObject(alias))
+        XCTAssertThrowsError(try StockBacktest.jsonObject(Data(#"{"rows":[{"k":1,"k":2}]}"#.utf8)))
+    }
+    func testProgressAuditsPayloadsOnceAndRejectsSkippingOrphanEvidence() throws {
+        let c = try StockBacktest.decodeCase(wireBody), path = try temporaryArchive()
+        var archive = StockBacktestArchive(directory: path)
+        let m = archiveManifest(c)
+        try archive.create(m); _ = try archive.saveCase(runID: m.runID, body: wireBody)
+        _ = try archive.saveResult(runID: m.runID, body: resultBody(c.input.caseID, hash: wireHash))
+        var reads = 0
+        archive.fault = { stage in if stage == "read:" + c.input.caseID + ".json" { reads += 1 } }
+        try archive.updateProgress(runID: m.runID, entries: m.cases, status: .paused)
+        XCTAssertEqual(reads, 2)
+        let manifestURL = path.appending(path: m.runID.uuidString.lowercased()).appending(path: "manifest.json")
+        let original = try Data(contentsOf: manifestURL)
+        var skipped = m.cases; skipped[0].status = .skipped; skipped[0].reason = "synthetic"
+        XCTAssertThrowsError(try archive.updateProgress(runID: m.runID, entries: skipped, status: .paused))
+        XCTAssertEqual(try Data(contentsOf: manifestURL), original)
+        var saved = m.cases; saved[0].status = .saved; saved[0].inputSHA256 = String(repeating: "0", count: 64)
+        XCTAssertThrowsError(try archive.updateProgress(runID: m.runID, entries: saved, status: .paused))
+        XCTAssertEqual(try Data(contentsOf: manifestURL), original)
+    }
+    func testSelectedReadsValidateBindingWithoutAuditingUnrelatedPayloads() throws {
+        let c = try StockBacktest.decodeCase(wireBody), path = try temporaryArchive()
+        var archive = StockBacktestArchive(directory: path)
+        let secondBody = Data(String(decoding: wireBody, as: UTF8.self).replacingOccurrences(of: "TEST", with: "TEST2").utf8)
+        let second = try StockBacktest.decodeCase(secondBody)
+        var m = archiveManifest(c); m.symbols.append(second.input.stockID)
+        var entry = m.cases[0]; entry.caseID = second.input.caseID; entry.stockID = second.input.stockID
+        m.cases.append(entry)
+        try archive.create(m)
+        _ = try archive.saveCase(runID: m.runID, body: wireBody)
+        _ = try archive.saveCase(runID: m.runID, body: secondBody)
+        let rb = try resultBody(c.input.caseID, hash: wireHash)
+        _ = try archive.saveResult(runID: m.runID, body: rb)
+        let run = path.appending(path: m.runID.uuidString.lowercased())
+        try Data("{}".utf8).write(to: run.appending(path: "cases").appending(path: second.input.caseID + ".json"))
+        var reads = 0
+        archive.fault = { stage in if stage.hasPrefix("read:us_") { reads += 1 } }
+        XCTAssertEqual(try archive.loadCase(runID: m.runID, caseID: c.input.caseID).body, wireBody)
+        XCTAssertEqual(reads, 1); reads = 0
+        XCTAssertEqual(try archive.loadResult(runID: m.runID, caseID: c.input.caseID), rb)
+        XCTAssertEqual(reads, 2)
+        XCTAssertThrowsError(try archive.loadManifest(runID: m.runID))
+        XCTAssertThrowsError(try archive.saveCase(runID: m.runID, body: wireBody))
+        XCTAssertThrowsError(try archive.updateProgress(runID: m.runID, entries: m.cases, status: .paused))
+        // Selected corruption and result binding still fail closed.
+        try Data(String(decoding: rb, as: UTF8.self).replacingOccurrences(of: wireHash, with: String(repeating: "0", count: 64)).utf8)
+            .write(to: run.appending(path: "results").appending(path: c.input.caseID + ".json"))
+        XCTAssertThrowsError(try archive.loadResult(runID: m.runID, caseID: c.input.caseID))
+        try Data("{}".utf8).write(to: run.appending(path: "cases").appending(path: c.input.caseID + ".json"))
+        XCTAssertThrowsError(try archive.loadCase(runID: m.runID, caseID: c.input.caseID))
+    }
+    func testDuplicateRawManifestBlocksAllWritesAndPreservesOriginalBytes() throws {
+        let c = try StockBacktest.decodeCase(wireBody)
+        for first in [false, true] {
+            for escaped in [false, true] {
+                let path = try temporaryArchive(), archive = StockBacktestArchive(directory: path), m = archiveManifest(c)
+                try archive.create(m)
+                let run = path.appending(path: m.runID.uuidString.lowercased()), url = run.appending(path: "manifest.json")
+                let original = try Data(contentsOf: url)
+                var entry = (try JSONSerialization.jsonObject(with: original) as! [String: Any])["cases"] as! [[String: Any]]
+                entry[0]["accountSeq"] = "SYNTHETIC_ONLY"
+                let ambiguous = try duplicateJSON(original, key: "cases", value: entry, first: first, escaped: escaped)
+                try ambiguous.write(to: url)
+                XCTAssertThrowsError(try archive.loadManifest(runID: m.runID))
+                XCTAssertThrowsError(try archive.list())
+                XCTAssertThrowsError(try archive.saveCase(runID: m.runID, body: wireBody))
+                XCTAssertThrowsError(try archive.updateProgress(runID: m.runID, entries: m.cases, status: .paused))
+                XCTAssertEqual(try Data(contentsOf: url), ambiguous)
+                XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: run.appending(path: "cases").path), [])
+            }
+        }
+    }
+
 }

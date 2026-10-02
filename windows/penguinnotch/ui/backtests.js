@@ -82,8 +82,29 @@ function validResult(r){
   });
 }
 function utf8Size(s){try{return encodeURIComponent(s).replace(/%[0-9A-F]{2}|[^%]/g,'x').length;}catch(_){return Infinity;}}
+// Key-only scan; JSON.parse below remains the grammar/value parser, never a repair step.
+function rejectDuplicateKeys(body){
+  const stack=[];
+  for(let i=0;i<body.length;){
+    const c=body[i];
+    if(c==='{'||c==='['){if(stack.length>=512)throw Error('Invalid replay JSON depth');stack.push({opening:c,keys:new Set()});i++;}
+    else if(c==='}'||c===']'){if(stack.pop()?.opening!==(c==='}'?'{':'['))throw Error('Invalid replay JSON');i++;}
+    else if(c==='"'){
+      const start=i++;
+      while(i<body.length&&body[i]!=='"')i+=body[i]==='\\'?2:1;
+      if(i>=body.length)throw Error('Invalid replay JSON');i++;
+      let next=i;while(next<body.length&&/[\t\n\r ]/.test(body[next]))next++;
+      if(body[next]===':'){
+        const frame=stack.at(-1);if(frame?.opening!=='{')throw Error('Invalid replay JSON');
+        const key=JSON.parse(body.slice(start,i));if(frame.keys.has(key))throw Error('Duplicate replay JSON key');frame.keys.add(key);
+      }
+    }else i++;
+  }
+  if(stack.length)throw Error('Invalid replay JSON');
+}
 function parsedBody(body,validator){
   if(typeof body!=='string'||utf8Size(body)>2*1024*1024)throw Error('Invalid replay body');
+  rejectDuplicateKeys(body);
   const value=JSON.parse(body);if(!validator(value))throw Error('Invalid replay body');return value;
 }
 async function archive(action,payload={}){
