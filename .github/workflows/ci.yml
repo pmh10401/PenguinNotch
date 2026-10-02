@@ -35,5 +35,15 @@ jobs:
       - name: Run unit tests
         run: make test-ci
 
+      # Preserve the rendered public-fixture attachments when a CI-only UI
+      # assertion fails; a generic XCTAssertTrue log cannot diagnose OCR/layout.
+      - name: Preserve failed native test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macOS-test-results-${{ github.sha }}
+          path: ~/Library/Developer/Xcode/DerivedData/PenguinNotch-*/Logs/Test/*.xcresult
+          if-no-files-found: warn
+
       - name: Verify SwiftPM resolution
         run: make verify-deps

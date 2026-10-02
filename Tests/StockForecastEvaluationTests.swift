@@ -155,7 +155,7 @@ final class StockForecastEvaluationTests: XCTestCase {
                     XCTAssertLessThan(detail.frame.maxY, summary.frame.minY, "Collapsed detail control follows its summary")
                 } else {
                     XCTAssertTrue(text.contains(normalized(L10n.t("Start replay"))))
-                    XCTAssertTrue(text.contains(normalized(L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."))))
+                    XCTAssertTrue(text.contains(normalized(L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."))), "Replay disclaimer OCR (\(language), \(bitmap.pixelsWide)×\(bitmap.pixelsHigh)): \(labels.map(\.text).joined(separator: " | "))")
                 }
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
                 attachment.name = "task6-public-\(language)-\(index)"; attachment.lifetime = .keepAlways; add(attachment)
