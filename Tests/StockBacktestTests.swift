@@ -1,10 +1,42 @@
 import AppKit
+import Combine
 import Foundation
 import XCTest
 import Darwin
 @testable import PenguinNotch
 
 final class StockBacktestTests: XCTestCase {
+    @MainActor
+    func testB1IdleSleepBeforeBootstrapPreservesListingAndCorruptionError() async throws {
+        for corrupt in [false, true] {
+            let c = try StockBacktest.decodeCase(wireBody), archive = StockBacktestArchive(directory: try temporaryArchive())
+            let m = archiveManifest(c)
+            try archive.create(m); let hash = try archive.saveCase(runID: m.runID, body: wireBody)
+            var entries = m.cases; entries[0].status = .saved; entries[0].inputSHA256 = hash
+            try archive.updateProgress(runID: m.runID, entries: entries, status: .paused)
+            let expected = try archive.loadManifest(runID: m.runID)
+            let manifestURL = archive.directory.appending(path: m.runID.uuidString.lowercased() + "/manifest.json")
+            if corrupt { try Data("{broken".utf8).write(to: manifestURL) }
+            let original = try Data(contentsOf: manifestURL)
+            let viewer = StockBacktestStore(archive: archive, request: { _ in
+                XCTFail("idle listing must not request a provider"); throw CocoaError(.fileReadUnknown)
+            }, provider: { .toss })
+            // No await yet: this MainActor bootstrap task cannot have completed.
+            NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+            XCTAssertNil(viewer.activeRunID)
+            let listed = expectation(description: corrupt ? "corrupt bootstrap reports its error" : "idle bootstrap lists saved run")
+            let subscription = corrupt
+                ? viewer.$errorMessage.dropFirst().sink { _ in listed.fulfill() }
+                : viewer.$runs.dropFirst().sink { _ in listed.fulfill() }
+            defer { subscription.cancel() }
+            await fulfillment(of: [listed], timeout: 5)
+            XCTAssertEqual(viewer.runs, corrupt ? [] : [expected])
+            XCTAssertEqual(viewer.errorMessage, corrupt ? "archive_unavailable" : nil)
+            XCTAssertEqual(try Data(contentsOf: manifestURL), original)
+            XCTAssertEqual(try Data(contentsOf: archive.directory.appending(path: m.runID.uuidString.lowercased() + "/cases/" + c.input.caseID + ".json")), wireBody)
+        }
+    }
+
     @MainActor
     func testFinalShortCalendarIdentityPreservesFrozenDenominator() async throws {
         let f = BacktestPublicFixture(mode: "partial", dailyCount: 2)
@@ -921,11 +953,42 @@ final class StockBacktestTests: XCTestCase {
     func testCollectorArchiveIOOffMainAndInitialListCannotOverwriteStart() async throws {
         let path = try temporaryArchive(), f = BacktestPublicFixture(mode: "partial")
         var archive = StockBacktestArchive(directory: path)
-        archive.fault = { _ in XCTAssertFalse(Thread.isMainThread) }
-        let store = f.store(archive)
-        try await store.start(symbols: [f.stock], sessions: 20)
-        await Task.yield()
-        XCTAssertEqual(store.runs.count, 1); XCTAssertEqual(store.runs[0].status, .completed)
+        let old = archiveManifest(try StockBacktest.decodeCase(wireBody))
+        try archive.create(old)
+        let listEntered = expectation(description: "initial archive list entered")
+        let requestEntered = expectation(description: "new collection waits for first public reply")
+        let proceed = DispatchSemaphore(value: 0), counter = BacktestReadCounter()
+        archive.fault = { phase in
+            XCTAssertFalse(Thread.isMainThread)
+            if phase == "read:manifest.json" {
+                counter.increment()
+                if counter.value == 1 { listEntered.fulfill(); _ = proceed.wait(timeout: .now() + 15) }
+            }
+        }
+        defer { proceed.signal() }
+        var first = true, release: CheckedContinuation<Void, Never>?
+        let store = StockBacktestStore(archive: archive, request: { request in
+            if first {
+                first = false
+                await withCheckedContinuation { release = $0; requestEntered.fulfill() }
+            }
+            return try await f.request(request)
+        }, now: { f.now }, sleep: { f.clock += Int64($0) }, provider: { .toss })
+        let listed = expectation(description: "initial list retains an unknown saved ID during collection")
+        let subscription = store.$runs.first(where: { $0.contains { $0.runID == old.runID } }).sink { _ in listed.fulfill() }
+        defer { subscription.cancel() }
+        let collecting = Task { try await store.start(symbols: [f.stock], sessions: 20) }
+        defer { collecting.cancel(); release?.resume() }
+        await fulfillment(of: [listEntered, requestEntered], timeout: 5)
+        let currentID = try XCTUnwrap(store.activeRunID)
+        XCTAssertNotEqual(currentID, old.runID)
+        proceed.signal()
+        await fulfillment(of: [listed], timeout: 5)
+        XCTAssertEqual(store.runs, [old]); XCTAssertEqual(store.activeRunID, currentID)
+        release?.resume(); release = nil
+        try await collecting.value
+        XCTAssertEqual(store.runs.map(\.runID), [old.runID, currentID])
+        XCTAssertEqual(store.runs.first, old); XCTAssertEqual(store.runs.last?.status, .completed)
     }
     func testCollectorPublicPageOffsetEncodingStrictRowsAndDuplicates() async throws {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [BacktestPublicEndpoint.self]

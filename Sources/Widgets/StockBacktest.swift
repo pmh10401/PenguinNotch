@@ -709,13 +709,16 @@ final class StockBacktestStore: ObservableObject {
         self.provider = provider ?? { [weak preferences] in
             preferences?.stockQuoteSource ?? StockQuoteSource(rawValue: UserDefaults.standard.string(forKey: "stockQuoteSource") ?? "toss") ?? .toss
         }
-        // No credential read or automatic collection. Do not let the initial listing overwrite a new run.
+        // Read-only discovery keeps unknown saved IDs; current collection state wins over the initial snapshot.
         let token = generation
         Task { [weak self, archive] in
             do {
                 let listed = try await Task.detached { try archive.list() }.value
-                guard let self, self.generation == token, !self.busy else { return }
-                self.runs = listed
+                guard let self else { return }
+                let current = Dictionary(uniqueKeysWithValues: self.runs.map { ($0.runID, $0) })
+                let listedIDs = Set(listed.map(\.runID))
+                self.runs = (listed.map { current[$0.runID] ?? $0 } + self.runs.filter { !listedIDs.contains($0.runID) })
+                    .sorted { $0.createdAt < $1.createdAt }
             } catch {
                 guard let self, self.generation == token, !self.busy else { return }
                 self.errorMessage = "archive_unavailable"
@@ -725,7 +728,7 @@ final class StockBacktestStore: ObservableObject {
             .sink { [weak self] _ in self?.cancel() }.store(in: &cancellables)
         preferences?.$stockSettingsRevision.dropFirst().sink { [weak self] _ in self?.cancel() }.store(in: &cancellables)
     }
-    func cancel() { generation = UUID(); pageTask?.cancel() }
+    func cancel() { guard busy else { return }; generation = UUID(); pageTask?.cancel() }
     private func check(_ token: UUID, _ revision: Int) throws {
         guard generation == token, self.revision() == revision, provider() == .toss, !Task.isCancelled else { throw CancellationError() }
     }
