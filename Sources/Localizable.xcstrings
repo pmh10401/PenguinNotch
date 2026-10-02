@@ -63092,7 +63092,12 @@
         }
       }
     },
-    "Direction excludes unchanged closes and 50% probabilities. Scores are not investment returns.": {"extractionState":"manual","localizations":{"ko":{"stringUnit":{"state":"translated","value":"방향 적중률은 보합과 50% 확률을 제외합니다. 평가는 투자 수익률이 아닙니다."}}}}
+    "Direction excludes unchanged closes and 50% probabilities. Scores are not investment returns.": {"extractionState":"manual","localizations":{"ko":{"stringUnit":{"state":"translated","value":"방향 적중률은 보합과 50% 확률을 제외합니다. 평가는 투자 수익률이 아닙니다."}}}},
+    "Target day": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "목표 거래일"}}}},
+    "All": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "전체"}}}},
+    "Source": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "출처"}}}},
+    "Evaluated": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "평가 완료"}}}},
+    "Export forecast CSV": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "예측 CSV 내보내기"}}}}
   },
   "version": "1.0"
 }

@@ -508,3 +508,65 @@ test('Task6 saved comparison evaluates captures separately and replay calibratio
      outcomes:[{model:'GBM daily zero drift v1 / replay v1',status:'forecast',reason:null,forecast:samples[0].expected['1d']}]},'a'.repeat(64));
   const replay=B.evaluationSummaryHTML(rows,'ko');assert.ok(replay.includes('과거 재현'));assert.ok(!replay.includes('Scheduled'));
 });
+
+
+test('Task6 fix1 idle status reload retains late listing but newer publication wins',async()=>{
+  let resolve;
+  const listed=manifest(),owner=new B.BacktestStore({invoke:async()=>new Promise(r=>resolve=r)});
+  const settings=new S.Store({onReplayInvalidation:()=>owner.cancel(),invoke:async()=>({toss:false,finnhub:false})});
+  await settings.reloadCredentials();resolve({type:'manifests',manifests:[listed]});await owner.ready;
+  assert.equal(owner.runs.length,1,'idle status discovery must not erase provider-independent archives');
+  assert.equal(owner.runs[0].runID,listed.runID);settings.dispose();
+  let late;
+  const newer=new B.BacktestStore({invoke:async()=>new Promise(r=>late=r)});
+  const updated={...listed,status:'paused'};newer.publish(updated);
+  late({type:'manifests',manifests:[listed]});await newer.ready;
+  assert.equal(newer.runs[0].status,'paused','a stale initial list must not overwrite a published archive update');
+});
+
+test('Task6 fix1 native settings epoch cancellation retries identical frozen public request once',async t=>{
+  const f=collectorFixture(t,{mode:'partial'}),native=[];let epoch=0,release,entered;
+  const waiting=new Promise(r=>entered=r),blocked=new Promise(r=>release=r);
+  const invoke=async(command,args)=>{
+    if(command==='set_stock_settings'){epoch++;return args.settings;}
+    if(command!=='stock_request')return f.invoke(command,args);
+    const request=args.request,initial=epoch;native.push({request:copy(request),at:f.now()});
+    if(request.kind==='candles'&&native.filter(c=>c.request.kind==='candles').length===1){entered();await blocked;}
+    if(initial!==epoch)throw 'Stock settings or credentials changed; retry with current settings';
+    const reply=await f.stockRequest(request.kind==='calendar'?{type:'calendar',market:request.market,date:request.date}:{type:'candles',stock:{market:request.market,symbol:request.symbol},interval:request.interval,before:request.before,count:request.count,adjusted:request.adjusted});
+    if(reply.type==='calendar')return {data:{result:reply.value},fetchedAt:reply.requestedAt};
+    return {data:{result:{candles:reply.values.map(b=>({timestamp:new Date(b.end).toISOString(),openPrice:String(b.open),highPrice:String(b.high),lowPrice:String(b.low),closePrice:String(b.close),volume:String(b.volume)})),nextBefore:reply.nextBefore}},fetchedAt:reply.requestedAt};
+  };
+  const owner=new B.BacktestStore({invoke,now:f.now,sleep:f.sleep});await owner.ready;
+  const settings=new S.Store({invoke,onReplayInvalidation:()=>owner.cancel()});
+  settings.configure({enabled:false,provider:'toss',symbols:[f.stock]});
+  const running=owner.start({symbols:settings.settings.symbols,sessions:20});await waiting;
+  await settings.saveSettings({...settings.settings,symbols:[{symbol:'OTHER',market:'us'}],displayInterval:5});release();await running;
+  const attempts=native.filter(c=>c.request.kind==='candles');assert.deepEqual(attempts[0].request,attempts[1].request);
+  assert.ok(attempts[1].at-attempts[0].at>=250,'retry obeys the same request pacing');
+  assert.equal(owner.runs[0].status,'completed');assert.deepEqual(owner.runs[0].symbols,[S.stockID(f.stock)]);
+  assert.equal(f.writes.filter(w=>w[0]==='saveCase').length,20);assert.equal(f.writes.filter(w=>w[0]==='saveResult').length,20);
+  assert.ok(native.every(c=>c.request.kind==='calendar'||c.request.symbol===f.stock.symbol&&c.request.adjusted===true&&c.request.count===200&&['1m','1d'].includes(c.request.interval)));
+  for(let n=1;n<native.length;n++)assert.ok(native[n].at-native[n-1].at>=250);
+  for(const entry of owner.runs[0].cases){
+    const body=JSON.parse((await f.invoke('stock_backtest_archive',{request:{action:'loadCase',runID:owner.runs[0].runID,caseID:entry.caseID}})).body);
+    assert.ok(body.input.minutes.length<=1400&&body.input.dailyCloses.length<=61&&body.source.minutePages.length<=8);
+    assert.equal(body.source.minutePages.length,2,'failed attempt adds no source page/data');
+  }
+  settings.dispose();
+});
+
+test('Task6 fix1 cancelled retry is bounded and provider/key cancellation cannot resurrect it',async()=>{
+  for(const message of ['request_cancelled','Stock settings or credentials changed; retry with current settings','Stock HTTP 429','Stock HTTP 401']){
+    let clock=1000,calls=0;const owner=new B.BacktestStore({invoke:async()=>({type:'manifests',manifests:[]}),now:()=>clock,sleep:async ms=>clock+=ms,stockRequest:async()=>{calls++;throw Error(message);}});await owner.ready;
+    await assert.rejects(()=>owner.request({type:'calendar',market:'us',date:'2026-09-25'},owner.generation,owner.revision));
+    assert.equal(calls,message.includes('429')||message.includes('401')?1:2,'only one native cancellation retry, no HTTP/auth retry expansion');
+  }
+  for(const change of [{provider:'finnhub'},{revision:1}]){
+    let owner,clock=1000,calls=0;
+    owner=new B.BacktestStore({invoke:async()=>({type:'manifests',manifests:[]}),now:()=>clock,sleep:async ms=>{clock+=ms;owner.configure(change);},stockRequest:async()=>{calls++;throw Error('request_cancelled');}});await owner.ready;
+    owner.busy=true;owner.activeRunID='public-run';
+    await assert.rejects(()=>owner.request({type:'calendar',market:'us',date:'2026-09-25'},owner.generation,owner.revision),/collection_cancelled/);
+    assert.equal(calls,1,'provider/key changes stop before the paced retry');
+  }
+});

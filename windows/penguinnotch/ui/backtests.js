@@ -172,14 +172,14 @@ class BacktestStore {
   constructor({invoke=root.__TAURI__?.core?.invoke,stockRequest,now=Date.now,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}){
     this.invoke=invoke;this.stockRequest=stockRequest||((r)=>publicRequest(this.invoke,r));this.now=now;this.sleep=sleep;
     this.runs=[];this.activeRunID=null;this.progress={completed:0,total:0};this.errorMessage=null;
-    this.listeners=new Set();this.generation=0;this.revision=0;this.provider='toss';this.busy=false;this.lastRequestAt=null;
-    const generation=this.generation;
-    this.ready=archive('list',{},this.invoke).then(r=>{if(this.generation===generation&&!this.busy){this.runs=r.manifests;this.emit();}})
-      .catch(()=>{if(this.generation===generation&&!this.busy){this.errorMessage='archive_unavailable';this.emit();}});
+    this.listeners=new Set();this.generation=0;this.archiveRevision=0;this.revision=0;this.provider='toss';this.busy=false;this.lastRequestAt=null;
+    const archiveRevision=this.archiveRevision;
+    this.ready=archive('list',{},this.invoke).then(r=>{if(this.archiveRevision===archiveRevision&&!this.busy){this.runs=r.manifests;this.emit();}})
+      .catch(()=>{if(this.archiveRevision===archiveRevision&&!this.busy){this.errorMessage='archive_unavailable';this.emit();}});
   }
   subscribe(listener){this.listeners.add(listener);listener(this);return ()=>this.listeners.delete(listener);}
   emit(){for(const listener of this.listeners){try{listener(this);}catch(_){/* A consumer must not interrupt archive cleanup. */}}}
-  cancel(){this.generation++;this.emit();}
+  cancel(){if(!this.busy&&!this.activeRunID)return;this.generation++;this.emit();}
   // Task6 calls this before applying provider/key revisions; watchlist/display edits do not change frozen symbols.
   configure({provider=this.provider,revision=this.revision}={}){
     if(provider!==this.provider||revision!==this.revision)this.cancel();
@@ -187,14 +187,25 @@ class BacktestStore {
   }
   check(generation,revision){if(generation!==this.generation||revision!==this.revision||this.provider!=='toss')throw Error('collection_cancelled');}
   async request(request,generation,revision){
-    this.check(generation,revision);
-    if(this.lastRequestAt!==null){const wait=250-(this.now()-this.lastRequestAt);if(wait>0)await this.sleep(wait);}
-    this.check(generation,revision);this.lastRequestAt=this.now();
-    const reply=await this.stockRequest(request);this.check(generation,revision);
-    if(reply?.type!==request.type||!time(reply.requestedAt)||reply.requestedAt>this.now())throw Error('Invalid public reply');
-    return reply;
+    // A display/watchlist save advances native GEN. Retry that same frozen public request once;
+    // provider/key changes cancel our generation first. Native auth/HTTP retries remain native-owned.
+    for(let attempt=0;attempt<2;attempt++){
+      this.check(generation,revision);
+      if(this.lastRequestAt!==null){const wait=250-(this.now()-this.lastRequestAt);if(wait>0)await this.sleep(wait);}
+      this.check(generation,revision);this.lastRequestAt=this.now();
+      let reply;
+      try{reply=await this.stockRequest(request);}catch(error){
+        this.check(generation,revision);
+        const message=String(error?.message??error);
+        if(attempt===0&&(message==='request_cancelled'||message==='Stock settings or credentials changed; retry with current settings'))continue;
+        throw error;
+      }
+      this.check(generation,revision);
+      if(reply?.type!==request.type||!time(reply.requestedAt)||reply.requestedAt>this.now())throw Error('Invalid public reply');
+      return reply;
+    }
   }
-  publish(m){const index=this.runs.findIndex(r=>r.runID===m.runID);if(index<0)this.runs.push(m);else this.runs[index]=m;
+  publish(m){this.archiveRevision++;const index=this.runs.findIndex(r=>r.runID===m.runID);if(index<0)this.runs.push(m);else this.runs[index]=m;
     this.progress={completed:m.cases.filter(e=>e.status!=='pending').length,total:m.cases.length};this.emit();}
   // Readonly original bytes + the same loadCase receipt; no typed reserialization hash.
   async loadCase(runID,caseID){
@@ -426,8 +437,9 @@ function evaluationGroups(rows){
   for(const r of rows){const key=JSON.stringify([r.model,r.capture,r.source==='replay'?'replay':'saved']);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);}
   return [...groups.values()];
 }
+const evaluationPercent=v=>v==null?'—':v.toFixed(1)+'%';
 function evaluationSummaryHTML(rows,lang){
-  const tr=k=>S.esc(S.t(lang,k)),num=(v,p=3)=>v==null?'—':v.toFixed(p),pct=v=>v==null?'—':v.toFixed(1)+'%';
+  const tr=k=>S.esc(S.t(lang,k)),num=(v,p=3)=>v==null?'—':v.toFixed(p),pct=evaluationPercent;
   return evaluationGroups(rows).map(own=>{
     const m=S.evaluationMetrics(own),r=own[0];
     const delta=m.mape===null||m.baselineMAPE===null?null:m.mape-m.baselineMAPE;
@@ -481,7 +493,9 @@ function mountBacktests(element,store,language=()=> 'en',symbols=()=>[]){
   function render(){
     if(!visible)return;
     if(!selected&&store.runs.length)selected=store.runs.at(-1).runID;
-    const focused=element.contains(document.activeElement)?document.activeElement.id:null,restore=S.rememberDisclosures(element),run=selectedRun(),stocks=symbols(),active=store.busy||!!store.activeRunID;
+    const focus=element.contains(document.activeElement)?document.activeElement:null;
+    const focused=focus?.id?{id:focus.id}:focus?.tagName==='SUMMARY'?{disclosure:focus.parentElement.dataset.stockDisclosure}:null;
+    const restore=S.rememberDisclosures(element),run=selectedRun(),stocks=symbols(),active=store.busy||!!store.activeRunID;
     const option=(v,label,current)=>`<option value="${S.esc(v)}" ${v===current?'selected':''}>${S.esc(label)}</option>`;
     const filter=(key,label,values)=>`<label>${tr(label)} <select id="backtest-${key}" data-replay-filter="${key}" aria-label="${tr(label)}">${option('',S.t(lang(),'All'),filters[key])}${values.map(v=>option(v,v,filters[key])).join('')}</select></label>`;
     element.innerHTML=`<h2>${tr('Historical replay')}</h2><p class="stock-small" role="note">${tr(REPLAY_WARNING)}</p><p class="stock-small">${tr('Adjusted inputs and target; regular close minus 60 minutes. GBM expected close equals the input price. No Codex requests are made.')}</p><div class="stock-actions"><label>${tr('Completed trading days')} <select id="backtest-sessions" aria-label="${tr('Completed trading days')}" ${active?'disabled':''}>${[20,60,120].map(n=>option(String(n),String(n),String(sessions))).join('')}</select></label><button id="backtest-start" ${active||store.provider!=='toss'||!stocks.length||stocks.length>30||store.errorMessage==='archive_unavailable'||loadError?'disabled':''}>${tr('Start replay')}</button><button id="backtest-cancel" ${active?'':'disabled'}>${tr('Cancel')}</button></div><p>${tr('Watched symbols (including hidden)')}: ${stocks.length}/30 · ${S.esc(stocks.map(S.stockID).join(', '))}</p>${store.provider!=='toss'?`<p role="status">${tr('Historical replay requires Toss Securities.')}</p>`:''}${!stocks.length?`<p>${tr('Add watched symbols before starting replay.')}</p>`:''}<p role="status">${tr(active?'Running':'Idle')} · ${store.progress.completed}/${store.progress.total}</p>${store.errorMessage||loadError?`<p class="stock-error" role="alert">${tr(store.errorMessage||loadError)}</p>`:''}<label>${tr('Replay run')} <select id="backtest-run" aria-label="${tr('Replay run')}">${option('',S.t(lang(),'Select a run'),selected)}${store.runs.map(r=>option(r.runID,`${r.runID} · ${r.status}`,selected)).join('')}</select></label>${run&&run.status!=='completed'?`<button id="backtest-resume" ${active||store.provider!=='toss'||store.errorMessage==='archive_unavailable'||loadError?'disabled':''}>${tr('Resume replay')}</button>`:''}`;
@@ -490,7 +504,7 @@ function mountBacktests(element,store,language=()=> 'en',symbols=()=>[]){
       element.innerHTML+=`<div class="stock-actions">${filter('market','Market',['us','kr'])}${filter('stockID','Stock',run.symbols)}${filter('day','Target day',[...new Set(run.cases.map(e=>e.tradingDay))].sort())}${filter('model','Model',run.models)}</div>`;
       try{
         const summary=replaySummary(run,loaded,filters.model?[filters.model]:run.models,filters);
-        element.innerHTML+=`<p>${tr('Acquired / requested')}: ${summary.acquired}/${summary.requested} · ${tr('Pending')}: ${summary.pending} · ${tr('Skipped')}: ${summary.skipped} · ${tr('Unavailable')}: ${summary.unavailable}</p>${loading?`<p role="status">${tr('Loading saved results…')}</p>`:''}${evaluationSummaryHTML(summary.rows,lang())}${summary.models.map(m=>`<p>${S.esc(m.model)} · ${tr('Evaluated')}: ${m.success} · ${tr('Skipped')}: ${m.skipped} · ${tr('Unavailable')}: ${m.unavailable}</p>`).join('')}<details data-stock-disclosure="replay-comparison"><summary>${tr('Compare identical prediction inputs')} · ${summary.comparison.pairedCount}</summary>${summary.comparison.rows.map(r=>`<p>${S.esc(r.model)} · MAPE ${r.paired.mape??'—'} · Brier ${r.paired.brier??'—'}</p>`).join('')}<p>${tr('Excluded conflicts / missing evidence')}: ${summary.comparison.excludedConflicts}/${summary.comparison.excludedMissingEvidence}</p></details>`;
+        element.innerHTML+=`<p>${tr('Acquired / requested')}: ${summary.acquired}/${summary.requested} · ${tr('Pending')}: ${summary.pending} · ${tr('Skipped')}: ${summary.skipped} · ${tr('Unavailable')}: ${summary.unavailable}</p>${loading?`<p role="status">${tr('Loading saved results…')}</p>`:''}${evaluationSummaryHTML(summary.rows,lang())}${summary.models.map(m=>`<p>${S.esc(m.model)} · ${tr('Evaluated')}: ${m.success} · ${tr('Skipped')}: ${m.skipped} · ${tr('Unavailable')}: ${m.unavailable}</p>`).join('')}<details data-stock-disclosure="replay-comparison"><summary>${tr('Compare identical prediction inputs')} · ${summary.comparison.pairedCount}</summary>${summary.comparison.rows.map(r=>`<p>${S.esc(r.model)} · MAPE ${evaluationPercent(r.paired.mape)} · Brier ${r.paired.brier??'—'}</p>`).join('')}<p>${tr('Excluded conflicts / missing evidence')}: ${summary.comparison.excludedConflicts}/${summary.comparison.excludedMissingEvidence}</p></details>`;
         element.innerHTML+=entries.map(e=>{const c=loaded.find(c=>c.entry.caseID===e.caseID);return `<details data-stock-disclosure="replay-case:${S.esc(e.caseID)}"><summary>${S.esc(e.stockID)} · ${e.tradingDay} · ${tr(e.status)}${e.reason?' · '+tr(e.reason):''}</summary><p>${tr('Reference')}: ${S.esc(c?.referenceID||run.runID+'/'+e.caseID)}</p>${c?`<pre class="stock-raw">${S.esc(c.rawDetail)}</pre>`:`<p>${tr(e.status==='saved'?'Unavailable':'Pending')}</p>`}</details>`;}).join('');
         element.innerHTML+='<button id="backtest-export">'+tr('Export evaluation CSV')+'</button>';
         element.querySelector('#backtest-export').onclick=()=>downloadEvaluationCSV(summary.rows,Object.fromEntries(loaded.filter(c=>entries.some(e=>e.caseID===c.entry.caseID)).map(c=>[c.referenceID,c.rawDetail])));
@@ -502,7 +516,9 @@ function mountBacktests(element,store,language=()=> 'en',symbols=()=>[]){
     element.querySelector('#backtest-run').onchange=e=>{selected=e.target.value;receipts.clear();filters={market:'',stockID:'',day:'',model:''};void load();render();};
     const resume=element.querySelector('#backtest-resume');if(resume)resume.onclick=()=>{void store.resume(selected).catch(()=>{});};
     element.querySelectorAll('[data-replay-filter]').forEach(e=>e.onchange=()=>{filters[e.dataset.replayFilter]=e.value;render();});
-    restore();if(focused)element.querySelector('#'+focused)?.focus({preventScroll:true});
+    restore();
+    const next=focused?.id?element.querySelector('#'+focused.id):focused?[...element.querySelectorAll('details[data-stock-disclosure]')].find(node=>node.dataset.stockDisclosure===focused.disclosure)?.querySelector(':scope > summary'):null;
+    next?.focus({preventScroll:true});
   }
   const unsubscribe=store.subscribe(()=>{render();void load();});
   return {render(){render();void load();},show(value){visible=value;if(value){render();void load();}},dispose(){generation++;receipts.clear();unsubscribe();}};

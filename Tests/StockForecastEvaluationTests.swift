@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import Vision
 import XCTest
 import Darwin
 @testable import PenguinNotch
@@ -15,6 +16,14 @@ final class StockForecastEvaluationTests: XCTestCase {
         XCTAssertTrue(history.contains("StockBacktestView(store: backtests)"))
         XCTAssertTrue(history.contains("StockEvaluation.rows(journal:"))
         XCTAssertTrue(history.contains("Saved analysis requests/responses"))
+        let previousLocale = L10n.testLocale
+        defer { L10n.testLocale = previousLocale }
+        L10n.testLocale = Locale(identifier: "ko")
+        XCTAssertEqual(L10n.t("Target day"), "목표 거래일")
+        XCTAssertEqual(L10n.t("All"), "전체")
+        XCTAssertEqual(L10n.t("Source"), "출처")
+        XCTAssertEqual(L10n.t("Evaluated"), "평가 완료")
+        XCTAssertEqual(L10n.t("Export forecast CSV"), "예측 CSV 내보내기")
     }
     @MainActor func testTask6SavedCohortsAndPublicRender() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "task6-public-" + UUID().uuidString)
@@ -77,14 +86,49 @@ final class StockForecastEvaluationTests: XCTestCase {
                          AnyView(StockBacktestView(store: backtests)),
                          AnyView(StockCodexHistoryView(store: analyses, journal: journal, backtests: backtests))]
             for (index, view) in views.enumerated() {
-                let content = view.padding(4).frame(width: 680, height: 520).environment(\.colorScheme, .light)
-                let host = NSHostingView(rootView: content); host.frame = NSRect(x: 0, y: 0, width: 680, height: 520); host.layoutSubtreeIfNeeded()
-                XCTAssertEqual(host.bounds.size, NSSize(width: 680, height: 520))
-                let renderer = ImageRenderer(content: content); renderer.scale = 1
-                let image = try XCTUnwrap(renderer.nsImage)
-                XCTAssertEqual(image.size, NSSize(width: 680, height: 520))
-                let png = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(image.tiffRepresentation))?.representation(using: .png, properties: [:]))
-                XCTAssertGreaterThan(png.count, 2000, "A real, nonblank public UI render")
+                // Native hosting is required for the ScrollView/segmented controls; ImageRenderer
+                // flattened only the header. The window is never ordered on screen.
+                let height = index == 1 ? 520.0 : 1100.0
+                let content = view.padding(4).frame(width: 680, height: height)
+                    .background(Color.white).environment(\.colorScheme, .light)
+                let bitmap = try hostingSnapshot(content, height: height)
+                let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                var bodyInk = 0
+                for y in stride(from: 100, to: bitmap.pixelsHigh, by: 2) {
+                    for x in stride(from: 0, to: bitmap.pixelsWide, by: 2) {
+                        if let pixel = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB), pixel.alphaComponent > 0.9,
+                           max(pixel.redComponent, pixel.greenComponent, pixel.blueComponent) < 0.8 { bodyInk += 1 }
+                    }
+                }
+                XCTAssertGreaterThan(bodyInk, 100, "Rendered body below header contains readable dark content, not just frame/PNG bytes")
+                // An offscreen window has no published AX children. One local SDK recognition
+                // request checks the actual bitmap labels and placement, not source strings.
+                let recognition = VNRecognizeTextRequest()
+                recognition.recognitionLevel = .accurate; recognition.usesLanguageCorrection = false
+                recognition.recognitionLanguages = language == "ko" ? ["ko-KR", "en-US"] : ["en-US"]
+                try VNImageRequestHandler(cgImage: try XCTUnwrap(bitmap.cgImage)).perform([recognition])
+                let labels = (recognition.results ?? []).compactMap { observation -> (text: String, frame: CGRect)? in
+                    guard let text = observation.topCandidates(1).first?.string else { return nil }
+                    return (text, observation.boundingBox)
+                }
+                func normalized(_ text: String) -> String { String(text.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }) }
+                let text = normalized(labels.map(\.text).joined(separator: " "))
+                if index != 1 {
+                    XCTAssertTrue(text.contains(normalized(forecast.forecastModel)), "The rendered native body contains the injected Codex model")
+                    if index == 0 { XCTAssertTrue(text.contains(normalized(forecast.pairedGBMRecord!.model)), "The rendered native body contains the paired GBM model") }
+                    XCTAssertTrue(text.contains(normalized(L10n.t("Saved analysis requests/responses"))))
+                    XCTAssertTrue(text.contains(normalized(L10n.t("MAPE minus baseline (percentage points)"))))
+                    XCTAssertTrue(text.contains(normalized(L10n.t("Evaluation details"))))
+                    XCTAssertFalse(text.contains(normalized(L10n.t("Price-hold baseline error"))), "Detailed metrics start collapsed")
+                    XCTAssertFalse(text.contains(normalized(L10n.t("Probability check"))), "Calibration starts collapsed")
+                    let summary = try XCTUnwrap(labels.first { normalized($0.text).contains(normalized(forecast.forecastModel)) })
+                    XCTAssertLessThan(summary.frame.maxY, 0.85, "The actual Codex summary is below the header")
+                    let detail = try XCTUnwrap(labels.filter { normalized($0.text).contains(normalized(L10n.t("Evaluation details"))) && $0.frame.maxY < summary.frame.minY }.max { $0.frame.maxY < $1.frame.maxY })
+                    XCTAssertLessThan(detail.frame.maxY, summary.frame.minY, "Collapsed detail control follows its summary")
+                } else {
+                    XCTAssertTrue(text.contains(normalized(L10n.t("Start replay"))))
+                    XCTAssertTrue(text.contains(normalized(L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."))))
+                }
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
                 attachment.name = "task6-public-\(language)-\(index)"; attachment.lifetime = .keepAlways; add(attachment)
             }
@@ -92,6 +136,19 @@ final class StockForecastEvaluationTests: XCTestCase {
         XCTAssertEqual(requests, 0)
         XCTAssertEqual(L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."),
             "현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음")
+    }
+
+    @MainActor private func hostingSnapshot<V: View>(_ content: V, height: Double) throws -> NSBitmapImageRep {
+        let rect = NSRect(x: 0, y: 0, width: 680, height: height)
+        let window = NSWindow(contentRect: rect, styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.appearance = NSAppearance(named: .aqua)
+        let host = NSHostingView(rootView: content); window.contentView = host
+        host.frame = rect; defer { window.close() }
+        for _ in 0..<3 { host.layoutSubtreeIfNeeded(); RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.02)) }
+        host.layoutSubtreeIfNeeded(); host.displayIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        return bitmap
     }
 
     private struct Fixture: Decodable {

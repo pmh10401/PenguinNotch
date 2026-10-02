@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const {chromium} = require('playwright');
 const root = path.join(__dirname, '../penguinnotch/ui');
 
-function mockIPC() {
+function mockIPC(options = {}) {
   if(!crypto.randomUUID)crypto.randomUUID=()=> 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const initial = {lang:'en', weekly:'inside', transition:'hard_step', adaptive:false, automatic:true, update:{available:null,checking:false,installing:false,message:null,downloaded:null,total:null,deferred:false,preview:false}, slots:[], flags:{notch_visible:true,notch_on_hover:true,tray_visible:true},
     display:{shows_notch_readings:true,weekly_ring_dashed:false,weekly_reading:false,weekly_headline:false,reset_time_format:'automatic',show_usage_pace:false,claude_daily_pace_ring:false,show_codex_extra_limits:true},
@@ -24,7 +24,7 @@ function mockIPC() {
     calls.push({cmd,args:structuredClone(args)});
     if(cmd==='stock_backtest_archive'){
       const r=args.request;
-      if(r.action==='list')return {type:'manifests',manifests:structuredClone(replayManifests)};
+      if(r.action==='list'){if(options.delayReplayList)return new Promise(resolve=>window.releaseInitialReplayList=manifests=>resolve({type:'manifests',manifests}));return {type:'manifests',manifests:structuredClone(replayManifests)};}
       if(r.action==='loadManifest')return {type:'manifest',manifest:structuredClone(replayManifests.find(m=>m.runID===r.runID))};
       if(r.action==='loadCase'||r.action==='loadResult')return {type:'body',...replayBodies[r.runID+'/'+r.caseID][r.action]};
       throw Error('No archive writes in UI fixture');
@@ -98,7 +98,7 @@ function mockIPC() {
         return route.fulfill({path:path.join(root,name),contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'text/javascript'});
       external.push(url.href);return route.abort();
     });
-    await context.addInitScript(mockIPC);
+    await context.addInitScript(mockIPC,{delayReplayList:process.env.TASK6_FIX_ONLY==='1'&&process.env.TASK6_FIX_CASE==='listing'});
     const page=await context.newPage();
     page.on('pageerror',e=>errors.push(e.message));
     page.on('console',m=>{if(['error','warning'].includes(m.type()))errors.push(m.text());});
@@ -108,6 +108,7 @@ function mockIPC() {
     assert.equal(page.url(),'http://settings.test/settings.html');
     const tabs=['accounts','stocks','monitoring','widgets','appearance','general'];
     assert.deepEqual(await page.locator('[role=tab] > span:last-child').allTextContents(),['AI subscriptions','Stocks','Computer monitoring','Daily widgets','Appearance','General']);
+    if(process.env.TASK6_FIX_ONLY==='1'){await task6ReviewFixUI(page,process.env.TASK6_FIX_CASE);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(await page.evaluate(()=>unmocked),[]);console.log('PASS Task6 fix1 actual settings mount: '+process.env.TASK6_FIX_CASE);return;}
     await task6ReplayUI(page);
     const idle=()=>page.waitForFunction(()=>!widgetSaving);
     const click=async selector=>{await page.locator(selector).click();await idle();};
@@ -419,4 +420,45 @@ async function task6ReplayUI(page){
   assert.equal(await page.locator('#stock-export-forecasts').isEnabled(),true);
   await page.evaluate(()=>{stockSettingsStore.history={version:1,trends:[],forecasts:[]};stockSettingsView.render();});
   await page.locator('#stock-tab-watchlist').click();
+}
+
+
+async function task6ReviewFixUI(page,check){
+  const fixture=require('../../Tests/Fixtures/stock-forecast-evaluation-v1.json'),sample=fixture.replayCases[0].caseData;
+  const models=['GBM daily zero drift v1 / replay v1','GBM 1m zero drift v1 / replay v1','GBM 10m zero drift v1 / replay v1'];
+  const hash='a'.repeat(64),resultHash='b'.repeat(64),runID='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const entry={caseID:sample.input.caseID,stockID:sample.input.stockID,tradingDay:sample.input.tradingDay,status:'saved',inputSHA256:hash,resultSHA256:resultHash,reason:null};
+  const result={version:1,caseID:entry.caseID,inputSHA256:hash,calculationVersion:'replay-v1',computedAt:sample.target.fetchedAt,outcomes:models.map((model,i)=>({model,status:'forecast',reason:null,forecast:fixture.replayCases[0].expected[['1d','1m','10m'][i]]}))};
+  const manifest={version:1,runID,createdAt:sample.target.fetchedAt,collectionStartedAt:sample.target.fetchedAt,collectionCompletedAt:sample.target.fetchedAt,protocolVersion:'replay-v1',codeVersion:'PUBLIC-FIXTURE',priceBasis:'provider-adjusted-as-fetched',cutoffMinutes:60,sessions:20,symbols:[entry.stockID],models,status:'completed',cases:[entry]};
+  await page.waitForFunction(()=>stockSettingsStore.credentialGeneration>0&&calls.some(c=>c.cmd==='get_stock_settings'));
+  if(check==='listing'){
+    assert.equal(await page.evaluate(()=>stockBacktestStore.runs.length),0);
+    await page.evaluate(manifest=>{replayManifests=[manifest];releaseInitialReplayList(replayManifests);},manifest);
+    await page.evaluate(()=>stockBacktestStore.ready);
+    assert.equal(await page.evaluate(()=>stockBacktestStore.runs.length),1,'actual settings mount/status reload preserves delayed initial list1');
+    // A later publication must remain authoritative over the older initial archive snapshot.
+    assert.equal(await page.evaluate(async manifest=>{let release;const owner=new PenguinNotchBacktests.BacktestStore({invoke:async()=>new Promise(r=>release=r)});owner.publish({...manifest,status:'paused',collectionCompletedAt:null});release({type:'manifests',manifests:[manifest]});await owner.ready;return owner.runs[0].status;},manifest),'paused');
+    return;
+  }
+  await page.evaluate(({manifest,sample,result,hash,resultHash})=>{
+    replayManifests=[manifest];replayBodies[manifest.runID+'/'+sample.input.caseID]={loadCase:{body:JSON.stringify(sample),sha256:hash},loadResult:{body:JSON.stringify(result),sha256:resultHash}};
+    stockBacktestStore.runs=replayManifests;stockBacktestStore.emit();
+  },{manifest,sample,result,hash,resultHash});
+  await page.locator('#tab-stocks').click();await page.locator('#stock-tab-history').click();await page.locator('#stock-history-replay').click();
+  await page.waitForFunction(()=>document.querySelectorAll('.stock-evaluation').length===3&&!document.getElementById('stock-replay').textContent.includes('Loading saved results'));
+  if(check==='focus'){
+    const summary=page.locator('.stock-evaluation details > summary').first();await summary.focus();
+    const key=await summary.evaluate(e=>e.parentElement.dataset.stockDisclosure);
+    await page.evaluate(()=>stockBacktestStore.emit());
+    assert.equal(await page.evaluate(()=>document.activeElement?.parentElement?.dataset.stockDisclosure),key,'IDless summary keyboard focus survives actual store refresh');
+    await page.keyboard.press('Enter');assert.equal(await page.locator('.stock-evaluation details').first().getAttribute('open'),'');
+  }else if(check==='units'){
+    for(const lang of ['en','ko']){
+      await page.evaluate(lang=>setUiLanguage(lang),lang);
+      const comparison=page.locator('[data-stock-disclosure="replay-comparison"]');await comparison.locator(':scope > summary').click();
+      const text=await comparison.textContent();assert.match(text,/MAPE \d+\.\d+% · Brier (?:0\.\d+|0|1)/,'paired MAPE has percentage units, Brier remains a fraction');
+      assert.doesNotMatch(text,/Brier [\d.]+%/);
+      await comparison.locator(':scope > summary').click();
+    }
+  }else throw Error('Unknown focused review check');
 }
