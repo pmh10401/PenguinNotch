@@ -428,15 +428,9 @@ impl Manifest {
                         .iter()
                         .map(|e| e.case_id.clone())
                         .collect::<Vec<_>>(),
-                )
-                && self
-                    .cases
-                    .iter()
-                    .map(|e| &e.trading_day)
-                    .collect::<HashSet<_>>()
-                    .len()
-                    <= self.sessions,
+                ),
         )?;
+        let mut days_by_market: HashMap<&str, HashSet<&str>> = HashMap::new();
         for e in &self.cases {
             check(
                 identity(&e.case_id, &e.stock_id, &e.trading_day)
@@ -447,6 +441,11 @@ impl Manifest {
                         .as_ref()
                         .is_none_or(|s| !s.is_empty() && s.len() <= 256),
             )?;
+            // Identity above guarantees a canonical market:symbol before grouping.
+            let market = e.stock_id.split_once(':').unwrap().0;
+            let days = days_by_market.entry(market).or_default();
+            days.insert(&e.trading_day);
+            check(days.len() <= self.sessions)?;
             check(match e.status {
                 EntryStatus::Pending => {
                     e.input_sha256.is_none() && e.result_sha256.is_none() && e.reason.is_none()
@@ -1405,6 +1404,74 @@ mod tests {
             "symbols":[c.input.stock_id],"models":[MODELS[0]],"status":"ready","cases":[{
                 "caseID":c.input.case_id,"stockID":c.input.stock_id,"tradingDay":c.input.trading_day,
                 "status":"pending","inputSHA256":null,"resultSHA256":null,"reason":null}]})).unwrap().as_bytes()).unwrap()
+    }
+    #[test]
+    fn manifest_session_limit_is_per_market() {
+        let mut manifest = m();
+        manifest.symbols = vec!["us:AAPL".into(), "kr:005930".into()];
+        let template = manifest.cases[0].clone();
+        let entry = |stock_id: &str, offset: usize| {
+            let mut e = template.clone();
+            e.stock_id = stock_id.into();
+            e.trading_day = format!("2026-09-{:02}", offset + 1);
+            e.case_id = format!("{}_{}", stock_id.replace(':', "_"), e.trading_day);
+            e
+        };
+        manifest.cases.clear();
+        for n in 0..20 {
+            manifest.cases.push(entry("us:AAPL", n));
+            manifest.cases.push(entry("kr:005930", n + 1));
+        }
+        assert_eq!(manifest.cases.len(), 40);
+        assert_eq!(
+            manifest
+                .cases
+                .iter()
+                .map(|e| &e.trading_day)
+                .collect::<HashSet<_>>()
+                .len(),
+            21
+        );
+        assert!(manifest.validate().is_ok());
+        let t = Temp::new();
+        handle_at(
+            &t.root(),
+            ArchiveRequest::Create {
+                manifest: manifest.clone(),
+            },
+        )
+        .unwrap();
+        let loaded = handle_at(
+            &t.root(),
+            ArchiveRequest::LoadManifest {
+                run_id: manifest.run_id.clone(),
+            },
+        )
+        .unwrap();
+        if let ArchiveReply::Manifest { manifest: actual } = loaded {
+            assert_eq!(actual, manifest);
+        } else {
+            panic!("wrong archive reply");
+        }
+        let mut same_market = manifest.clone();
+        same_market.symbols.push("us:MSFT".into());
+        same_market.cases.push(entry("us:MSFT", 20));
+        assert!(same_market.cases.len() <= same_market.symbols.len() * same_market.sessions);
+        assert!(same_market.validate().is_err());
+        let mut total_invalid = manifest.clone();
+        total_invalid.cases.push(entry("us:AAPL", 20));
+        assert!(total_invalid.cases.len() > total_invalid.symbols.len() * total_invalid.sessions);
+        assert!(total_invalid.validate().is_err());
+        let mut identity_invalid = manifest.clone();
+        identity_invalid.cases[0].stock_id = "kr:005930".into();
+        assert!(identity_invalid.validate().is_err());
+        let mut hash_invalid = manifest.clone();
+        hash_invalid.cases[0].status = EntryStatus::Saved;
+        hash_invalid.cases[0].input_sha256 = Some("invalid".into());
+        assert!(hash_invalid.validate().is_err());
+        let mut duplicate = manifest.clone();
+        duplicate.cases[1] = duplicate.cases[0].clone();
+        assert!(duplicate.validate().is_err());
     }
     fn create(root: &Path) -> Manifest {
         let m = m();

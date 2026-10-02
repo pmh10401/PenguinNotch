@@ -66,7 +66,8 @@ function validManifest(m){
     &&Array.isArray(m.models)&&m.models.length>0&&unique(m.models)&&m.models.every(model=>MODELS.includes(model))
     &&['ready','running','paused','completed'].includes(m.status)&&(m.status==='completed')===(m.collectionCompletedAt!==null)
     &&Array.isArray(m.cases)&&m.cases.length<=m.symbols.length*m.sessions&&unique(m.cases.map(e=>e?.caseID))
-    &&new Set(m.cases.map(e=>e?.tradingDay)).size<=m.sessions&&m.cases.every(e=>validEntry(e)&&m.symbols.includes(e.stockID)&&(m.status!=='completed'||e.status!=='pending'));
+    &&m.cases.every(e=>validEntry(e)&&m.symbols.includes(e.stockID)&&(m.status!=='completed'||e.status!=='pending'))
+    &&['kr','us'].every(market=>new Set(m.cases.filter(e=>S.parseStock(e.stockID).market===market).map(e=>e.tradingDay)).size<=m.sessions);
 }
 function validResult(r){
   if(!keys(r,['version','caseID','inputSHA256','calculationVersion','computedAt','outcomes'])||r.version!==1||!safeCaseID(r.caseID)||!digest(r.inputSHA256)

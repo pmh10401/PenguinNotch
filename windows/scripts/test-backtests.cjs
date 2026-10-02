@@ -323,3 +323,30 @@ test('native public adapter bypasses display gate and retains full offsets/dupli
  const store=new B.BacktestStore({invoke,now:f.now,sleep:f.sleep});await store.start({symbols:[f.stock],sessions:20});
  assert.ok(store.runs[0].cases.every(e=>e.status==='saved'));assert.equal(native.length,101);assert.ok(native.every(r=>r.kind==='calendar'||r.interval!=='10m'&&r.adjusted===true&&r.count===200));
 });
+
+test('manifest session limit is per market',()=>{
+ const m=manifest();m.symbols=['us:AAPL','kr:005930'];m.cases=[];
+ const entry=(stockID,n)=>{const tradingDay=`2026-09-${String(n+1).padStart(2,'0')}`;return {caseID:stockID.replace(':','_')+'_'+tradingDay,stockID,tradingDay,status:'pending',inputSHA256:null,resultSHA256:null,reason:null};};
+ for(let n=0;n<20;n++)m.cases.push(entry('us:AAPL',n),entry('kr:005930',n+1));
+ assert.equal(m.cases.length,40);assert.equal(new Set(m.cases.map(e=>e.tradingDay)).size,21);assert.equal(B.validManifest(m),true);
+ const same=copy(m);same.symbols.push('us:MSFT');same.cases.push(entry('us:MSFT',20));assert.ok(same.cases.length<=same.symbols.length*same.sessions);assert.equal(B.validManifest(same),false);
+ const total=copy(m);total.cases.push(entry('us:AAPL',20));assert.ok(total.cases.length>total.symbols.length*total.sessions);assert.equal(B.validManifest(total),false);
+ const identity=copy(m);identity.cases[0].stockID='kr:005930';assert.equal(B.validManifest(identity),false);
+ const hash=copy(m);hash.cases[0].status='saved';hash.cases[0].inputSHA256='invalid';assert.equal(B.validManifest(hash),false);
+ const duplicate=copy(m);duplicate.cases[1]=copy(duplicate.cases[0]);assert.equal(B.validManifest(duplicate),false);
+});
+test('collector freezes divergent market calendars',async t=>{
+ const f=collectorFixture(t,{mode:'partial',dailyCount:2}),stocks=[{symbol:'AAPL',market:'us',visible:false},{symbol:'005930',market:'kr',visible:false}];
+ let clock=Date.parse('2026-09-25T19:30:00Z'),candles=0,store;
+ const dates=latest=>{const out=[];for(let n=0;n<20;n++){out.push(latest);latest=f.previous(latest);}return out;};
+ const expected={us:dates('2026-09-24'),kr:dates('2026-09-25')};
+ store=new B.BacktestStore({invoke:f.invoke,now:()=>clock,sleep:async ms=>{clock+=ms;},stockRequest:async request=>{
+  if(request.type==='candles'){
+   candles++;const m=store.runs[0];assert.ok(m);assert.equal(new Set(m.cases.map(e=>e.tradingDay)).size,21);
+   for(const stock of stocks)assert.deepEqual(m.cases.filter(e=>e.stockID===S.stockID(stock)).map(e=>e.tradingDay),expected[stock.market]);
+  }
+  const reply=await f.stockRequest(request);reply.requestedAt=clock;return reply;
+ }});
+ await store.start({symbols:stocks,sessions:20});const m=store.runs[0];assert.equal(m.status,'completed');assert.equal(m.cases.length,40);
+ assert.equal(candles,120);assert.ok(m.cases.every(e=>e.status==='saved'));assert.deepEqual((await f.invoke('stock_backtest_archive',{request:{action:'loadManifest',runID:m.runID}})).manifest.cases,m.cases);
+});

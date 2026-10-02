@@ -331,11 +331,14 @@ struct StockBacktestArchive: Sendable {
               m.symbols.allSatisfy({ WatchedStock.parse($0)?.id == $0 && !$0.contains("..") }),
               !m.models.isEmpty, Set(m.models).count == m.models.count, m.models.allSatisfy(models.contains),
               m.cases.count <= m.symbols.count * m.sessions, Set(m.cases.map(\.caseID)).count == m.cases.count,
-              Set(m.cases.map(\.tradingDay)).count <= m.sessions,
               (m.status == .completed) == (m.collectionCompletedAt != nil) else { throw invalid() }
+        var daysByMarket: [String: Set<String>] = [:]
         for e in m.cases {
             guard identity(e.caseID, stockID: e.stockID, day: e.tradingDay), m.symbols.contains(e.stockID),
                   digest(e.inputSHA256), digest(e.resultSHA256), e.reason.map({ !$0.isEmpty && $0.utf8.count <= 256 }) ?? true else { throw invalid() }
+            let market = WatchedStock.parse(e.stockID)!.market.rawValue // Identity above validates canonical stockID.
+            daysByMarket[market, default: []].insert(e.tradingDay)
+            guard daysByMarket[market]!.count <= m.sessions else { throw invalid() }
             switch e.status {
             case .pending: guard e.inputSHA256 == nil, e.resultSHA256 == nil, e.reason == nil else { throw invalid() }
             case .saved: guard e.inputSHA256 != nil, e.reason == nil else { throw invalid() }

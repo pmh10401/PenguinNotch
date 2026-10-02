@@ -558,6 +558,64 @@ final class StockBacktestTests: XCTestCase {
     }
 
 
+    func testManifestSessionLimitIsPerMarket() throws {
+        var m = archiveManifest(try StockBacktest.decodeCase(wireBody))
+        m.symbols = ["us:AAPL", "kr:005930"]; m.cases = []
+        func entry(_ id: String, _ offset: Int) -> StockBacktestManifest.Entry {
+            let date = String(format: "2026-09-%02d", offset + 1)
+            return .init(caseID: id.replacingOccurrences(of: ":", with: "_") + "_" + date, stockID: id,
+                tradingDay: date, status: .pending, inputSHA256: nil, resultSHA256: nil, reason: nil)
+        }
+        for n in 0..<20 { m.cases.append(entry("us:AAPL", n)); m.cases.append(entry("kr:005930", n + 1)) }
+        XCTAssertEqual(Set(m.cases.map(\.tradingDay)).count, 21)
+        XCTAssertEqual(m.cases.count, 40)
+        let encoder = JSONEncoder()
+        XCTAssertEqual(try StockBacktestArchive.decodeManifest(encoder.encode(m)), m)
+        var sameMarket = m; sameMarket.symbols.append("us:MSFT"); sameMarket.cases.append(entry("us:MSFT", 20))
+        XCTAssertLessThanOrEqual(sameMarket.cases.count, sameMarket.symbols.count * sameMarket.sessions)
+        XCTAssertThrowsError(try StockBacktestArchive.decodeManifest(encoder.encode(sameMarket)))
+        var totalInvalid = m; totalInvalid.cases.append(entry("us:AAPL", 20))
+        XCTAssertGreaterThan(totalInvalid.cases.count, totalInvalid.symbols.count * totalInvalid.sessions)
+        XCTAssertThrowsError(try StockBacktestArchive.decodeManifest(encoder.encode(totalInvalid)))
+        var identityInvalid = m; identityInvalid.cases[0].stockID = "kr:005930"
+        XCTAssertThrowsError(try StockBacktestArchive.decodeManifest(encoder.encode(identityInvalid)))
+        var hashInvalid = m; hashInvalid.cases[0].status = .saved; hashInvalid.cases[0].inputSHA256 = "invalid"
+        XCTAssertThrowsError(try StockBacktestArchive.decodeManifest(encoder.encode(hashInvalid)))
+        var duplicate = m; duplicate.cases[1] = duplicate.cases[0]
+        XCTAssertThrowsError(try StockBacktestArchive.decodeManifest(encoder.encode(duplicate)))
+    }
+    @MainActor
+    func testCollectorFreezesDivergentMarketCalendars() async throws {
+        let archive = StockBacktestArchive(directory: try temporaryArchive())
+        let us = BacktestPublicFixture(market: .us, mode: "partial", dailyCount: 2)
+        let kr = BacktestPublicFixture(market: .kr, mode: "partial", dailyCount: 2)
+        var clock = StockBacktestStore.timestamp("2026-09-25T19:30:00Z")!, candleRequests = 0
+        var store: StockBacktestStore!
+        func dates(_ latest: String) -> [String] {
+            var date = latest, result: [String] = []
+            for _ in 0..<20 { result.append(date); date = us.previous(date) }; return result
+        }
+        let usDates = dates("2026-09-24"), krDates = dates("2026-09-25")
+        store = StockBacktestStore(archive: archive, request: { request in
+            let fixture: BacktestPublicFixture
+            switch request {
+            case .calendar(let market, _): fixture = market == .us ? us : kr
+            case .candles(let stock, _, _, _, _):
+                fixture = stock.market == .us ? us : kr; candleRequests += 1
+                let m = try XCTUnwrap(store.runs.first)
+                XCTAssertEqual(m.cases.filter { $0.stockID == us.stock.id }.map(\.tradingDay), usDates)
+                XCTAssertEqual(m.cases.filter { $0.stockID == kr.stock.id }.map(\.tradingDay), krDates)
+                XCTAssertEqual(Set(m.cases.map(\.tradingDay)).count, 21)
+            }
+            fixture.clock = clock; return try await fixture.request(request)
+        }, now: { StockBacktest.date(clock) }, sleep: { clock += Int64($0) }, provider: { .toss })
+        try await store.start(symbols: [us.stock, kr.stock], sessions: 20)
+        let m = try XCTUnwrap(store.runs.first)
+        XCTAssertEqual(m.status, .completed); XCTAssertEqual(m.cases.count, 40)
+        XCTAssertEqual(candleRequests, 120); XCTAssertTrue(m.cases.allSatisfy { $0.status == .saved })
+        XCTAssertEqual(try archive.loadManifest(runID: m.runID).cases, m.cases)
+    }
+
     @MainActor
     func testCollectorsUseOnlyFrozenPublicInputs() async throws {
         let path = try temporaryArchive(), fixture = BacktestPublicFixture()
