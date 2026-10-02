@@ -34,6 +34,7 @@ mod updater;
 mod widgets;
 mod system_usage;
 mod stocks;
+mod backtests;
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -2056,6 +2057,7 @@ fn main() {
             activity: Mutex::new(Vec::new()),
         })
         .invoke_handler(tauri::generate_handler![
+            backtests::stock_backtest_archive,
             get_state,
             get_usage,
             claude_sign_in,
