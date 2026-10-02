@@ -31,6 +31,10 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.25.0", headline: L10n.t("Forecast history and evaluation"),
+                        changes: [.init(title: L10n.t("Saved predictions")),
+                                  .init(title: L10n.t("Historical replay"),
+                                        detail: L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."))]),
             ReleaseNote(version: "1.24.1", headline: L10n.t("Simpler stock settings"),
                         changes: [.init(title: L10n.t("Find watchlists, accounts, analysis and history in separate tabs.")),
                                   .init(title: L10n.t("Load accounts once and keep detailed information collapsed until needed."))]),

@@ -269,3 +269,29 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project Pen
 - Grok은 지정된 공개 코드만 읽어 비교 집합·사후 LLM 재실행·수정 가격·분봉 근거·확률 사건의 다섯 위험을 제시했고 Codex가 호출 흐름과 대조했습니다. 기대값과 확률의 부호가 다르다는 지적은 분포의 비대칭성과 구분하며 그 자체를 응답 오류로 단정하지 않습니다. 계좌·인증·사용자 이력·미추적 연구 산출물은 전달하지 않았습니다.
 - 로컬 저장 기록의 읽기 전용 감사는 별도 로컬 보고서에 두었습니다. Windows의 실제 `validForecast`/`score` 함수로 변환 입력을 검사해 집계와 대조했습니다. 첫 검사 어댑터의 존재하지 않는 반환 필드 단언은 실제 `accuracy` 필드로 바꿔 후속 검사를 통과했으며 앱 코드는 변경하지 않았습니다. 새 과거 시세 수집·모델 호출·Swift 빌드·Windows 실기·통합 기능 구현·설치·릴리즈는 수행하지 않았습니다.
 - 범위 승인 후 [정규장 종가 예측 통합·평가 설계](../superpowers/specs/2026-10-02-stock-forecast-evaluation-design.md)를 작성했습니다. 기존 이력 보존, 60분 전 cutoff, 같은 입력의 봉별 계산, 별도 재현 아카이브와 선택 모델 대응 비교를 명세합니다. 이는 검토용 문서이며 미래의 구현·과거 자료 확보·검증 성공을 입증하지 않습니다.
+
+## S19
+
+### 2026-10-02 1.25.0 개발 소스의 최종 오프라인 검증
+
+- 승인된 [설계](../superpowers/specs/2026-10-02-stock-forecast-evaluation-design.md)·[계획](../superpowers/plans/2026-10-02-stock-forecast-evaluation.md)의 Task1–6 구현과 각 독립 검토를 완료했습니다. Task7 시작 기능 기준은 로컬 `6905c55c5596b58a7e718871783af7579da2cdbe`입니다. 개발 버전은 **1.25.0 / Mac66 / Windows r58**이며 정식 공개 버전 **1.24.1**은 유지합니다. 이 기록은 로컬 검증이며 원격 CI·릴리즈·설치를 입증하지 않습니다. controller의 새 Task7/전체 브랜치 독립 검토·공개 코드 Grok 검토는 후속 단계입니다.
+- 공개 구현: [Swift 평가](../../Sources/Widgets/StockForecastEvaluation.swift), [재현 계산·아카이브·수집](../../Sources/Widgets/StockBacktest.swift), [통합 기록 화면](../../Sources/Settings/StockForecastHistoryView.swift), [재현 화면](../../Sources/Settings/StockBacktestView.swift), [Windows 평가](../../windows/penguinnotch/ui/stocks.js), [Windows 재현](../../windows/penguinnotch/ui/backtests.js), [native 보존 저장](../../windows/penguinnotch/src/backtests.rs). 원본 입력/결과 바이트의 SHA-256 연결, 입력만 받는 계산, 목표만 읽는 평가, 수정주가 기준, 취소·명시적 재개·누락 분모를 검사합니다. 사용법은 [주식 규칙](stocks.md#1250-개발-소스의-통합-평가와-과거-재현)에 있습니다.
+- [공유 합성 fixture](../../Tests/Fixtures/stock-forecast-evaluation-v1.json)의 SHA-256은 `9f0b6b7f6a60338352d76355c0a9678b40ab3438232fc4c7bf08c29bb73dad4f`입니다. DST·조기 종료·KR 세션, 세 모형, pending·통화·확률/구간 경계·선택 집합·중복 출처를 대조합니다. 가격 상대 오차 1e-8, 확률/집계 차이 1e-6 이내의 공개 합성 대조이며 실제 예측 성과나 사용자 집계가 아닙니다.
+- **최종 Swift 전체는 한 번 실행하여 2,260개 중 8개 skip, 두 테스트에서 17개 assertion 실패(exit 65)**였습니다. `ReleaseNotesTests.testTheCurrentVersionHasANote`는 1.25.0 노트 누락(1개), `TossAccountTests.testStockSettingsPagesRenderWithoutReadingAccountsOrChangingSavedChoices`는 680×640 포인트를 Retina의 1360×1280 픽셀과 비교한 기존 fixture 가정(8개 렌더 × 2개 단언)입니다. 승인된 좁은 수정으로 현재 버전의 사실에 맞는 노트를 추가하고 정확한 포인트 크기와 `window.backingScaleFactor`에 따른 픽셀 크기를 함께 단언했습니다. 계좌 요청 0·선택값 불변·원래 캡처 경로를 유지했습니다. 이후 **ReleaseNotes 7개 + 해당 설정 검사 1개 = 8개 통과, 실패/skip 0(exit 0)**입니다. 전체 suite를 재실행하지 않았으므로 새 전체 통과로 표현하지 않습니다.
+- 전체 Swift에서 관련 suite는 모두 실패 0입니다: Evaluation15, Backtest32, Forecast17, Chart15, Journal10, CodexAnalysis11, Quote30, Timing7. 별도 CodexRunner9는 live1 skip·실패0입니다. 이 수치는 전체 2,260개에 포함하며 다시 합산하지 않습니다. 8개 skip은 Amp·Apify·Devin·LMStudio·weather·Ollama·Codex arithmetic·Claude reset의 opt-in 실서비스 검사입니다. 전체/집중 명령에서 해당 opt-in 환경변수를 모두 해제했으며 활성화하지 않았습니다.
+- **Mac-host Rust 전체: 245개 통과·실패 0·4개 ignored(exit 0)**, hook binary는 0개입니다. 제외한 것은 실제 AGY quota, 화면 읽기, native Codex quota, Claude renewal입니다. **최신 GNU workspace/all-target 잠금·오프라인 컴파일도 exit 0**이며 Task4 native gate/per-market 수정까지 포함합니다. Mac-host Rust 실행과 Windows 교차 컴파일을 실제 Windows 실행으로 표현하지 않습니다.
+- Node/UI는 이후 변경하지 않은 최신 Task5/6 기록을 재사용합니다: 재현 전체28/28(Task5), Task6 UX5/5, fix1 관련8/8, fix2 관련10/10 및 마지막 변경 단언4/4는 서로 겹치는 범위입니다. stock umbrella11 PASS 그룹, widgets1/1, ko7/7, fake auth UI1/1, inline syntax가 통과했습니다. 실제 Chromium 설정24개 배치·노치48개 배치, fix1 focus/units, 최신 fix2 listing/union이 통과했으며 모의 IPC·외부 요청 abort를 사용했습니다. 서로 다른 시점의 검사를 합산하거나 최신 전체 Node/browser를 다시 실행했다고 주장하지 않습니다.
+- Task6의 최신 네이티브 렌더는 공개 임시 저장소를 주입한 EN/KO history/replay/Codex 진입점 6개 NSHostingView bitmap과 본문 픽셀·로컬 Vision label 검증입니다. ImageRenderer가 헤더만 남긴 초기 근거는 대체되었습니다. 화면 밖 캡처는 실제 창 키보드·닫기 조작 검증이 아닙니다.
+- 출력은 pristine하지 않습니다. 기존 Xcode CoreDevice/CoreSimulator 지원 진단, AppIntents metadata 생략·linkd/autoShortcut/XPC, SwiftUI 상태 접근, 로컬 Vision TextRecognition E5 및 일부 AppKit window/환경 진단이 남습니다. 집중 재컴파일에는 기존 Swift6 actor/Sendable·불필요한 nonisolated(unsafe)·Void 추론 진단과 unsigned strip-bitcode 생략도 있습니다. Rust는 Mac 기존 unused/dead-code8개, GNU normal4/test1개 경고를 유지합니다. 무관한 경고 수정을 하지 않았습니다.
+- [Windows workflow](../../.github/workflows/windows.yml)의 push/PR 경로에 fixture와 project.yml을 포함하고 Node backtest 단계를 연결했습니다. Node 단언은 project.yml·Cargo.toml·tauri.conf.json·Cargo.lock의 버전 일치를 확인합니다. 실제 동일 명령·YAML 구조 검사 exit0이며 fixture만 변경돼도 Windows 검사가 선택됩니다. 버전·기존 lock/Package.resolved·Info.plist는 Task7에서 그대로입니다. 생성 프로젝트의 소스 목록이 맞아 재생성/정리를 하지 않았습니다.
+- **실자료 probe는 UNPERFORMED**입니다. 안전한 기존 비대화형 인증을 입증하지 못했으며 인증·계좌·실제 제공처 조회를 실행하지 않았습니다. 실제 분봉 제공 기간·확보율·최종 종가와 당시 수정 버전, 사용자 Windows WebView2/Credential Manager·권한, 이 브랜치의 원격 CI는 미검증입니다. 개인 아카이브/집계·비밀·TEST 라벨은 공개 문서에 포함하지 않습니다. 순위·자동 모델 채택·매매 수익률 주장도 없습니다.
+
+대표 오프라인 명령(저장소 루트, 기존 의존성/생성 프로젝트 사용):
+
+```sh
+env -u PENGUINNOTCH_LIVE_CODEX_TEST -u CODENOTCH_TEST_APIFY_LIVE -u CODENOTCH_TEST_AMP_LIVE -u PENGUINNOTCH_TEST_DEVIN_LIVE -u PENGUINNOTCH_OLLAMA_LIVE -u PENGUINNOTCH_LMSTUDIO_LIVE -u PENGUINNOTCH_LIVE_WEATHER_TEST -u CLAUDE_RESET_LIVE_RENDER_PATH DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project PenguinNotch.xcodeproj -scheme PenguinNotch -destination 'platform=macOS' -configuration Debug -derivedDataPath build/forecast-evaluation-tests -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile test CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+cargo test --locked --offline --manifest-path windows/Cargo.toml --workspace --features tauri/macos-private-api
+cargo check --locked --offline --manifest-path windows/Cargo.toml --workspace --all-targets --target x86_64-pc-windows-gnu
+```
+
+Swift 실패 원본·집중 GREEN·정확한 명령/종료 코드·로그/해시·겹치는 Node/browser 근거는 로컬 Task7 report에 보존합니다. 전용 Xcode/Rust 캐시는 삭제하지 않고 종료 후 controller에 반환합니다.

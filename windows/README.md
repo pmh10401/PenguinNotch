@@ -16,6 +16,10 @@ with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.
 Overflowing notch items now scroll with the mouse wheel or trackpad on every edge,
 in both Circles and Bars. See [Scrolling long lists](#scrolling-long-lists).
 
+**Development source: 1.25.0 / r58**, matching macOS 1.25.0 / build 66.
+Unified evaluation and historical replay are implemented locally; stable 1.24.1
+is unchanged. This branch has not been published or installed.
+
 ## What it shows
 
 | Cell | Source | How it reads it |
@@ -110,10 +114,64 @@ deltas; settings loads the archive for filtering/export. No age-based pruning or
 omission-based deletion occurs, and unreadable/unknown archives are preserved
 with an error. macOS uses its own files; history is not synchronized between PCs.
 
+### Forecast history and historical replay (development 1.25.0)
+
+Open **Settings → Stocks → History → Forecast history and evaluation**.
+**Saved predictions** combines the existing journal and saved-response evaluation;
+model, manual/automatic capture and saved/replay cohorts stay separate. Summary
+comes first, with detailed metrics, calibration, comparisons and evidence collapsed.
+Paired GBM calculations are not Codex requests; saved abstentions count as saved
+responses but are not scored. Codex execution remains macOS-only.
+
+Configure the existing watchlist, choose **20, 60 (default), or 120 completed trading
+days**, then click **Start replay**. This freezes the **entire configured watchlist,
+including hidden symbols**, up to 30. There is no subset selector. Market, stock,
+target-day and model filters affect displayed results and CSV only. Cancel preserves
+saved data; explicit resume uses the run's frozen manifest after watchlist edits.
+Opening/reopening does not start or resume collection. Closing Settings while busy
+hides and retains the same WebView/owner until collection settles.
+
+Toss replay targets each official regular close from inputs frozen 60 minutes
+before it. The local models are `GBM daily zero drift v1 / replay v1`,
+`GBM 1m zero drift v1 / replay v1` and `GBM 10m zero drift v1 / replay v1`.
+Daily requires 61 closes / 60 returns; minute models require 10 consecutive
+completed returns, with complete 10-minute buckets. Requests are at least 250 ms
+apart, capped at 200 candles/page, 8 minute pages / 1,400 raw minute rows/case.
+Finnhub cannot provide replay candles.
+
+**Reconstructed from data fetched now; availability at the original time is not guaranteed.**
+Inputs and targets use provider-adjusted data fetched now, without claiming the
+historical adjustment vintage. Existing saved predictions keep unadjusted actual
+settlement. Past minute/target coverage may be missing; acquisition and model skip
+reasons remain visible and never become successful zero-error results.
+
+GBM expected close equals input price and its same-case price-hold baseline MAPE.
+Probability error and nominal 80% interval coverage/width do not prove better point
+predictions or trading returns. MAPE/coverage/width are percentages (MAPE/width may
+exceed 100), Brier is a fraction and MAE stays currency-specific. Paired comparisons
+require the selected models' identical frozen inputs and targets; available and
+paired denominators are separate. No ranking, automatic adoption, replay LLM call
+or new account request is added.
+
+Runs live in `%APPDATA%\penguinnotch\Forecasts\Backtests\<runUUID>\`, separately
+from SQLite and earlier history. The manifest binds original case/result bytes by
+SHA-256; corruption preserves originals and blocks writes. Evaluation CSV retains
+references, raw evidence, times, skip reasons and denominators with spreadsheet-safe
+text. See the [main README](../README.md#forecast-history-and-historical-replay)
+and [public verification ledger](../docs/wiki/sources.md#s19).
+
+Offline fixture checks, rendered browser mocks and Mac-host Rust/GNU compilation
+do not establish native Windows WebView2/Credential Manager or real historical
+provider coverage. Remote CI for this branch and onscreen macOS integration remain
+unverified. The optional real-data probe was not performed: safe noninteractive
+authentication was not established. Controller-owned whole-branch independent
+review is still pending.
+
 Focused checks from `windows/`:
 
 ```powershell
 node --test scripts/test-stocks.cjs
+node --test scripts/test-backtests.cjs
 node scripts/test-widgets.cjs
 node scripts/check-ui-scripts.mjs
 node --test test-codex-headline.cjs test-light-surface.cjs scripts/test-ko-i18n.cjs scripts/test-claude-auth-ui.cjs

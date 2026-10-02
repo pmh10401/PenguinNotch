@@ -416,8 +416,9 @@ final class TossAccountTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(40))
                 let image = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
                 view.cacheDisplay(in: view.bounds, to: image)
-                XCTAssertEqual(image.pixelsWide, 680)
-                XCTAssertEqual(image.pixelsHigh, 640)
+                XCTAssertEqual(view.bounds.size, NSSize(width: 680, height: 640))
+                XCTAssertEqual(image.pixelsWide, Int(680 * window.backingScaleFactor))
+                XCTAssertEqual(image.pixelsHigh, Int(640 * window.backingScaleFactor))
                 try image.representation(using: .png, properties: [:])?.write(to:
                     URL(fileURLWithPath: "/tmp/PenguinNotch-stock-settings-mac-\(language.rawValue)-\(index).png"))
                 window.orderOut(nil)

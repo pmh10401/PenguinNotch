@@ -8,10 +8,14 @@ on:
     branches: [main]
     paths:
       - 'windows/**'
+      - 'Tests/Fixtures/stock-forecast-evaluation-v1.json'
+      - 'project.yml'
       - '.github/workflows/windows.yml'
   pull_request:
     paths:
       - 'windows/**'
+      - 'Tests/Fixtures/stock-forecast-evaluation-v1.json'
+      - 'project.yml'
       - '.github/workflows/windows.yml'
 
 jobs:
@@ -24,6 +28,10 @@ jobs:
         working-directory: windows
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check macOS and Windows version parity
+        run: |
+          node -e 'const fs = require("node:fs"), assert = require("node:assert/strict"); const read = p => fs.readFileSync(p, "utf8"); const mac = read("../project.yml").match(/MARKETING_VERSION: "([^"]+)"/)[1]; const cargo = read("penguinnotch/Cargo.toml").match(/^version = "([^"]+)"/m)[1]; const lock = read("Cargo.lock").match(/name = "penguinnotch"\r?\nversion = "([^"]+)"/)[1]; assert.equal(cargo, mac); assert.equal(JSON.parse(read("penguinnotch/tauri.conf.json")).version, mac); assert.equal(lock, mac); console.log("macOS / Windows / lock version:", mac);'
 
       # First, and quick: cargo never reads the pages, so a syntax error in
       # their script stays green through the build and ships as an empty
@@ -42,6 +50,9 @@ jobs:
 
       - name: Test stock analysis and history
         run: node --test scripts/test-stocks.cjs
+
+      - name: Test historical replay and evaluation
+        run: node --test scripts/test-backtests.cjs
 
       - name: Test system widgets and disk volumes
         run: node scripts/test-widgets.cjs

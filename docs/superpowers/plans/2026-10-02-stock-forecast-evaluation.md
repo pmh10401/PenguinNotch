@@ -8,7 +8,9 @@
 
 **Tech Stack:** Swift/Foundation/SwiftUI/XCTest, 기존 Rust/Tauri/serde, vanilla JS/Node, 기존 Playwright 검사. 해시는 macOS CryptoKit과 Rust에서 이미 lock에 있는 sha2 0.10.9를 사용한다.
 
-**Spec:** [승인된 설계](../specs/2026-10-02-stock-forecast-evaluation-design.md), 설계 커밋 `6b40e1c`. 2026-10-02 사용자의 “진행”으로 설계 검토 단계가 승인됐다. **이 계획은 아직 사용자 실행 검토 전이다.**
+**Spec:** [승인된 설계](../specs/2026-10-02-stock-forecast-evaluation-design.md), 설계 커밋 `6b40e1c`. 2026-10-02 사용자의 “진행”으로 설계 검토 단계가 승인됐고 이후 승인 범위의 Task1–6 구현·각 독립 검토를 완료했다.
+
+**Status:** 개발 소스 1.25.0 / Mac66 / Windows r58의 Task7 오프라인 검증·문서·CI와 로컬 전달을 준비했다. Swift 전체 2,260개/8 skip/두 테스트의 17 assertion 실패 뒤 승인된 노트·Retina fixture 수정과 관련 8개 GREEN을 확인했으며 전체 검사를 반복하지 않았다. Rust245 통과/4 ignored·실패0과 최신 GNU all-target 컴파일을 확인했다. 정식 배포는 1.24.1을 유지한다. Step3의 선택적 실자료 probe는 안전한 비대화형 인증이 입증되지 않아 미수행이다. Step4의 문서는 준비하되 새 Task7 검토·전체 브랜치 독립 검토·공개 코드 Grok 검토는 controller가 후속 수행한다. 해당 단계는 검토 완료 전까지 체크하지 않는다. [S19](../../wiki/sources.md#s19)는 공개 fixture 검증과 미검증 범위를 구분한다.
 
 ## Global Constraints
 
@@ -78,11 +80,11 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 
 **Interfaces:** Shared interfaces의 StockEvaluation rows/metrics/compare와 JS 대응 함수를 제공한다. 기존 Score/compareModels 호출의 반환값·단위는 유지하고 내부 계산만 공통 규칙에 연결한다.
 
-- [ ] **Step 1: RED 회귀를 추가한다.** Swift `testSelectedModelsIgnoreUnselectedPendingModel`: A/B의 동일 입력에 정산한 기록 각 1건과 C pending이 있을 때 `compare(rows, selectedModels:["A","B"]).pairedCount == 1`이다. `testEquivalentPairedGBMCountsOnce`는 recorded+pairedCalculation의 출력이 같으면 evaluated=1이고 양쪽 출처를 유지하며, 출력이 다르면 pairedCount=0이다. Node도 같은 fixture를 읽는다.
-- [ ] **Step 2: RED를 확인한다.** Verification commands의 Swift suite와 `node --test windows/scripts/test-stocks.cjs`를 실행하고 선택 모델·중복 처리의 assertion 또는 새 API 미구현으로 실패하는지 기록한다.
-- [ ] **Step 3: 최소 구현한다.** `StockEvaluation`과 JS 함수를 추가한다. MAPE=100*abs(expected-actual)/actual, Brier=(p-(actual>previous))², range는 양 끝 포함, width=100*(upper-lower)/input이다. 기존 isValid/validForecast를 통과한 기록만 읽는다. evidence=nil인 오래된 기록은 자체 점수·기준선까지만 허용하고 복수 모델 대응은 제외한다. recorded/paired가 완전히 같으면 출처만 묶고, 선택하지 않은 모델을 비교 필수 집합에 넣지 않는다.
-- [ ] **Step 4: GREEN과 경계를 확인한다.** 보합·p=.5, null 실적, 다른 통화, 실적/근거/capture 불일치, Codex abstain, 같은 이름의 다른 입력을 검사한다. MAPE>100을100으로 자르지 않고, 극단적인 유한 가격의 계산 오버플로우는 해당 지표 null/계산 불가로 표시해 성공0점으로 처리하지 않는다. MAPE/coverage는 백분율, Brier는 fraction, MAE는 통화별임을 양쪽에서 단언한다. fixture는 Swift #filePath 및 Node 저장소 상대 경로로 읽고 제품에 동봉하지 않는다.
-- [ ] **Step 5: 검토 후 로컬 commit한다.** 변경 파일만 stage하고 Global Constraints의 게이트를 통과한다. 첫 제품 commit에는 Task 7의 버전 값도 포함한다.
+- [x] **Step 1: RED 회귀를 추가한다.** Swift `testSelectedModelsIgnoreUnselectedPendingModel`: A/B의 동일 입력에 정산한 기록 각 1건과 C pending이 있을 때 `compare(rows, selectedModels:["A","B"]).pairedCount == 1`이다. `testEquivalentPairedGBMCountsOnce`는 recorded+pairedCalculation의 출력이 같으면 evaluated=1이고 양쪽 출처를 유지하며, 출력이 다르면 pairedCount=0이다. Node도 같은 fixture를 읽는다.
+- [x] **Step 2: RED를 확인한다.** Verification commands의 Swift suite와 `node --test windows/scripts/test-stocks.cjs`를 실행하고 선택 모델·중복 처리의 assertion 또는 새 API 미구현으로 실패하는지 기록한다.
+- [x] **Step 3: 최소 구현한다.** `StockEvaluation`과 JS 함수를 추가한다. MAPE=100*abs(expected-actual)/actual, Brier=(p-(actual>previous))², range는 양 끝 포함, width=100*(upper-lower)/input이다. 기존 isValid/validForecast를 통과한 기록만 읽는다. evidence=nil인 오래된 기록은 자체 점수·기준선까지만 허용하고 복수 모델 대응은 제외한다. recorded/paired가 완전히 같으면 출처만 묶고, 선택하지 않은 모델을 비교 필수 집합에 넣지 않는다.
+- [x] **Step 4: GREEN과 경계를 확인한다.** 보합·p=.5, null 실적, 다른 통화, 실적/근거/capture 불일치, Codex abstain, 같은 이름의 다른 입력을 검사한다. MAPE>100을100으로 자르지 않고, 극단적인 유한 가격의 계산 오버플로우는 해당 지표 null/계산 불가로 표시해 성공0점으로 처리하지 않는다. MAPE/coverage는 백분율, Brier는 fraction, MAE는 통화별임을 양쪽에서 단언한다. fixture는 Swift #filePath 및 Node 저장소 상대 경로로 읽고 제품에 동봉하지 않는다.
+- [x] **Step 5: 검토 후 로컬 commit한다.** 변경 파일만 stage하고 Global Constraints의 게이트를 통과한다. 첫 제품 commit에는 Task 7의 버전 값도 포함한다.
 
 ### Task 2: 봉별 과거 입력과 순수 계산
 
@@ -90,11 +92,11 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 
 **Interfaces:** StockBacktestInput/Case/Outcome/Result/Manifest와 predict/predictReplay를 제공한다. `StockForecast.intradayEstimate(price:Decimal,previous:Decimal,bars:[StockCandle],trading:TradingSession,at:Date,interval:StockChartInterval) -> StockForecast?`를 추가하고 기존 chartEstimate는 기존 시각으로 이를 호출한다. JS 대응은 `intradayEstimate(price,previous,bars,trading,at,interval)`이다.
 
-- [ ] **Step 1: RED `testTargetCannotChangePrediction`을 추가한다.** 같은 input에 actualClose=1과 1000을 붙인 두 case의 각 1m/10m/1d outcome이 같아야 한다. 원자료 응답에 cutoff 이후 극단적인 가격을 추가해도 완료 봉 필터를 통과한 input/예측은 같다. 검증할 input에 미래 봉을 직접 끼워 넣으면 거부한다. 일봉 61개 fixture에서 expectedClose===inputPrice, observations===60, cutoff===sessionEnd-3600000을 단언한다.
-- [ ] **Step 2: RED를 확인한다.** Swift only-testing을 StockBacktestTests로 바꾸고 `node --test windows/scripts/test-backtests.cjs`를 실행한다.
-- [ ] **Step 3: 타입과 최소 계산을 구현한다.** 검증한 case에서 input만 꺼낸다. 일봉 61개, 분봉 마지막 연속 완료 구간의 수익률 10개 이상을 사용한다. 남은 시간은 end-cutoff이며 일봉은 세션 길이, 분봉은 interval 길이로 나눈다. 기존 distribution과 완료 봉 집계를 재사용하고 live record의20..60 제한은 유지한다. JS module은 기존 `module.exports`/`globalThis.PenguinNotchBacktests` 패턴을 따른다.
-- [ ] **Step 4: GREEN과 시각을 확인한다.** DST·조기 종료, gap, volume=0, 11봉/10수익률, 60개 초과 분봉 수익률, 일봉60개 부족, cutoff-inputBarEnd>120000ms, NaN/Infinity/혼합 priceBasis, 잘못된 OHLC를 fixture와 작은 생성 열로 검사한다. 기존 StockForecastTests/StockChartTests도 한 번 실행한다.
-- [ ] **Step 5: 검토 후 로컬 commit한다.** 공개 모의 fixture만 포함하고 실제 사용자 자료는 넣지 않는다.
+- [x] **Step 1: RED `testTargetCannotChangePrediction`을 추가한다.** 같은 input에 actualClose=1과 1000을 붙인 두 case의 각 1m/10m/1d outcome이 같아야 한다. 원자료 응답에 cutoff 이후 극단적인 가격을 추가해도 완료 봉 필터를 통과한 input/예측은 같다. 검증할 input에 미래 봉을 직접 끼워 넣으면 거부한다. 일봉 61개 fixture에서 expectedClose===inputPrice, observations===60, cutoff===sessionEnd-3600000을 단언한다.
+- [x] **Step 2: RED를 확인한다.** Swift only-testing을 StockBacktestTests로 바꾸고 `node --test windows/scripts/test-backtests.cjs`를 실행한다.
+- [x] **Step 3: 타입과 최소 계산을 구현한다.** 검증한 case에서 input만 꺼낸다. 일봉 61개, 분봉 마지막 연속 완료 구간의 수익률 10개 이상을 사용한다. 남은 시간은 end-cutoff이며 일봉은 세션 길이, 분봉은 interval 길이로 나눈다. 기존 distribution과 완료 봉 집계를 재사용하고 live record의20..60 제한은 유지한다. JS module은 기존 `module.exports`/`globalThis.PenguinNotchBacktests` 패턴을 따른다.
+- [x] **Step 4: GREEN과 시각을 확인한다.** DST·조기 종료, gap, volume=0, 11봉/10수익률, 60개 초과 분봉 수익률, 일봉60개 부족, cutoff-inputBarEnd>120000ms, NaN/Infinity/혼합 priceBasis, 잘못된 OHLC를 fixture와 작은 생성 열로 검사한다. 기존 StockForecastTests/StockChartTests도 한 번 실행한다.
+- [x] **Step 5: 검토 후 로컬 commit한다.** 공개 모의 fixture만 포함하고 실제 사용자 자료는 넣지 않는다.
 
 ### Task 3: 보존 가능한 실행 저장과 Windows IPC
 
@@ -102,11 +104,11 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 
 **Interfaces:** Swift `StockBacktestArchive(directory:URL)`는 `list() throws->[StockBacktestManifest]`, `create(_ manifest:StockBacktestManifest) throws`, `loadManifest(runID:UUID) throws->StockBacktestManifest`, `saveCase(runID:UUID,body:Data) throws->String`, `loadCase(runID:UUID,caseID:String) throws->(body:Data,sha256:String)`, `saveResult(runID:UUID,body:Data) throws->String`, `loadResult(runID:UUID,caseID:String) throws->Data?`, `updateProgress(runID:UUID,entries:[StockBacktestManifest.Entry],status:StockBacktestManifest.Status) throws`를 제공한다. Entry/Status는 Shared interfaces의 cases 원소/status enum이다. Rust/Tauri는 단일 `stock_backtest_archive(request:ArchiveRequest) -> Result<ArchiveReply,String>`이며 같은 list/create/loadManifest/saveCase/loadCase/saveResult/loadResult/updateProgress tagged enum이다. create는 manifest, save는 runID+UTF-8 body, load는 runID+caseID, update는 runID+entries+status만 받는다. Reply는 manifests/manifest/body+sha256/receipt(sha256)/empty이며 action과 대응해야 한다. 경로는 native에서 계산하고 JS `archive(action,payload)`는 이 command만 호출한다.
 
-- [ ] **Step 1: RED 저장 회귀를 추가한다.** `testCrashAfterCaseSaveResumesWithoutOverwrite`는 saveCase 이후 manifest 갱신 전에 중단하고, 다시 읽은 같은 hash를 연결하여 원본 byte를 유지한다. `testUnknownNestedFieldsAndTraversalRejectWithoutWriting`는 accountSeq/token/quantity, ../, 잘못된 runID, 미지원 version/모델을 모든 계층에서 거부한다.
-- [ ] **Step 2: RED를 확인한다.** Swift StockBacktestTests, Node test-backtests, Rust `backtests::tests::`를 실행한다. 의존성 해결 단계에서 중단되면 제품 테스트 미실행으로 구분한다.
-- [ ] **Step 3: 원자 저장을 구현한다.** SHA-256은 CryptoKit과 현재 lock의 sha2 `=0.10.9`를 사용한다. 직접 의존성을 선언해 package graph만 갱신하고 다른 crate는 갱신하지 않는다. case/result는 typed whitelist로 검증한 UTF-8 body byte를 그대로 저장·해시하며 다시 직렬화하지 않는다. 파일당2MiB, 새 파일은 임시 작성 후 같은 폴더에서 원자 배치, 기존 같은 값은 no-op, 다른 값은 저장 거부다. manifest의 고정 항목·완료 entry는 유지하고 mutable progress만 원자 갱신한다.
-- [ ] **Step 4: GREEN과 실패 보존을 확인한다.** 같은 case의 동시 save, 쓰기/rename 실패, 결과의 input hash 불일치, 미지원/손상 JSON, manifest 중단, symlink 외부 경로 이탈에서 원본이 그대로인지 검사한다. 공통 fixture body hash가 양쪽 native에서 같고 기존 GBM/Codex/SQLite에는 쓰지 않음을 임시 폴더에서 단언한다.
-- [ ] **Step 5: 검토 후 로컬 commit한다.** Cargo.lock 차이는 직접 의존성 추가분만 확인한다.
+- [x] **Step 1: RED 저장 회귀를 추가한다.** `testCrashAfterCaseSaveResumesWithoutOverwrite`는 saveCase 이후 manifest 갱신 전에 중단하고, 다시 읽은 같은 hash를 연결하여 원본 byte를 유지한다. `testUnknownNestedFieldsAndTraversalRejectWithoutWriting`는 accountSeq/token/quantity, ../, 잘못된 runID, 미지원 version/모델을 모든 계층에서 거부한다.
+- [x] **Step 2: RED를 확인한다.** Swift StockBacktestTests, Node test-backtests, Rust `backtests::tests::`를 실행한다. 의존성 해결 단계에서 중단되면 제품 테스트 미실행으로 구분한다.
+- [x] **Step 3: 원자 저장을 구현한다.** SHA-256은 CryptoKit과 현재 lock의 sha2 `=0.10.9`를 사용한다. 직접 의존성을 선언해 package graph만 갱신하고 다른 crate는 갱신하지 않는다. case/result는 typed whitelist로 검증한 UTF-8 body byte를 그대로 저장·해시하며 다시 직렬화하지 않는다. 파일당2MiB, 새 파일은 임시 작성 후 같은 폴더에서 원자 배치, 기존 같은 값은 no-op, 다른 값은 저장 거부다. manifest의 고정 항목·완료 entry는 유지하고 mutable progress만 원자 갱신한다.
+- [x] **Step 4: GREEN과 실패 보존을 확인한다.** 같은 case의 동시 save, 쓰기/rename 실패, 결과의 input hash 불일치, 미지원/손상 JSON, manifest 중단, symlink 외부 경로 이탈에서 원본이 그대로인지 검사한다. 공통 fixture body hash가 양쪽 native에서 같고 기존 GBM/Codex/SQLite에는 쓰지 않음을 임시 폴더에서 단언한다.
+- [x] **Step 5: 검토 후 로컬 commit한다.** Cargo.lock 차이는 직접 의존성 추가분만 확인한다.
 
 ### Task 4: 제한된 토스 과거 자료 수집과 재개
 
@@ -114,11 +116,11 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 
 **Interfaces:** Swift `@MainActor StockBacktestStore:ObservableObject`는 published `runs,activeRunID,progress,errorMessage`, `start(symbols:[WatchedStock],sessions:Int) async throws`, `resume(runID:UUID) async throws`, `cancel()`을 제공한다. request adapter `(StockBacktestRequest) async throws -> StockBacktestReply`, 시계·대기를 init에 주입한다. Request는 calendar(market,date)/candles(stock,interval,before,count,adjusted)만 허용한다. JS `BacktestStore({invoke,stockRequest,now,sleep})`도 같은 state/start/resume/cancel을 제공한다.
 
-- [ ] **Step 1: RED 수집 회귀를 추가한다.** `testCollectorsUseOnlyFrozenPublicInputs`는 완료60거래일, cutoff 이전 분봉·adjusted=true·200/page, 반복 nextBefore가 있는 fixture를 반환한다. accounts/holdings/prices/model calls=0, 최대8페이지/1400행, 페이지 간>=250ms를 단언한다. `testSessionMismatchIsSkipped`는 KR calendar와 목표 candle의 불일치에서 결과 없음/이유 있음을 확인한다.
-- [ ] **Step 2: RED를 확인한다.** Swift/Node Backtest suite를 실행한다. URLProtocol과 fake IPC의 공개 모의 응답만 사용한다.
-- [ ] **Step 3: 순차 수집을 구현한다.** 달력을 시장/날짜별로 공유하고 previousBusinessDay를 따라 고정 날짜 목록을 먼저 확정한다. 대상 날짜의 cutoff 분봉과 sessionEnd 이전 일봉을 count=200으로 읽는다. Swift는 `TossInvestAPI.backtestPage(token:String,stock:WatchedStock,interval:String,before:String,session:URLSession) async throws->StockBacktestReply`를 추가해 candleData를 재사용하며 calendar는 기존 marketSessions의 at을 현지 날짜에 맞춘다. 생산용 Store는 start/resume 때만 기존 TossCredentials/TossInvestAPI.accessToken을 사용하며 별도 토큰 캐시는 만들지 않는다. Windows는 기존 stock_request의 calendar(date)와 candles(interval:"1m",count:200,before,adjusted:true)를 한 페이지씩 호출한다. 8페이지 동안 native lock을 잡는 기존10m command는 사용하지 않는다.
-- [ ] **Step 4: GREEN과 재개를 확인한다.** inclusive 경계의 같은 값 중복은 제거하고 다른 값은 skipped, 반복 cursor도 skipped, 부분 제공은 모델별 보류다. 401/429는 기존 상한을 지키며 인증 실패는 paused다. 설정/credential generation 변경은 후속 요청을 멈추고 cancel 이후 늦은 응답은 저장하지 않는다. macOS의 provider/키 저장·삭제 경로는 공유 Store.cancel을 호출하고 페이지 완료 전 stockSettingsRevision도 확인한다. 이중 start는 거부하고 창을 닫았다 열어도 같은 Store를 유지한다. 사용자 resume 전에는 자동 재개하지 않는다. 저장한 case는 재조회0건으로 재사용하고 사례마다 progress를 갱신한다.
-- [ ] **Step 5: 검토 후 로컬 commit한다.** 개인 인증이 필요한 자동 테스트나 서비스 업로드는 추가하지 않는다.
+- [x] **Step 1: RED 수집 회귀를 추가한다.** `testCollectorsUseOnlyFrozenPublicInputs`는 완료60거래일, cutoff 이전 분봉·adjusted=true·200/page, 반복 nextBefore가 있는 fixture를 반환한다. accounts/holdings/prices/model calls=0, 최대8페이지/1400행, 페이지 간>=250ms를 단언한다. `testSessionMismatchIsSkipped`는 KR calendar와 목표 candle의 불일치에서 결과 없음/이유 있음을 확인한다.
+- [x] **Step 2: RED를 확인한다.** Swift/Node Backtest suite를 실행한다. URLProtocol과 fake IPC의 공개 모의 응답만 사용한다.
+- [x] **Step 3: 순차 수집을 구현한다.** 달력을 시장/날짜별로 공유하고 previousBusinessDay를 따라 고정 날짜 목록을 먼저 확정한다. 대상 날짜의 cutoff 분봉과 sessionEnd 이전 일봉을 count=200으로 읽는다. Swift는 `TossInvestAPI.backtestPage(token:String,stock:WatchedStock,interval:String,before:String,session:URLSession) async throws->StockBacktestReply`를 추가해 candleData를 재사용하며 calendar는 기존 marketSessions의 at을 현지 날짜에 맞춘다. 생산용 Store는 start/resume 때만 기존 TossCredentials/TossInvestAPI.accessToken을 사용하며 별도 토큰 캐시는 만들지 않는다. Windows는 기존 stock_request의 calendar(date)와 candles(interval:"1m",count:200,before,adjusted:true)를 한 페이지씩 호출한다. 8페이지 동안 native lock을 잡는 기존10m command는 사용하지 않는다.
+- [x] **Step 4: GREEN과 재개를 확인한다.** inclusive 경계의 같은 값 중복은 제거하고 다른 값은 skipped, 반복 cursor도 skipped, 부분 제공은 모델별 보류다. 401/429는 기존 상한을 지키며 인증 실패는 paused다. 설정/credential generation 변경은 후속 요청을 멈추고 cancel 이후 늦은 응답은 저장하지 않는다. macOS의 provider/키 저장·삭제 경로는 공유 Store.cancel을 호출하고 페이지 완료 전 stockSettingsRevision도 확인한다. 이중 start는 거부하고 창을 닫았다 열어도 같은 Store를 유지한다. 사용자 resume 전에는 자동 재개하지 않는다. 저장한 case는 재조회0건으로 재사용하고 사례마다 progress를 갱신한다.
+- [x] **Step 5: 검토 후 로컬 commit한다.** 개인 인증이 필요한 자동 테스트나 서비스 업로드는 추가하지 않는다.
 
 ### Task 5: 재현 결과의 대응 평가와 CSV
 
@@ -126,11 +128,11 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 
 **Interfaces:** Swift `StockEvaluation.replayRows(runID:UUID,caseData:StockBacktestCase,result:StockBacktestResult,inputSHA256:String) throws->[StockEvaluationRow]`, JS `replayRows(runID,caseData,result,inputSHA256)`를 제공한다. `StockEvaluation.csv(rows:[StockEvaluationRow],metrics:StockEvaluationMetrics,details:[String:String]) -> String`/JS `evaluationCSV(rows,metrics,details)`은 원본 입력 참조, source/가격 기준/분모/제외 이유/모델 결과를 내보낸다. details는 referenceID별 검증한 원본 공개 입력·응답 JSON이다. 기존 StockForecastJournal.csv와 Windows csv도 유지한다. replay의 inputKey는 runID/caseID/inputSHA256 참조다.
 
-- [ ] **Step 1: RED `testIncompleteCohortNeverScoresAsZero`를 추가한다.** 두 case에서 A 성공2건/B 성공1건+skipped1건이면 A evaluated=2/B=1, 선택A+B pairedCount=1이다. pending·다른 actual·다른 hash는 paired=0이다. baseline에 p/range를 만들지 않고 각 GBM MAPE=baseline임을 단언한다.
-- [ ] **Step 2: RED를 확인한다.** Swift Evaluation/Backtest와 Node 두 suite를 실행한다.
-- [ ] **Step 3: 기존 평가 함수에 연결한다.** replayRows를 Task 1의 metrics/compare에 전달한다. actual은 case.target에서만 읽는다. 시장·종목·거래일 filter와 확보/성공/보류/대응/일수를 계산한다. calibration은 기존10pp/Wilson95식을 적용하며 수동/자동/replay, 통화별 MAE를 분리한다. recorded와 pairedCalculation은 같은 원본 입력끼리 비교할 수 있지만 replay와 혼합하지 않는다. 보류 사례는 manifest/outcome 건수로 표시하고 가짜 성공 row를 만들지 않는다.
-- [ ] **Step 4: GREEN과 CSV를 확인한다.** target 변경 시 예측 불변/점수만 변화, 미지원/다른 버전 결과 거부, 보합·p=.5·구간 양 끝·선택 모델 변경에 따른 분모를 확인한다. CSV roundtrip에서 가격/시각/source/reason/입력 참조·근거를 유지하고 원본 파일을 바꾸지 않는다. 가격 상대 오차<=1e-8, 확률/집계 차이<=1e-6으로 공통 fixture 결과를 대조한다.
-- [ ] **Step 5: 검토 후 로컬 commit한다.** TEST를 보고 변동성·임계값을 다시 선택하거나 LLM을 재실행하지 않는다.
+- [x] **Step 1: RED `testIncompleteCohortNeverScoresAsZero`를 추가한다.** 두 case에서 A 성공2건/B 성공1건+skipped1건이면 A evaluated=2/B=1, 선택A+B pairedCount=1이다. pending·다른 actual·다른 hash는 paired=0이다. baseline에 p/range를 만들지 않고 각 GBM MAPE=baseline임을 단언한다.
+- [x] **Step 2: RED를 확인한다.** Swift Evaluation/Backtest와 Node 두 suite를 실행한다.
+- [x] **Step 3: 기존 평가 함수에 연결한다.** replayRows를 Task 1의 metrics/compare에 전달한다. actual은 case.target에서만 읽는다. 시장·종목·거래일 filter와 확보/성공/보류/대응/일수를 계산한다. calibration은 기존10pp/Wilson95식을 적용하며 수동/자동/replay, 통화별 MAE를 분리한다. recorded와 pairedCalculation은 같은 원본 입력끼리 비교할 수 있지만 replay와 혼합하지 않는다. 보류 사례는 manifest/outcome 건수로 표시하고 가짜 성공 row를 만들지 않는다.
+- [x] **Step 4: GREEN과 CSV를 확인한다.** target 변경 시 예측 불변/점수만 변화, 미지원/다른 버전 결과 거부, 보합·p=.5·구간 양 끝·선택 모델 변경에 따른 분모를 확인한다. CSV roundtrip에서 가격/시각/source/reason/입력 참조·근거를 유지하고 원본 파일을 바꾸지 않는다. 가격 상대 오차<=1e-8, 확률/집계 차이<=1e-6으로 공통 fixture 결과를 대조한다.
+- [x] **Step 5: 검토 후 로컬 commit한다.** TEST를 보고 변동성·임계값을 다시 선택하거나 LLM을 재실행하지 않는다.
 
 ### Task 6: 기록 UX 통합과 실행 화면
 
@@ -138,11 +140,11 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 
 **Interfaces:** `StockForecastHistoryView(journal:StockForecastJournal, analyses:StockCodexAnalysisStore, backtests:StockBacktestStore)`를 통합 진입점으로 삼는다. 기존 `StockCodexHistoryView`는 같은 화면에 Codex 초기 filter를 전달한다. `StockBacktestView(store:StockBacktestStore)`는 시작/취소/재개와 결과를 표시한다. JS `mountBacktests(element,store,language)`는 render/show를 반환하고 stocks.mountSettings 기록 탭에서 호출한다. 창/뷰 재생성 때 Store를 다시 만들지 않는다.
 
-- [ ] **Step 1: RED UX 회귀를 추가한다.** Swift render tests는 단일 기록 진입점, GBM+Codex 양쪽 출처, 요약/접힌 상세를 확인한다. Windows 실제 페이지 fixture에서 키보드 전환/20·60·120 선택, 시작→닫기→다시 표시에도 start=1이고 취소 가능함을 단언한다. 이름 `=TEST,"quoted"\nnext`의 escape와 CSV 주입 방지도 확인한다.
-- [ ] **Step 2: RED를 확인한다.** Swift Evaluation suite, Node test-backtests, 설치된 Playwright로 `node windows/scripts/test-settings-browser.cjs`를 실행한다. 외부 통신은 fixture에서 abort한다.
-- [ ] **Step 3: 화면을 연결한다.** 진입점은「예측 기록과 평가 / Forecast history and evaluation」, 내부는「실제 저장 기록 / Saved predictions」「과거 재현 / Historical replay」다. 초기 요약은 평가 건수·기준선과의 차이·Brier이고 나머지는 상세에 둔다. 제한 문구는「현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음 / Reconstructed from data fetched now; availability at the original time is not guaranteed.」이다. GBM 기대값=입력 가격과 macOS 전용 Codex 실행을 표시하며 비동작 조작은 만들지 않는다.
-- [ ] **Step 4: GREEN과 회귀를 확인한다.** en/ko 문구, 680x520 창/큰 호버 글씨, 열린 상세/filter/CSV 유지, Finnhub 미지원, 빈/손상 이력, 전체 skipped, 부분 완료를 검사한다. 기존 check-ui-scripts/test-stocks/test-widgets/test-ko-i18n/test-claude-auth-ui 및 settings/notch browser suite를 한 번 실행하고 외부 호출/비밀 로그0을 확인한다.
-- [ ] **Step 5: 검토 후 로컬 commit한다.** 이미지/로그는 공개 모의 응답만 CI artifact에 저장하고 개인 기록은 촬영하지 않는다.
+- [x] **Step 1: RED UX 회귀를 추가한다.** Swift render tests는 단일 기록 진입점, GBM+Codex 양쪽 출처, 요약/접힌 상세를 확인한다. Windows 실제 페이지 fixture에서 키보드 전환/20·60·120 선택, 시작→닫기→다시 표시에도 start=1이고 취소 가능함을 단언한다. 이름 `=TEST,"quoted"\nnext`의 escape와 CSV 주입 방지도 확인한다.
+- [x] **Step 2: RED를 확인한다.** Swift Evaluation suite, Node test-backtests, 설치된 Playwright로 `node windows/scripts/test-settings-browser.cjs`를 실행한다. 외부 통신은 fixture에서 abort한다.
+- [x] **Step 3: 화면을 연결한다.** 진입점은「예측 기록과 평가 / Forecast history and evaluation」, 내부는「실제 저장 기록 / Saved predictions」「과거 재현 / Historical replay」다. 초기 요약은 평가 건수·기준선과의 차이·Brier이고 나머지는 상세에 둔다. 제한 문구는「현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음 / Reconstructed from data fetched now; availability at the original time is not guaranteed.」이다. GBM 기대값=입력 가격과 macOS 전용 Codex 실행을 표시하며 비동작 조작은 만들지 않는다.
+- [x] **Step 4: GREEN과 회귀를 확인한다.** en/ko 문구, 680x520 창/큰 호버 글씨, 열린 상세/filter/CSV 유지, Finnhub 미지원, 빈/손상 이력, 전체 skipped, 부분 완료를 검사한다. 기존 check-ui-scripts/test-stocks/test-widgets/test-ko-i18n/test-claude-auth-ui 및 settings/notch browser suite를 한 번 실행하고 외부 호출/비밀 로그0을 확인한다.
+- [x] **Step 5: 검토 후 로컬 commit한다.** 이미지/로그는 공개 모의 응답만 CI artifact에 저장하고 개인 기록은 촬영하지 않는다.
 
 ### Task 7: 양 플랫폼 검증과 결과 전달
 
@@ -150,11 +152,11 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 
 **Interfaces:** CI는 Node backtests와 공통 fixture 변경을 감지해 Windows native 검사를 실행한다. 로컬 보고서는 manifest/결과 hash·요청/유효/누락·모델별 metrics를 참조하고 공개 위키에는 계약과 공개 fixture 검증만 기록한다.
 
-- [ ] **Step 1: 버전/CI 검사를 준비한다.** 첫 제품 commit에1.25.0/Mac66/r58을 설정하고 기존 package 해결을 유지한다. Windows workflow에 `Tests/Fixtures/stock-forecast-evaluation-v1.json` path와 `node --test scripts/test-backtests.cjs`를 추가한다. fixture만 바뀌어도 Windows 검사가 실행되고 양 플랫폼 version이 같음을 단언한다.
-- [ ] **Step 2: 관련 회귀가 GREEN인지 확인한다.** Swift Evaluation/Backtest/Forecast/Chart/Journal/CodexAnalysis/Quote/Timing, Windows Node UI/stock/backtest, Rust 전체 tests를 실행한다. 공유 계산·저장을 변경하므로 마지막에 Swift 전체 suite를 한 번 실행한다. Mac Rust는 `--features tauri/macos-private-api`, Windows CI는 `cargo test --locked`를 사용한다. 캐시 정리로 무관한 연구를 건드리지 않는다.
+- [x] **Step 1: 버전/CI 검사를 준비한다.** 첫 제품 commit에1.25.0/Mac66/r58을 설정하고 기존 package 해결을 유지한다. Windows workflow에 `Tests/Fixtures/stock-forecast-evaluation-v1.json` path와 `node --test scripts/test-backtests.cjs`를 추가한다. fixture만 바뀌어도 Windows 검사가 실행되고 양 플랫폼 version이 같음을 단언한다.
+- [x] **Step 2: 관련 회귀가 GREEN인지 확인한다.** Swift Evaluation/Backtest/Forecast/Chart/Journal/CodexAnalysis/Quote/Timing, Windows Node UI/stock/backtest, Rust 전체 tests를 실행한다. 공유 계산·저장을 변경하므로 마지막에 Swift 전체 suite를 한 번 실행한다. Mac Rust는 `--features tauri/macos-private-api`, Windows CI는 `cargo test --locked`를 사용한다. 캐시 정리로 무관한 연구를 건드리지 않는다.
 - [ ] **Step 3: 실제 제공 자료를 별도 근거로 확인한다.** 기존 앱의 비대화형 인증으로 공개 시장 데이터를 평가한다면 먼저 선택1종목/20거래일을 제한 실행한다. 키체인 승인이 필요하면 중단하고 비밀을 출력하지 않는다. 제공 범위가 부족해도 누락을 저장하고 시작/확보/누락/모델 건수·hash를 ignored `build/`의 로컬 보고서에 기록한다. 자료를 확보하지 못했다면 모의 검증과 구분해 명시한다.
 - [ ] **Step 4: 전체 독립 검토와 문서를 완료한다.** Grok 읽기 전용으로 추적된 공개 변경만 보내 동일 시점 입력/가격 기준/저장/취소를 교차 검토한다. 개인 아카이브·인증·원자료·TEST 라벨·미추적 연구는 보내지 않는다. 부모가 근거를 확인하여 필요한 수정과 영향받은 검사만 수행한다. 양 언어 README와 위키에 구현/검증/미검증을 구분한다.
-- [ ] **Step 5: 최종 로컬 commit과 전달을 완료한다.** 최신 Ponytail review/게이트 후 코드/공개 fixture/문서만 commit한다. 변경, 테스트, 사용법, 과거 분봉 확보 한계, Windows 실기 미검증을 보고한다. 이 작업의 완료만으로 GitHub push/정식 release/설치를 실행하지 않는다.
+- [x] **Step 5: 최종 로컬 commit과 전달을 완료한다.** 최신 Ponytail review/게이트 후 코드/공개 fixture/문서만 commit한다. 변경, 테스트, 사용법, 과거 분봉 확보 한계, Windows 실기 미검증을 보고한다. 이 작업의 완료만으로 GitHub push/정식 release/설치를 실행하지 않는다.
 
 ## Self-review and execution handoff
 
