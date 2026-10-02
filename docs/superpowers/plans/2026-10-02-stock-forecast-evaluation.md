@@ -10,7 +10,7 @@
 
 **Spec:** [승인된 설계](../specs/2026-10-02-stock-forecast-evaluation-design.md), 설계 커밋 `6b40e1c`. 2026-10-02 사용자의 “진행”으로 설계 검토 단계가 승인됐고 이후 승인 범위의 Task1–6 구현·각 독립 검토를 완료했다.
 
-**Status:** 개발 소스 1.25.0 / Mac66 / Windows r58의 Task7 오프라인 검증·문서·CI와 로컬 전달을 준비했다. Swift 전체 2,260개/8 skip/두 테스트의 17 assertion 실패 뒤 승인된 노트·Retina fixture 수정과 관련 8개 GREEN을 확인했으며 전체 검사를 반복하지 않았다. Rust245 통과/4 ignored·실패0과 최신 GNU all-target 컴파일을 확인했다. 정식 배포는 1.24.1을 유지한다. Step3의 선택적 실자료 probe는 안전한 비대화형 인증이 입증되지 않아 미수행이다. Task7 검토·전체 브랜치 독립 검토·공개 코드 Grok 검토는 완료했고 F1–F6와 M2가 통합됐다. 단일 수정 wave 이후 controller가 기준 `45b1e5894667537bfa2c0797be8a33af9c4965a7` 이후 범위를 정확히 한 번 재검토하고 잔여 사항을 판단한다. 최종 수락 전까지 해당 단계는 체크하지 않는다. [S19](../../wiki/sources.md#s19)는 공개 fixture 검증과 미검증 범위를 구분한다.
+**Status:** 개발 소스 1.25.0 / Mac66 / Windows r58의 Task1–7 구현·오프라인 검증·문서·CI와 각 독립 검토를 완료했다. 공개 코드 Grok 검토 뒤 F1–F6/M2를 수정했고, 추가 bootstrap 회귀 B1과 같은 초기 조회 경로를 보완하여 수정 범위 재검토를 통과했다. 결과는 `codex/stock-forecast-evaluation`의 로컬 커밋으로 보존한다. 선택적 실자료 probe는 안전한 비대화형 인증이 입증되지 않아 미수행이며 실제 모델 성능·Windows 실기·원격 CI·배포·설치를 주장하지 않는다. Swift 전체에서 발견한 두 테스트의 실패와 수정 후 관련 검사 결과는 [S19](../../wiki/sources.md#s19), 최종 보완·검토 근거와 Windows 중단 감지 한계는 [S20](../../wiki/sources.md#s20)에 구분해 기록했다.
 
 ## Global Constraints
 
@@ -155,7 +155,7 @@ cargo test --locked --manifest-path windows/Cargo.toml --features tauri/macos-pr
 - [x] **Step 1: 버전/CI 검사를 준비한다.** 첫 제품 commit에1.25.0/Mac66/r58을 설정하고 기존 package 해결을 유지한다. Windows workflow에 `Tests/Fixtures/stock-forecast-evaluation-v1.json` path와 `node --test scripts/test-backtests.cjs`를 추가한다. fixture만 바뀌어도 Windows 검사가 실행되고 양 플랫폼 version이 같음을 단언한다.
 - [x] **Step 2: 관련 회귀가 GREEN인지 확인한다.** Swift Evaluation/Backtest/Forecast/Chart/Journal/CodexAnalysis/Quote/Timing, Windows Node UI/stock/backtest, Rust 전체 tests를 실행한다. 공유 계산·저장을 변경하므로 마지막에 Swift 전체 suite를 한 번 실행한다. Mac Rust는 `--features tauri/macos-private-api`, Windows CI는 `cargo test --locked`를 사용한다. 캐시 정리로 무관한 연구를 건드리지 않는다.
 - [ ] **Step 3: 실제 제공 자료를 별도 근거로 확인한다.** 기존 앱의 비대화형 인증으로 공개 시장 데이터를 평가한다면 먼저 선택1종목/20거래일을 제한 실행한다. 키체인 승인이 필요하면 중단하고 비밀을 출력하지 않는다. 제공 범위가 부족해도 누락을 저장하고 시작/확보/누락/모델 건수·hash를 ignored `build/`의 로컬 보고서에 기록한다. 자료를 확보하지 못했다면 모의 검증과 구분해 명시한다.
-- [ ] **Step 4: 전체 독립 검토와 문서를 완료한다.** Grok 읽기 전용으로 추적된 공개 변경만 보내 동일 시점 입력/가격 기준/저장/취소를 교차 검토한다. 개인 아카이브·인증·원자료·TEST 라벨·미추적 연구는 보내지 않는다. 부모가 근거를 확인하여 필요한 수정과 영향받은 검사만 수행한다. 양 언어 README와 위키에 구현/검증/미검증을 구분한다.
+- [x] **Step 4: 전체 독립 검토와 문서를 완료한다.** Grok 읽기 전용으로 추적된 공개 변경만 보내 동일 시점 입력/가격 기준/저장/취소를 교차 검토한다. 개인 아카이브·인증·원자료·TEST 라벨·미추적 연구는 보내지 않는다. 부모가 근거를 확인하여 필요한 수정과 영향받은 검사만 수행한다. 양 언어 README와 위키에 구현/검증/미검증을 구분한다.
 - [x] **Step 5: 최종 로컬 commit과 전달을 완료한다.** 최신 Ponytail review/게이트 후 코드/공개 fixture/문서만 commit한다. 변경, 테스트, 사용법, 과거 분봉 확보 한계, Windows 실기 미검증을 보고한다. 이 작업의 완료만으로 GitHub push/정식 release/설치를 실행하지 않는다.
 
 ## Self-review and execution handoff
