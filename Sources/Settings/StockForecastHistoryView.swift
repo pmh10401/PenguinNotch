@@ -4,192 +4,154 @@ import UniformTypeIdentifiers
 
 struct StockForecastHistoryView: View {
     @ObservedObject var journal: StockForecastJournal
+    @ObservedObject var analyses: StockCodexAnalysisStore
+    @ObservedObject var backtests: StockBacktestStore
     @Environment(\.dismiss) private var dismiss
-    @State private var capture: ForecastCapture = .scheduled
+    @State private var replay = false
     @State private var stockID = ""
-    @State private var model = StockForecastRecord.modelVersion
+    @State private var day = ""
+    @State private var model = ""
+    @State private var capture = ""
     @State private var days = 30
-    @State private var exportsCSV = false
+    @State private var source: String
+    @State private var exporting = false
     @State private var document = ForecastCSVDocument(text: "")
     @State private var exportError: String?
-    @State private var page = Page.history
 
-    private enum Page: CaseIterable {
-        case history, comparison, calibration
-        var title: String {
-            switch self {
-            case .history: L10n.t("Saved predictions")
-            case .comparison: L10n.t("Model comparison")
-            case .calibration: L10n.t("Probability check")
-            }
+    init(journal: StockForecastJournal, analyses: StockCodexAnalysisStore, backtests: StockBacktestStore, initialCodexFilter: Bool = false) {
+        self.journal = journal; self.analyses = analyses; self.backtests = backtests
+        _source = State(initialValue: initialCodexFilter ? "codex" : "")
+    }
+    private var savedAnalyses: [StockCodexAnalysis] {
+        Self.savedAnalyses(analyses.analyses, stockID: stockID, day: day, model: model, capture: capture).filter { $0.completedAt >= cutoff }
+    }
+    static func savedAnalyses(_ values: [StockCodexAnalysis], stockID: String = "", day: String = "", model: String = "", capture: String = "") -> [StockCodexAnalysis] {
+        values.filter { a in
+            (stockID.isEmpty || a.input.stockID == stockID) && (model.isEmpty || a.forecastModel == model || a.model == model)
+                && (capture.isEmpty || capture == "manual")
+                && (day.isEmpty || targetDay(a.input.sessionStart, stockID: a.input.stockID) == day)
         }
     }
-
-    private var cohort: [StockForecastRecord] {
-        let cutoff = days == 0 ? Date.distantPast : Date().addingTimeInterval(-Double(days) * 86400)
-        return journal.records.filter { $0.capture == capture
-            && (stockID.isEmpty || $0.stockID == stockID) && $0.createdAt >= cutoff }
-            .sorted { $0.createdAt > $1.createdAt }
+    static func targetDay(_ date: Date, stockID: String) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = StockQuoteCodec.timeZone(for: WatchedStock.parse(stockID)?.market ?? .us)
+        return StockBacktest.day(date, calendar: calendar)
     }
-    private var filtered: [StockForecastRecord] { cohort.filter { $0.model == model } }
-    private var exportRecords: [StockForecastRecord] { page == .comparison ? cohort : filtered }
-
+    private var cutoff: Date { days == 0 ? .distantPast : Date().addingTimeInterval(-Double(days) * 86400) }
+    private var rows: [StockEvaluationRow] {
+        let rows = StockEvaluation.filtered(StockEvaluation.rows(journal: journal.records.filter { $0.createdAt >= cutoff }, analyses: analyses.analyses.filter { $0.completedAt >= cutoff }),
+            stockID: stockID.isEmpty ? nil : stockID, day: day.isEmpty ? nil : day, capture: capture.isEmpty ? nil : capture)
+        return rows.filter { r in
+            (model.isEmpty || r.model == model) && (source.isEmpty
+                || source == "codex" && savedAnalyses.contains { a in a.forecastModel == r.model && r.references.contains { $0.referenceID == a.id.uuidString } }
+                || source != "codex" && (r.source.rawValue == source || r.references.contains { $0.source.rawValue == source }))
+        }
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(L10n.t("Forecast history")).font(.title2.bold())
+                Text(L10n.t("Forecast history and evaluation")).font(.title2.bold())
                 Spacer()
-                Button(L10n.t("Export filtered CSV…")) {
-                    document = ForecastCSVDocument(text: StockForecastJournal.csv(exportRecords))
-                    exportsCSV = true
-                }
-                .disabled(exportRecords.isEmpty)
                 Button(L10n.t("Done")) { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            HStack {
-                Picker(L10n.t("Prediction timing"), selection: $capture) {
-                    ForEach(ForecastCapture.allCases) { Text($0.title).tag($0) }
-                }
-                Picker(L10n.t("Stock"), selection: $stockID) {
-                    Text(L10n.t("All stocks")).tag("")
-                    ForEach(Set(journal.records.map(\.stockID)).sorted(), id: \.self) { id in
-                        Text(id).tag(id)
-                    }
-                }
-            }
-            HStack {
-                if page == .comparison {
-                    Text(L10n.t("All recorded models")).frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Picker(L10n.t("Model"), selection: $model) {
-                        ForEach(Set(journal.records.map(\.model) + [StockForecastRecord.modelVersion]).sorted(), id: \.self) {
-                            Text($0).tag($0)
-                        }
-                    }
-                }
-                Picker(L10n.t("Period"), selection: $days) {
-                    Text(L10n.t("Last 30 days")).tag(30)
-                    Text(L10n.t("Last 90 days")).tag(90)
-                    Text(L10n.t("All time")).tag(0)
-                }
-            }
-            Picker(L10n.t("Forecast view"), selection: $page) {
-                ForEach(Page.allCases, id: \.self) { Text($0.title).tag($0) }
+            Picker(L10n.t("Forecast view"), selection: $replay) {
+                Text(L10n.t("Saved predictions")).tag(false)
+                Text(L10n.t("Historical replay")).tag(true)
             }.pickerStyle(.segmented)
-            if let error = journal.errorMessage { Text(error).foregroundStyle(.red).font(.caption) }
-            if let message = journal.reconciliationMessage { Text(message).font(.caption).foregroundStyle(.secondary) }
-            if let exportError { Text(exportError).foregroundStyle(.red).font(.caption) }
-
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    switch page {
-                    case .comparison:
-                        ForecastComparisonView(records: cohort)
-                    case .calibration:
-                        ForecastCalibrationView(records: filtered)
-                    case .history:
-                        history
-                    }
+                VStack(alignment: .leading, spacing: 14) {
+                    if replay { StockBacktestView(store: backtests) } else { savedHistory }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(2)
             }
-            Text(L10n.t("Saved inputs are never replaced. CSV follows the current filters and includes all recorded models on the comparison tab. Missing daily closes remain pending."))
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(20)
-        .frame(width: 860, height: 700)
-        .onAppear {
-            if !journal.records.contains(where: { $0.capture == .scheduled }),
-               journal.records.contains(where: { $0.capture == .manual }) { capture = .manual }
-        }
-        .fileExporter(isPresented: $exportsCSV, document: document, contentType: .commaSeparatedText,
-                      defaultFilename: "PenguinNotch-forecasts") { result in
-            if case .failure = result { exportError = L10n.t("Could not export forecast history.") }
-            else { exportError = nil }
-        }
+        }.padding(16).frame(minWidth: 620, idealWidth: 820, minHeight: 480, idealHeight: 680)
+        .fileExporter(isPresented: $exporting, document: document, contentType: .commaSeparatedText,
+                      defaultFilename: "PenguinNotch-evaluation") { if case .failure = $0 { exportError = L10n.t("Could not export forecast history.") } }
     }
-
-    private var history: some View {
-        let score = StockForecastScore(filtered)
-        return VStack(alignment: .leading, spacing: 16) {
-            Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
-                GridRow {
-                    metric("Direction hit rate", score.directionCount == 0 ? "—"
-                        : "\(percent(Double(score.directionHits) / Double(score.directionCount) * 100)) · \(score.directionHits)/\(score.directionCount)")
-                    metric("Mean price error (MAPE)", percent(score.meanError))
-                    metric("Price-hold baseline error", percent(score.baselineError))
+    private var savedHistory: some View {
+        let all = StockEvaluation.rows(journal: journal.records, analyses: analyses.analyses)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Picker(L10n.t("Stock"), selection: $stockID) {
+                    Text(L10n.t("All stocks")).tag("")
+                    ForEach(Set(all.map(\.stockID) + analyses.analyses.map { $0.input.stockID }).sorted(), id: \.self) { Text($0).tag($0) }
                 }
-                GridRow {
-                    metric("80% range coverage", percent(score.rangeCoverage))
-                    metric("Up-probability error (Brier)", score.brier.map { String(format: "%.3f", $0) } ?? "—")
-                    metric("Evaluated / pending", "\(score.evaluated) / \(score.total - score.evaluated)")
+                Picker(L10n.t("Target day"), selection: $day) {
+                    Text(L10n.t("All")).tag("")
+                    ForEach(Set(all.map { Self.targetDay(StockBacktest.date($0.sessionStart), stockID: $0.stockID) } + analyses.analyses.map { Self.targetDay($0.input.sessionStart, stockID: $0.input.stockID) }).sorted(), id: \.self) { Text($0).tag($0) }
                 }
             }
-            .padding(12)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-
-            Text(L10n.t("Direction compares with the previous close, not your purchase price. Ties and 50% calls are excluded from direction hits. Lower MAPE and Brier are better; Brier treats an unchanged close as not rising. GBM's central price equals its price-hold baseline. Sample counts matter; this is not investment performance."))
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if filtered.isEmpty {
-                ContentUnavailableView(L10n.t("No saved predictions in this filter"), systemImage: "chart.xyaxis.line",
-                    description: Text(L10n.t("Enable automatic recording or save current predictions in Stocks settings. Only predictions made before the close can be recorded.")))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                  ForEach(filtered) { record in
-                    DisclosureGroup {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("\(L10n.t("Model 80% range")): \(price(record.lowerClose, record)) – \(price(record.upperClose, record))")
-                            Text("\(L10n.t("Rise")): \(percent(record.riseProbability * 100)) · n=\(record.observations)")
-                            if let error = record.absolutePercentageError {
-                                Text("\(L10n.t("Price error")): \(percent(error))")
-                            }
-                            Divider().padding(.vertical, 6)
-                            ForecastEvidenceView(record: record)
-                        }
-                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(record.name.isEmpty ? record.stockID : record.name).font(.headline)
-                                Text("\(record.stockID) · \(tradingDay(record))").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text("\(L10n.t("Estimated close")): \(price(record.expectedClose, record))")
-                                Text(record.actualClose.map { "\(L10n.t("Actual daily close")): \(price($0, record))" }
-                                     ?? L10n.t("Pending daily close"))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Text(record.directionHit.map { L10n.t($0 ? "Direction matched" : "Direction missed") }
-                                 ?? L10n.t(record.actualClose == nil ? "Pending" : "No direction score"))
-                                .font(.caption).frame(width: 100)
+            HStack {
+                Picker(L10n.t("Model"), selection: $model) {
+                    Text(L10n.t("All recorded models")).tag("")
+                    ForEach(Set(all.map(\.model) + analyses.analyses.map(\.forecastModel)).sorted(), id: \.self) { Text($0).tag($0) }
+                }
+                Picker(L10n.t("Prediction timing"), selection: $capture) {
+                    Text(L10n.t("All")).tag("")
+                    ForEach(ForecastCapture.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+            }
+            Picker(L10n.t("Period"), selection: $days) {
+                Text(L10n.t("Last 30 days")).tag(30)
+                Text(L10n.t("Last 90 days")).tag(90)
+                Text(L10n.t("All time")).tag(0)
+            }
+            Picker(L10n.t("Source"), selection: $source) {
+                Text(L10n.t("All")).tag("")
+                Text(L10n.t("Saved records")).tag("recorded")
+                Text(L10n.t("Saved Codex responses")).tag("codex")
+                Text(L10n.t("Paired calculation (no Codex request)")).tag("pairedCalculation")
+            }
+            Text("\(L10n.t("Saved analysis requests/responses")): \(savedAnalyses.count) · \(L10n.t("Saved abstentions")): \(savedAnalyses.filter { $0.response.status == .abstain }.count)").font(.caption)
+            Text(L10n.t("Failed or invalid CLI attempts are not archived. Paired calculation is not a Codex request. Codex execution is available on macOS only.")).font(.caption).foregroundStyle(.secondary)
+            if let error = journal.errorMessage ?? analyses.errorMessage ?? exportError { Text(error).foregroundStyle(.orange).font(.caption) }
+            if let message = journal.reconciliationMessage ?? analyses.reconciliationMessage { Text(message).font(.caption) }
+            if rows.isEmpty { Text(L10n.t("No saved predictions in this filter")) }
+            ForEach(EvaluationSummaryView.groups(rows), id: \.id) { own in EvaluationSummaryView(rows: own.rows) }
+            // Comparisons keep recording times separate even when all timing filters are selected.
+            ForEach(Set(rows.map(\.capture)).sorted(), id: \.self) { capture in
+                let cohort = rows.filter { $0.capture == capture }
+                EvaluationComparisonView(comparison: StockEvaluation.compare(cohort, selectedModels: Set(cohort.map(\.model))))
+            }
+            ForEach(EvaluationSummaryView.groups(rows), id: \.id) { group in
+              ForEach(group.rows, id: \.referenceID) { row in
+                DisclosureGroup("\(name(row)) · \(row.stockID) · \(row.model) · \(row.actualClose == nil ? L10n.t("Pending") : L10n.t("Evaluated"))") {
+                    Text("\(L10n.t("Estimated close")): \(row.expectedClose.description) · \(L10n.t("Actual close")): \(row.actualClose?.description ?? L10n.t("Pending"))").font(.caption)
+                    ForEach(row.references, id: \.self) { ref in
+                        Text("\(L10n.t("Reference")): \(ref.referenceID) · \(ref.source.rawValue)").font(.caption).textSelection(.enabled)
+                        if let record = journal.records.first(where: { $0.id == ref.referenceID }) { ForecastEvidenceView(record: record) }
+                        if let analysis = analyses.analyses.first(where: { $0.id.uuidString == ref.referenceID }) {
+                            Text(analysis.response.notes).textSelection(.enabled)
+                            if let record = analysis.forecastRecord { ForecastEvidenceView(record: record) }
                         }
                     }
-                    .padding(12)
-                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                  }
+                }
+            }
+            }
+            ForEach(savedAnalyses.filter { $0.response.status == .abstain }) { analysis in
+                DisclosureGroup("\(analysis.input.stockID) · \(analysis.model) · \(L10n.t("Abstained"))") {
+                    Text("\(L10n.t("Reference")): \(analysis.id.uuidString)")
+                    Text(analysis.response.notes).textSelection(.enabled)
+                }
+            }
+            Text(L10n.t("Saved inputs and predictions never change. Actual closes are checked on a later local date when stock estimates refresh. Abstentions are saved but not scored.")).font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button(L10n.t("Export evaluation CSV")) {
+                    var details: [String: String] = [:]
+                    let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .millisecondsSince1970
+                    let refs = Set(rows.flatMap { $0.references.map(\.referenceID) })
+                    for record in journal.records where refs.contains(record.id) { if let data = try? encoder.encode(record) { details[record.id] = String(decoding: data, as: UTF8.self) } }
+                    for analysis in savedAnalyses { if let data = try? encoder.encode(analysis) { details[analysis.id.uuidString] = String(decoding: data, as: UTF8.self) } }
+                    document = ForecastCSVDocument(text: EvaluationSummaryView.csv(rows: rows, details: details)); exporting = true
+                }
+                Button(L10n.t("Export forecast CSV")) {
+                    let refs = Set(rows.flatMap { $0.references.map(\.referenceID) })
+                    document = ForecastCSVDocument(text: StockForecastJournal.csv(journal.records.filter { refs.contains($0.id) })); exporting = true
                 }
             }
         }
     }
-
-    private func metric(_ title: String.LocalizationValue, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(L10n.t(title)).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.headline).monospacedDigit()
-        }.frame(maxWidth: .infinity, alignment: .leading)
-    }
-    private func percent(_ value: Double?) -> String { value.map { String(format: "%.1f%%", $0) } ?? "—" }
-    private func price(_ value: Decimal, _ record: StockForecastRecord) -> String {
-        StockQuoteCodec.format(price: value, currency: record.currency, locale: .current)
-    }
-    private func tradingDay(_ record: StockForecastRecord) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = record.marketCalendar.timeZone
-        return formatter.string(from: record.sessionStart)
+    private func name(_ row: StockEvaluationRow) -> String {
+        journal.records.first { row.references.contains(.init(referenceID: $0.id, source: .recorded)) }?.name ?? row.stockID
     }
 }
 
@@ -361,7 +323,7 @@ struct ForecastCalibrationView: View {
     }
 }
 
-private struct ForecastCSVDocument: FileDocument {
+struct ForecastCSVDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
     var text: String
     init(text: String) { self.text = text }

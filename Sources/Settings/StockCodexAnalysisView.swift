@@ -61,65 +61,11 @@ struct StockCodexAnalysisView: View {
 }
 
 struct StockCodexHistoryView: View {
-    @ObservedObject var store: StockCodexAnalysisStore = .shared
-    @Environment(\.dismiss) private var dismiss
-    @State private var model = ""
-
-    private var analyses: [StockCodexAnalysis] {
-        store.analyses.filter { model.isEmpty || $0.model == model }.reversed()
-    }
-
+    @ObservedObject var store: StockCodexAnalysisStore
+    @ObservedObject var journal: StockForecastJournal
+    @ObservedObject var backtests: StockBacktestStore
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(L10n.t("Codex analysis history")).font(.title2.bold())
-                Spacer()
-                Button(L10n.t("Done")) { dismiss() }.keyboardShortcut(.cancelAction)
-            }
-            Picker(L10n.t("Model"), selection: $model) {
-                Text(L10n.t("All recorded models")).tag("")
-                ForEach(Set(store.analyses.map(\.model)).sorted(), id: \.self) { Text($0).tag($0) }
-            }
-            Text(L10n.t("Saved inputs and predictions never change. Actual closes are checked on a later local date when stock estimates refresh. Abstentions are saved but not scored."))
-                .font(.caption).foregroundStyle(.secondary)
-            if let message = store.errorMessage ?? store.reconciliationMessage {
-                Text(message).font(.caption).foregroundStyle(.orange)
-            }
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForecastComparisonView(records: analyses.flatMap {
-                        [$0.forecastRecord, $0.pairedGBMRecord].compactMap { $0 }
-                    })
-                    ForEach(analyses) { analysis in
-                        DisclosureGroup {
-                            Text(analysis.response.notes).textSelection(.enabled)
-                            if let record = analysis.forecastRecord {
-                                LabeledContent(L10n.t("Estimated close"), value: price(record.expectedClose, record.currency))
-                                LabeledContent(L10n.t("Actual close"), value: record.actualClose.map {
-                                    price($0, record.currency)
-                                } ?? L10n.t("Pending daily close"))
-                                LabeledContent(L10n.t("Direction"), value: record.directionHit.map {
-                                    L10n.t($0 ? "Direction matched" : "Direction missed")
-                                } ?? L10n.t("No direction score"))
-                                ForecastEvidenceView(record: record)
-                            }
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(analysis.input.stockID) · \(analysis.model)").font(.headline)
-                                Text("\(analysis.completedAt.formatted(date: .abbreviated, time: .shortened)) · \(L10n.t(analysis.response.status == .abstain ? "Abstained" : "Saved manually"))")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(12)
-                        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                    }
-                }
-            }
-        }
-        .padding(20).frame(minWidth: 740, idealWidth: 840, minHeight: 560)
-    }
-
-    private func price(_ value: Decimal, _ currency: String) -> String {
-        StockQuoteCodec.format(price: value, currency: currency, locale: .current)
+        StockForecastHistoryView(journal: journal, analyses: store,
+            backtests: backtests, initialCodexFilter: true)
     }
 }

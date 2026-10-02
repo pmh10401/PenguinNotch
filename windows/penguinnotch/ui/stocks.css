@@ -32,3 +32,13 @@
 
 [data-stock-drag]{touch-action:none;cursor:grab}.stock-drag-handle{color:var(--stock-muted);display:inline-block;padding:3px}.stock-drag-source{opacity:.55;cursor:grabbing!important}.stock-drop-target{outline:2px solid var(--accent,var(--link));outline-offset:3px;border-radius:5px}
 .stock-account-viewer .stock-table{min-width:520px}.stock-account-viewer .stock-table small{display:block;color:var(--stock-muted);font-weight:400}.stock-account-viewer .stock-table th:first-child{min-width:100px;max-width:180px}.stock-account-viewer .stock-row select{max-width:65%;min-width:0}.stock-account-viewer .stock-table-wrap{margin-top:8px}
+
+/* Evaluation fits the native 680×520 settings pane and larger text. */
+.stock-evaluation{min-width:0;overflow-wrap:anywhere}
+.stock-evaluation table{width:100%;font-size:inherit;border-collapse:collapse}
+.stock-evaluation th,.stock-evaluation td{overflow-wrap:anywhere;text-align:left;padding:4px}
+#stock-replay select,#stock-saved select{max-width:100%;min-width:0}
+#stock-replay label,#stock-saved label{min-width:0;max-width:100%}
+#stock-replay details{margin:8px 0}
+.stock-raw{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;max-height:300px;overflow:auto;font-size:inherit}
+.stock-evaluation h3{font-size:inherit}

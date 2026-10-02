@@ -60121,7 +60121,17 @@
     "Opt in to recording about one hour before the close, or save current predictions manually. Recording continues while the app runs, even with Settings closed.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "마감 약 1시간 전 자동 기록을 켜거나 현재 예측을 직접 저장하세요. 자동 기록은 설정을 닫아도 앱이 실행 중이면 계속됩니다."}}}},
     "Review direction accuracy, price error, probability error, and range coverage": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "방향 적중률, 가격 오차, 확률 오차, 예상 범위 포함률을 확인합니다"}}}},
     "Filter by stock, model, period, and recording time. Export the selected records as CSV; account numbers and balances are never included.": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "종목, 모형, 기간, 기록 시점으로 걸러 보고 CSV로 내보냅니다. 계좌번호와 잔고는 포함하지 않습니다."}}}},
-    "Saved predictions": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "저장한 예측"}}}},
+    "Saved predictions": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실제 저장 기록"
+          }
+        }
+      }
+    },
     "Model comparison": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "모형 비교"}}}},
     "Probability check": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "확률 검증"}}}},
     "All recorded models": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "기록된 모든 모형"}}}},
@@ -62721,7 +62731,368 @@
           }
         }
       }
-    }
+    },
+    "Forecast history and evaluation": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예측 기록과 평가"
+          }
+        }
+      }
+    },
+    "Historical replay": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "과거 재현"
+          }
+        }
+      }
+    },
+    "Reconstructed from data fetched now; availability at the original time is not guaranteed.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음"
+          }
+        }
+      }
+    },
+    "Adjusted inputs and target; regular close minus 60 minutes. GBM expected close equals the input price. No Codex requests are made.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "입력과 목표 모두 현재 조회한 수정 가격입니다. 정규장 종료 60분 전을 재현하며 GBM 기대 종가는 입력 가격과 같습니다. Codex 요청은 실행하지 않습니다."
+          }
+        }
+      }
+    },
+    "Completed trading days": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료 거래일 수"
+          }
+        }
+      }
+    },
+    "Start replay": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재현 시작"
+          }
+        }
+      }
+    },
+    "Resume replay": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재현 재개"
+          }
+        }
+      }
+    },
+    "Watched symbols (including hidden)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "관심 종목(숨긴 종목 포함)"
+          }
+        }
+      }
+    },
+    "Historical replay requires Toss Securities.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "과거 재현은 토스증권이 필요합니다."
+          }
+        }
+      }
+    },
+    "Add watched symbols before starting replay.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재현을 시작하기 전에 관심 종목을 추가하세요."
+          }
+        }
+      }
+    },
+    "Running": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행 중"
+          }
+        }
+      }
+    },
+    "Replay run": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재현 실행 기록"
+          }
+        }
+      }
+    },
+    "Select a run": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행 기록 선택"
+          }
+        }
+      }
+    },
+    "No historical replay runs.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "과거 재현 기록이 없습니다."
+          }
+        }
+      }
+    },
+    "Market": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시장"
+          }
+        }
+      }
+    },
+    "Loading saved results…": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 결과를 읽는 중…"
+          }
+        }
+      }
+    },
+    "Acquired / requested": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자료 확보 / 요청"
+          }
+        }
+      }
+    },
+    "Skipped": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제외"
+          }
+        }
+      }
+    },
+    "MAPE minus baseline (percentage points)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MAPE와 기준선의 차이(%p)"
+          }
+        }
+      }
+    },
+    "Evaluation details": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "평가 상세"
+          }
+        }
+      }
+    },
+    "Mean range width": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "평균 구간 폭"
+          }
+        }
+      }
+    },
+    "Calibration is descriptive; related stocks and dates can increase uncertainty. Ties count as not rising; 50% calls remain in calibration.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보정 검사는 기술 통계이며 관련 종목과 날짜는 불확실성을 키울 수 있습니다. 보합은 상승하지 않은 것으로 계산하며 50% 예측도 보정 검사에 포함합니다."
+          }
+        }
+      }
+    },
+    "Excluded conflicts / missing evidence": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "충돌 / 근거 누락 제외"
+          }
+        }
+      }
+    },
+    "Reference": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원본 참조"
+          }
+        }
+      }
+    },
+    "Export evaluation CSV": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "평가 CSV 내보내기"
+          }
+        }
+      }
+    },
+    "Saved analysis requests/responses": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 분석 요청/응답"
+          }
+        }
+      }
+    },
+    "Saved abstentions": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 예측 보류 응답"
+          }
+        }
+      }
+    },
+    "Saved records": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 기록"
+          }
+        }
+      }
+    },
+    "Saved Codex responses": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 Codex 응답"
+          }
+        }
+      }
+    },
+    "Paired calculation (no Codex request)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "짝지은 계산(Codex 요청 아님)"
+          }
+        }
+      }
+    },
+    "Failed or invalid CLI attempts are not archived. Paired calculation is not a Codex request. Codex execution is available on macOS only.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실패하거나 유효하지 않은 CLI 시도는 보관하지 않습니다. 짝지은 계산은 Codex 요청이 아닙니다. Codex 실행은 macOS에서만 제공합니다."
+          }
+        }
+      }
+    },
+    "Replay paused. Resume is explicit.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재현이 일시 중지되었습니다. 직접 재개해야 합니다."
+          }
+        }
+      }
+    },
+    "Replay paused. Check the selected provider credentials.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재현이 일시 중지되었습니다. 선택한 제공처의 인증 정보를 확인하세요."
+          }
+        }
+      }
+    },
+    "Replay failed. Saved cases are retained.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재현에 실패했습니다. 저장된 사례는 유지됩니다."
+          }
+        }
+      }
+    },
+    "Completed": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료"
+          }
+        }
+      }
+    },
+    "Paused": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일시 중지"
+          }
+        }
+      }
+    },
+    "Direction excludes unchanged closes and 50% probabilities. Scores are not investment returns.": {"extractionState":"manual","localizations":{"ko":{"stringUnit":{"state":"translated","value":"방향 적중률은 보합과 50% 확률을 제외합니다. 평가는 투자 수익률이 아닙니다."}}}}
   },
   "version": "1.0"
 }

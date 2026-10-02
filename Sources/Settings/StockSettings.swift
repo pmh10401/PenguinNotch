@@ -17,6 +17,7 @@ struct StockSettings: View {
     @ObservedObject var preferences: Preferences
     @ObservedObject private var portfolio: StockForecastStore
     @ObservedObject private var account: TossAccountStore
+    @ObservedObject private var backtests: StockBacktestStore
     @State private var clientID = ""
     @State private var clientSecret = ""
     @State private var finnhubKey = ""
@@ -26,7 +27,6 @@ struct StockSettings: View {
     @State private var showsFinnhubKeys = false
     @State private var showsTossKeys = false
     @State private var showsForecastHistory = false
-    @State private var showsCodexHistory = false
     @State private var forecastSaveMessage: String?
     @State private var page: StockSettingsPage
     @State private var showsConnection = false
@@ -39,6 +39,7 @@ struct StockSettings: View {
         self.preferences = preferences
         self.portfolio = portfolio
         self.account = account
+        self.backtests = StockBacktestStore.shared(preferences: preferences)
         _page = State(initialValue: page)
     }
 
@@ -117,9 +118,8 @@ struct StockSettings: View {
                         }
                     }
                 case .history:
-                    Section(L10n.t("Forecast history")) {
-                        Button(L10n.t("View forecast history and accuracy…")) { showsForecastHistory = true }
-                        Button(L10n.t("View Codex analysis history…")) { showsCodexHistory = true }
+                    Section(L10n.t("Forecast history and evaluation")) {
+                        Button(L10n.t("Forecast history and evaluation")) { showsForecastHistory = true }
                         Text(
                             L10n.t(
                                 "Compare saved predictions with the matching Toss daily close after the next local calendar date. Automatic and manual records are scored separately."
@@ -133,8 +133,7 @@ struct StockSettings: View {
             .formStyle(.grouped)
             .id(page)
         }
-        .sheet(isPresented: $showsForecastHistory) { StockForecastHistoryView(journal: portfolio.journal) }
-        .sheet(isPresented: $showsCodexHistory) { StockCodexHistoryView() }
+        .sheet(isPresented: $showsForecastHistory) { StockForecastHistoryView(journal: portfolio.journal, analyses: .shared, backtests: backtests) }
         .onAppear { portfolio.setSettingsVisible(true) }
         .onDisappear {
             portfolio.setSettingsVisible(false)
@@ -158,7 +157,7 @@ struct StockSettings: View {
 
     @ViewBuilder
     private var connectionContent: some View {
-        Picker(L10n.t("Quote provider"), selection: $preferences.stockQuoteSource) {
+        Picker(L10n.t("Quote provider"), selection: Binding(get: { preferences.stockQuoteSource }, set: { backtests.cancel(); preferences.stockQuoteSource = $0 })) {
             ForEach(StockQuoteSource.allCases) { source in Text(source.title).tag(source) }
         }
         Text(L10n.t("Only the selected provider is used. Switching keeps your watchlist and saved keys."))
@@ -177,6 +176,7 @@ struct StockSettings: View {
                     SecureField(L10n.t("Finnhub API key"), text: $finnhubKey)
                     HStack {
                         Button(L10n.t("Save Finnhub key")) {
+                            backtests.cancel()
                             if FinnhubCredentials.save(finnhubKey) {
                                 finnhubKey = ""
                                 preferences.stockSettingsRevision += 1
@@ -187,6 +187,7 @@ struct StockSettings: View {
                         }
                         .disabled(finnhubKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         Button(L10n.t("Remove Finnhub key")) {
+                            backtests.cancel()
                             FinnhubCredentials.clear()
                             finnhubKey = ""
                             preferences.stockSettingsRevision += 1
@@ -212,6 +213,7 @@ struct StockSettings: View {
                     SecureField(L10n.t("Client secret"), text: $clientSecret)
                     HStack {
                         Button(L10n.t("Save API keys")) {
+                            backtests.cancel()
                             TossCredentials.save(clientID: clientID, clientSecret: clientSecret)
                             clientSecret = ""
                             preferences.stockSettingsRevision += 1
@@ -219,6 +221,7 @@ struct StockSettings: View {
                         }
                         .disabled(clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         Button(L10n.t("Remove API keys")) {
+                            backtests.cancel()
                             TossCredentials.clear()
                             clientID = ""
                             clientSecret = ""

@@ -1,4 +1,6 @@
 'use strict';
+const task6fs = require('node:fs');
+const task6path = require('node:path');
 const test=require('node:test'),assert=require('node:assert/strict');
 const S=require('../penguinnotch/ui/stocks.js');
 const B=require('../penguinnotch/ui/backtests.js');
@@ -446,4 +448,63 @@ test('cancellation after terminal write reads immutable completion and never pau
  await assert.rejects(()=>owner.start({symbols:[f.stock],sessions:20}));assert.equal(owner.errorMessage,'collection_cancelled');
  assert.equal(owner.runs[0].status,'completed');assert.ok(B.validManifest(owner.runs[0]));assert.ok(owner.runs[0].cases.every(e=>e.resultSHA256));
  assert.equal(f.manifests.get(owner.runs[0].runID).status,'completed');assert.equal(owner.activeRunID,null);assert.equal(owner.busy,false);
+});
+
+test('Task6 mounts the retained replay store without a render-time predictor',()=>{
+  assert.equal(typeof B.mountBacktests,'function');
+  const settings=task6fs.readFileSync(task6path.join(__dirname,'../penguinnotch/ui/settings.html'),'utf8');
+  assert.ok(settings.includes('retainReplayWindow'),'settings attaches the official close-event owner');
+  assert.match(settings,/backtests\.js/);
+});
+
+test('Task6 actual close callback retains only active work and releases a hidden settled owner',async()=>{
+  let listener,callback,hide=0,close=0,starts=0,prevented=0;
+  const store={busy:false,activeRunID:null,subscribe(fn){listener=fn;fn(this);return()=>{};},start(){starts++;this.busy=true;this.activeRunID='public';listener();}};
+  const visible=[];
+  const win={onCloseRequested:async fn=>callback=fn,hide:async()=>hide++,close:async()=>{await callback({preventDefault(){prevented++;}});close++;}};
+  const owner=B.retainReplayWindow(win,store,v=>visible.push(v));await owner.ready;
+  store.start();await callback({preventDefault(){prevented++;}});
+  assert.equal(hide,1);assert.equal(close,0);owner.show();assert.equal(starts,1);
+  await callback({preventDefault(){prevented++;}});store.busy=false;store.activeRunID=null;listener();await Promise.resolve();await Promise.resolve();
+  assert.equal(close,1);assert.equal(prevented,2);assert.deepEqual(visible,[false,true,false]);
+  await callback({preventDefault(){throw Error('Idle close must destroy');}});assert.equal(hide,2);
+  owner.dispose();
+});
+
+test('Task6 summary and CSV never pool models/captures and retain malicious public detail',()=>{
+  const f=require('../../Tests/Fixtures/stock-forecast-evaluation-v1.json'),a=copy(f.rows[0]),b=copy(a),c=copy(a);
+  b.model='B';b.capture='scheduled';c.source='replay';c.referenceID='public-replay';
+  const rows=[a,b,c],groups=B.evaluationGroups(rows);assert.equal(groups.length,3);
+  assert.ok(groups.every(g=>new Set(g.map(r=>r.model)).size===1&&new Set(g.map(r=>r.capture)).size===1));
+  const name='=TEST,"quoted"\nnext',detail=JSON.stringify({name});
+  const csv=B.groupedEvaluationCSV(rows,{[a.referenceID]:detail});
+  assert.ok(readCSV(csv).some(row=>row.includes(detail)));assert.match(csv,/public-replay/);
+  assert.equal(csv.split('\r\n').filter(line=>line.startsWith('"metrics"')).length,3);
+  const html=B.evaluationSummaryHTML(rows,'ko');assert.match(html,/평가 완료/);assert.doesNotMatch(html,/undefined|NaN/);
+});
+
+test('Task6 provider and credential invalidation cancels before change, watchlist changes preserve frozen run',async()=>{
+  let cancellations=0;const seen=[];
+  const store=new S.Store({onReplayInvalidation:()=>{cancellations++;seen.push(store.settings.provider);},invoke:async(cmd,args)=>{
+    if(cmd==='set_stock_settings'){assert.ok(cancellations>0);return args.settings;}
+    if(cmd==='get_stock_credential_status'){assert.ok(cancellations>0);return {toss:false,finnhub:false};}
+    throw Error('No other calls');
+  }});
+  store.configure({provider:'toss',enabled:false,symbols:[{market:'us',symbol:'TEST',visible:false}]});
+  assert.equal(cancellations,0);
+  await store.saveSettings({...store.settings,provider:'finnhub'});assert.equal(seen[0],'toss');
+  const before=cancellations;store.configure({...store.settings,symbols:[]});assert.equal(cancellations,before);
+  await store.reloadCredentials();assert.ok(cancellations>before);store.dispose();
+});
+
+
+test('Task6 saved comparison evaluates captures separately and replay calibration labels its source',()=>{
+  const sample=copy(require('../../Tests/Fixtures/stock-forecast-evaluation-v1.json').records[0]);
+  const html=S.comparisonHTML([sample,{...sample,capture:'scheduled',actualClose:110}], 'en');
+  assert.equal((html.match(/<table /g)||[]).length,2);
+  assert.ok(html.includes('0.952%'));assert.ok(html.includes('5.455%'));
+  const rows=B.replayRows('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',samples[0].caseData,
+    {version:1,caseID:samples[0].caseData.input.caseID,inputSHA256:'a'.repeat(64),calculationVersion:'replay-v1',computedAt:samples[0].caseData.target.fetchedAt,
+     outcomes:[{model:'GBM daily zero drift v1 / replay v1',status:'forecast',reason:null,forecast:samples[0].expected['1d']}]},'a'.repeat(64));
+  const replay=B.evaluationSummaryHTML(rows,'ko');assert.ok(replay.includes('과거 재현'));assert.ok(!replay.includes('Scheduled'));
 });

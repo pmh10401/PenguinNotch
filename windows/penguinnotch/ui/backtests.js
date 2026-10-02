@@ -420,7 +420,95 @@ function evaluationCSV(rows,metrics,details={}){
   return lines.join('\r\n')+'\r\n';
 }
 
-const api={PRICE_BASIS,validInput,validCase,predictReplay,validManifest,validResult,archive,BacktestStore,replayRows,evaluationCalibration,filteredEvaluationRows,replaySummary,evaluationCSV};
+const REPLAY_WARNING='Reconstructed from data fetched now; availability at the original time is not guaranteed.';
+function evaluationGroups(rows){
+  const groups=new Map();
+  for(const r of rows){const key=JSON.stringify([r.model,r.capture,r.source==='replay'?'replay':'saved']);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);}
+  return [...groups.values()];
+}
+function evaluationSummaryHTML(rows,lang){
+  const tr=k=>S.esc(S.t(lang,k)),num=(v,p=3)=>v==null?'—':v.toFixed(p),pct=v=>v==null?'—':v.toFixed(1)+'%';
+  return evaluationGroups(rows).map(own=>{
+    const m=S.evaluationMetrics(own),r=own[0];
+    const delta=m.mape===null||m.baselineMAPE===null?null:m.mape-m.baselineMAPE;
+    return `<section class="stock-evaluation"><h3>${S.esc(r.model)} · ${tr(r.capture==='manual'?'Manual':r.capture==='scheduled'?'Scheduled':'Historical replay')} · ${tr(r.source==='replay'?'Historical replay':'Saved predictions')}</h3><dl class="stock-metrics"><dt>${tr('Evaluated / pending')}</dt><dd>${m.evaluated} / ${m.total-m.evaluated}</dd><dt>${tr('MAPE minus baseline (percentage points)')}</dt><dd>${num(delta)}</dd><dt>${tr('Brier score')}</dt><dd>${num(m.brier)}</dd></dl><details data-stock-disclosure="evaluation:${S.esc(JSON.stringify([r.model,r.capture,r.source==='replay'?'replay':'saved']))}"><summary>${tr('Evaluation details')}</summary><dl class="stock-metrics"><dt>MAPE</dt><dd>${pct(m.mape)}</dd><dt>${tr('Price-hold baseline MAPE')}</dt><dd>${pct(m.baselineMAPE)}</dd><dt>${tr('Direction accuracy')}</dt><dd>${m.directionHits}/${m.directionCount}</dd><dt>${tr('80% range coverage')}</dt><dd>${pct(m.coverage)}</dd><dt>${tr('Mean range width')}</dt><dd>${pct(m.meanWidthPercent)}</dd>${Object.entries(m.maeByCurrency).map(([c,v])=>`<dt>MAE ${S.esc(c)}</dt><dd>${num(v)}</dd>`).join('')}</dl><p class="stock-small">${tr('Direction excludes unchanged closes and 50% probabilities. Scores are not investment returns.')}</p>${r.source==='replay'?S.probabilityHTML(own,lang,evaluationCalibration,'replay-calibration:'+r.model):''}</details></section>`;
+  }).join('');
+}
+function groupedEvaluationCSV(rows,details={}){
+  const groups=evaluationGroups(rows);
+  if(!groups.length)return evaluationCSV([],S.evaluationMetrics([]),details);
+  const referenced=new Set(rows.flatMap(r=>[r.referenceID,...(r.references||[]).map(ref=>ref.referenceID)]));
+  const bodies=groups.map(own=>evaluationCSV(own,S.evaluationMetrics(own),Object.fromEntries(Object.entries(details).filter(([id])=>own.some(r=>r.referenceID===id||r.references?.some(ref=>ref.referenceID===id))))));
+  const orphan=Object.fromEntries(Object.entries(details).filter(([id])=>!referenced.has(id)));
+  if(Object.keys(orphan).length)bodies.push(evaluationCSV([],S.evaluationMetrics([]),orphan));
+  return bodies.map((body,i)=>i?body.slice(body.indexOf('\r\n')+2):body).join('');
+}
+function downloadEvaluationCSV(rows,details){
+  const url=URL.createObjectURL(new Blob(['\ufeff'+groupedEvaluationCSV(rows,details)],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+  a.href=url;a.download='penguinnotch-evaluation.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+// Native settings close destroys its WebView; only an in-flight replay retains this owner.
+function retainReplayWindow(win,store,visibility,error=()=>{}){
+  let hidden=false,hiding=false,closing=false;
+  async function release(){if(hidden&&!hiding&&!closing&&!store.busy&&!store.activeRunID){closing=true;try{await win.close();}catch(e){closing=false;error(e);}}}
+  const ready=win.onCloseRequested(async event=>{
+    if(!store.busy&&!store.activeRunID)return;
+    event.preventDefault();hidden=true;hiding=true;visibility(false);
+    try{await win.hide();}catch(e){hidden=false;visibility(true);error(e);}finally{hiding=false;void release();}
+  });
+  const unsubscribe=store.subscribe(()=>{void release();});
+  return {ready,show(){hidden=false;visibility(true);},dispose:unsubscribe};
+}
+function mountBacktests(element,store,language=()=> 'en',symbols=()=>[]){
+  let selected='',sessions=60,filters={market:'',stockID:'',day:'',model:''},loaded=[],loadError='',loading=false,visible=true,signature='',generation=0;
+  const receipts=new Map();
+  const tr=k=>S.esc(S.t(typeof language==='function'?language():language,k));
+  const lang=()=>typeof language==='function'?language():language;
+  const selectedRun=()=>store.runs.find(r=>r.runID===selected);
+  async function load(){
+    const run=selectedRun(),key=JSON.stringify([run?.runID,run?.cases]);if(key===signature)return;
+    signature=key;const token=++generation;loaded=[];loadError='';loading=!!run;render();if(!run)return;
+    const next=[];
+    for(const entry of run.cases){
+      if(token!==generation)return;
+      const id=entry.caseID;
+      try{let c=receipts.get(id);if(!c||JSON.stringify(c.entry)!==JSON.stringify(entry)){c=await store.loadCase(run.runID,entry.caseID);if(token!==generation)return;receipts.set(id,c);}next.push(c);}
+      catch(_){if(token===generation)loadError='archive_unavailable';}
+    }
+    if(token!==generation)return;
+    loaded=next;loading=false;render();
+  }
+  function render(){
+    if(!visible)return;
+    if(!selected&&store.runs.length)selected=store.runs.at(-1).runID;
+    const focused=element.contains(document.activeElement)?document.activeElement.id:null,restore=S.rememberDisclosures(element),run=selectedRun(),stocks=symbols(),active=store.busy||!!store.activeRunID;
+    const option=(v,label,current)=>`<option value="${S.esc(v)}" ${v===current?'selected':''}>${S.esc(label)}</option>`;
+    const filter=(key,label,values)=>`<label>${tr(label)} <select id="backtest-${key}" data-replay-filter="${key}" aria-label="${tr(label)}">${option('',S.t(lang(),'All'),filters[key])}${values.map(v=>option(v,v,filters[key])).join('')}</select></label>`;
+    element.innerHTML=`<h2>${tr('Historical replay')}</h2><p class="stock-small" role="note">${tr(REPLAY_WARNING)}</p><p class="stock-small">${tr('Adjusted inputs and target; regular close minus 60 minutes. GBM expected close equals the input price. No Codex requests are made.')}</p><div class="stock-actions"><label>${tr('Completed trading days')} <select id="backtest-sessions" aria-label="${tr('Completed trading days')}" ${active?'disabled':''}>${[20,60,120].map(n=>option(String(n),String(n),String(sessions))).join('')}</select></label><button id="backtest-start" ${active||store.provider!=='toss'||!stocks.length||stocks.length>30||store.errorMessage==='archive_unavailable'||loadError?'disabled':''}>${tr('Start replay')}</button><button id="backtest-cancel" ${active?'':'disabled'}>${tr('Cancel')}</button></div><p>${tr('Watched symbols (including hidden)')}: ${stocks.length}/30 · ${S.esc(stocks.map(S.stockID).join(', '))}</p>${store.provider!=='toss'?`<p role="status">${tr('Historical replay requires Toss Securities.')}</p>`:''}${!stocks.length?`<p>${tr('Add watched symbols before starting replay.')}</p>`:''}<p role="status">${tr(active?'Running':'Idle')} · ${store.progress.completed}/${store.progress.total}</p>${store.errorMessage||loadError?`<p class="stock-error" role="alert">${tr(store.errorMessage||loadError)}</p>`:''}<label>${tr('Replay run')} <select id="backtest-run" aria-label="${tr('Replay run')}">${option('',S.t(lang(),'Select a run'),selected)}${store.runs.map(r=>option(r.runID,`${r.runID} · ${r.status}`,selected)).join('')}</select></label>${run&&run.status!=='completed'?`<button id="backtest-resume" ${active||store.provider!=='toss'||store.errorMessage==='archive_unavailable'||loadError?'disabled':''}>${tr('Resume replay')}</button>`:''}`;
+    if(run){
+      const entries=run.cases.filter(e=>(!filters.market||S.parseStock(e.stockID).market===filters.market)&&(!filters.stockID||e.stockID===filters.stockID)&&(!filters.day||e.tradingDay===filters.day));
+      element.innerHTML+=`<div class="stock-actions">${filter('market','Market',['us','kr'])}${filter('stockID','Stock',run.symbols)}${filter('day','Target day',[...new Set(run.cases.map(e=>e.tradingDay))].sort())}${filter('model','Model',run.models)}</div>`;
+      try{
+        const summary=replaySummary(run,loaded,filters.model?[filters.model]:run.models,filters);
+        element.innerHTML+=`<p>${tr('Acquired / requested')}: ${summary.acquired}/${summary.requested} · ${tr('Pending')}: ${summary.pending} · ${tr('Skipped')}: ${summary.skipped} · ${tr('Unavailable')}: ${summary.unavailable}</p>${loading?`<p role="status">${tr('Loading saved results…')}</p>`:''}${evaluationSummaryHTML(summary.rows,lang())}${summary.models.map(m=>`<p>${S.esc(m.model)} · ${tr('Evaluated')}: ${m.success} · ${tr('Skipped')}: ${m.skipped} · ${tr('Unavailable')}: ${m.unavailable}</p>`).join('')}<details data-stock-disclosure="replay-comparison"><summary>${tr('Compare identical prediction inputs')} · ${summary.comparison.pairedCount}</summary>${summary.comparison.rows.map(r=>`<p>${S.esc(r.model)} · MAPE ${r.paired.mape??'—'} · Brier ${r.paired.brier??'—'}</p>`).join('')}<p>${tr('Excluded conflicts / missing evidence')}: ${summary.comparison.excludedConflicts}/${summary.comparison.excludedMissingEvidence}</p></details>`;
+        element.innerHTML+=entries.map(e=>{const c=loaded.find(c=>c.entry.caseID===e.caseID);return `<details data-stock-disclosure="replay-case:${S.esc(e.caseID)}"><summary>${S.esc(e.stockID)} · ${e.tradingDay} · ${tr(e.status)}${e.reason?' · '+tr(e.reason):''}</summary><p>${tr('Reference')}: ${S.esc(c?.referenceID||run.runID+'/'+e.caseID)}</p>${c?`<pre class="stock-raw">${S.esc(c.rawDetail)}</pre>`:`<p>${tr(e.status==='saved'?'Unavailable':'Pending')}</p>`}</details>`;}).join('');
+        element.innerHTML+='<button id="backtest-export">'+tr('Export evaluation CSV')+'</button>';
+        element.querySelector('#backtest-export').onclick=()=>downloadEvaluationCSV(summary.rows,Object.fromEntries(loaded.filter(c=>entries.some(e=>e.caseID===c.entry.caseID)).map(c=>[c.referenceID,c.rawDetail])));
+      }catch(_){element.innerHTML+=`<p role="alert" class="stock-error">${tr('archive_unavailable')}</p>`;}
+    }else element.innerHTML+=`<p>${tr('No historical replay runs.')}</p>`;
+    element.querySelector('#backtest-sessions').onchange=e=>sessions=+e.target.value;
+    element.querySelector('#backtest-start').onclick=()=>{void store.start({symbols:stocks,sessions}).catch(()=>{});};
+    element.querySelector('#backtest-cancel').onclick=()=>store.cancel();
+    element.querySelector('#backtest-run').onchange=e=>{selected=e.target.value;receipts.clear();filters={market:'',stockID:'',day:'',model:''};void load();render();};
+    const resume=element.querySelector('#backtest-resume');if(resume)resume.onclick=()=>{void store.resume(selected).catch(()=>{});};
+    element.querySelectorAll('[data-replay-filter]').forEach(e=>e.onchange=()=>{filters[e.dataset.replayFilter]=e.value;render();});
+    restore();if(focused)element.querySelector('#'+focused)?.focus({preventScroll:true});
+  }
+  const unsubscribe=store.subscribe(()=>{render();void load();});
+  return {render(){render();void load();},show(value){visible=value;if(value){render();void load();}},dispose(){generation++;receipts.clear();unsubscribe();}};
+}
+
+const api={mountBacktests,retainReplayWindow,REPLAY_WARNING,evaluationGroups,evaluationSummaryHTML,groupedEvaluationCSV,downloadEvaluationCSV,PRICE_BASIS,validInput,validCase,predictReplay,validManifest,validResult,archive,BacktestStore,replayRows,evaluationCalibration,filteredEvaluationRows,replaySummary,evaluationCSV};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 root.PenguinNotchBacktests=api;
 })(globalThis);

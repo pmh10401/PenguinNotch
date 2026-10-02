@@ -304,8 +304,10 @@
 <div id="toast" data-dynamic>Saved</div>
 
 <script src="stocks.js"></script>
+<script src="backtests.js"></script>
 <script>
-let stockSettingsView=null, stockSettingsStore=null;
+let stockSettingsView=null, stockSettingsStore=null, stockReplayLifetime=null;
+const stockBacktestStore=new PenguinNotchBacktests.BacktestStore({invoke:(cmd,args)=>window.__TAURI__.core.invoke(cmd,args)});
 /* ---------------------------------------------------------------------------
    PenguinNotch settings: the Mac's task-based sections for features available on Windows.
 
@@ -2385,6 +2387,7 @@ function boot(){
 /* Readings and the accent can change while the window is behind something else; coming back to it is
    when the old values are wrong, so that is when they are read again. */
 window.addEventListener('focus', () => {
+  stockReplayLifetime?.show();
   loadLook();
   refreshOptions();
   // A screen can be plugged in, and the notch carried to another edge, while this window sits behind
@@ -2392,7 +2395,9 @@ window.addEventListener('focus', () => {
   refreshScreens();
 });
 stockSettingsStore=new PenguinNotchStocks.Store({invoke,listen:window.__TAURI__.event.listen,emit:(name,payload)=>window.__TAURI__.event.emit(name,payload),onChange:()=>stockSettingsView?.render()});
-stockSettingsView=PenguinNotchStocks.mountSettings({element:document.getElementById('pane-stocks'),store:stockSettingsStore,language:()=>uiLang});
+stockSettingsView=PenguinNotchStocks.mountSettings({element:document.getElementById('pane-stocks'),store:stockSettingsStore,backtests:stockBacktestStore,language:()=>uiLang});
+stockReplayLifetime=PenguinNotchBacktests.retainReplayWindow(window.__TAURI__.window.getCurrentWindow(),stockBacktestStore,visible=>stockSettingsView.show(visible&&curTab==='stocks',false),e=>strip('close failed: '+errText(e)));
+stockReplayLifetime.ready.catch(e=>strip('close handler failed: '+errText(e)));
 stockSettingsStore.init().catch(()=>{strip(PenguinNotchStocks.t(uiLang,'Stock settings unavailable'));});
 window.addEventListener('beforeunload',()=>stockSettingsStore.dispose());
 boot();

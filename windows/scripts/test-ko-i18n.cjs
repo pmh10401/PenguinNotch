@@ -128,3 +128,15 @@ test('account toggle preserves the selected order and does not replace a custom 
   context.toggleNotch('claude');await Promise.resolve();assert.deepEqual(Array.from(saved[1],s=>s.provider),['grok','codex','claude']);
   assert.ok(saved[1],'full custom list is not reset to automatic');
 });
+
+test('Task6 replay warning and selection labels have exact Korean copy on both platforms',()=>{
+  const S=require('../penguinnotch/ui/stocks.js'),B=require('../penguinnotch/ui/backtests.js');
+  const strings=JSON.parse(readFileSync(path.join(__dirname,'../../Sources/Localizable.xcstrings'),'utf8')).strings;
+  const warning='현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음';
+  assert.equal(S.t('ko',B.REPLAY_WARNING),warning);
+  assert.equal(strings[B.REPLAY_WARNING].localizations.ko.stringUnit.value,warning);
+  for(const key of ['Forecast history and evaluation','Saved predictions','Historical replay','Completed trading days','Watched symbols (including hidden)','Export evaluation CSV']){
+    assert.notEqual(S.t('ko',key),key);
+    assert.equal(strings[key].localizations.ko.stringUnit.value,S.t('ko',key));
+  }
+});

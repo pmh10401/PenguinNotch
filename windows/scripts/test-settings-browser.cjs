@@ -7,6 +7,7 @@ const {chromium} = require('playwright');
 const root = path.join(__dirname, '../penguinnotch/ui');
 
 function mockIPC() {
+  if(!crypto.randomUUID)crypto.randomUUID=()=> 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const initial = {lang:'en', weekly:'inside', transition:'hard_step', adaptive:false, automatic:true, update:{available:null,checking:false,installing:false,message:null,downloaded:null,total:null,deferred:false,preview:false}, slots:[], flags:{notch_visible:true,notch_on_hover:true,tray_visible:true},
     display:{shows_notch_readings:true,weekly_ring_dashed:false,weekly_reading:false,weekly_headline:false,reset_time_format:'automatic',show_usage_pace:false,claude_daily_pace_ring:false,show_codex_extra_limits:true},
     limits:{watch_limit:0.5,critical_limit:0.7},
@@ -14,12 +15,20 @@ function mockIPC() {
     hidden:['system-gpu','widget-weather'], colors:{'system-cpu':'36a8eb','widget-weather':'00e5cc'},
     order:['system-cpu','codex','widget-calendar','system-memory','widget-stock:us:AAPL','widget-weather','system-gpu','widget-todo'],
     weatherCity:{id:1,name:'Seoul',latitude:37.56,longitude:126.97}}};
+  window.replayManifests=[];window.replayBodies={};
   window.fixture = JSON.parse(localStorage.getItem('settings-fixture') || 'null') || initial;
   window.calls = []; window.emitted = []; window.unmocked = []; window.failNextPrefs = false; window.failNextTransition = false; window.failNextDisplay = false; window.failNextLimits = false; window.failNextAutomatic = false;
   const events = new Map(), save = () => localStorage.setItem('settings-fixture', JSON.stringify(fixture));
   window.events = events;
   window.__TAURI__ = {core:{invoke:async(cmd,args={})=>{
     calls.push({cmd,args:structuredClone(args)});
+    if(cmd==='stock_backtest_archive'){
+      const r=args.request;
+      if(r.action==='list')return {type:'manifests',manifests:structuredClone(replayManifests)};
+      if(r.action==='loadManifest')return {type:'manifest',manifest:structuredClone(replayManifests.find(m=>m.runID===r.runID))};
+      if(r.action==='loadCase'||r.action==='loadResult')return {type:'body',...replayBodies[r.runID+'/'+r.caseID][r.action]};
+      throw Error('No archive writes in UI fixture');
+    }
     if(cmd==='set_widget_prefs') {
       await new Promise(resolve=>setTimeout(resolve,30));
       if(window.failNextPrefs){window.failNextPrefs=false;throw Error('fixture save rejected');}
@@ -68,11 +77,15 @@ function mockIPC() {
       get_tray_options:[{id:'claude',label:'Claude',status:'ok',used:0.25},{id:'codex',label:'Codex',status:'ok',used:0.5},{id:'opencode',label:'OpenCode',status:'ok',used:12}],
       get_antigravity_prefs:{limit:'automatic',model:'gemini'},get_widget_prefs:fixture.widgets,
       get_update_state:fixture.update,get_automatic_updates:fixture.automatic!==false,
-      get_stock_settings:{enabled:false,symbols:[]},get_stock_credential_status:{toss:false,finnhub:false},load_stock_history:{version:1,trends:[],forecasts:[]}};
+      stock_backtest_archive:{type:'manifests',manifests:[]},get_stock_settings:{enabled:false,symbols:[]},get_stock_credential_status:{toss:false,finnhub:false},load_stock_history:{version:1,trends:[],forecasts:[]}};
     if(!(cmd in replies)){unmocked.push(cmd);throw Error('Unmocked native call: '+cmd);}
     return structuredClone(replies[cmd]);
   }},event:{listen:async(name,fn)=>{events.set(name,fn);return()=>events.delete(name);},emit:async(name,payload)=>{emitted.push({name,payload});}},
-  app:{getVersion:async()=>'settings QA'},window:{getCurrentWindow:()=>({close:async()=>{}})}};
+  app:{getVersion:async()=>'settings QA'},window:{getCurrentWindow:()=>({
+    onCloseRequested:async fn=>{window.nativeCloseRequested=fn;return()=>{};},
+    hide:async()=>{window.hideCount=(window.hideCount||0)+1;},
+    close:async()=>{let prevented=false;await window.nativeCloseRequested?.({preventDefault(){prevented=true;}});if(!prevented)window.destroyCount=(window.destroyCount||0)+1;}
+  })}};
 }
 
 (async()=>{
@@ -81,7 +94,7 @@ function mockIPC() {
     const context=await browser.newContext({viewport:{width:680,height:520}}),errors=[],external=[];
     await context.route('**/*',route=>{
       const url=new URL(route.request().url()),name=path.basename(url.pathname);
-      if(url.hostname==='settings.test'&&['settings.html','stocks.js','stocks.css','krx-listed-companies.tsv'].includes(name))
+      if(url.hostname==='settings.test'&&['settings.html','stocks.js','stocks.css','backtests.js','krx-listed-companies.tsv'].includes(name))
         return route.fulfill({path:path.join(root,name),contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'text/javascript'});
       external.push(url.href);return route.abort();
     });
@@ -95,6 +108,7 @@ function mockIPC() {
     assert.equal(page.url(),'http://settings.test/settings.html');
     const tabs=['accounts','stocks','monitoring','widgets','appearance','general'];
     assert.deepEqual(await page.locator('[role=tab] > span:last-child').allTextContents(),['AI subscriptions','Stocks','Computer monitoring','Daily widgets','Appearance','General']);
+    await task6ReplayUI(page);
     const idle=()=>page.waitForFunction(()=>!widgetSaving);
     const click=async selector=>{await page.locator(selector).click();await idle();};
     const state=()=>page.evaluate(()=>structuredClone(fixture.widgets));
@@ -271,3 +285,138 @@ function mockIPC() {
     console.log('PASS: six macOS-aligned sections, English/Korean, keyboard and saved tabs, independent hardware/widgets, legacy visibility, scoped order/color, city search, OpenCode, adaptive pill, color transition rollback, stock view events, persistence and 24 layout checks; no console errors, unmocked calls or external requests');
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+async function task6ReplayUI(page){
+  await page.locator('#tab-stocks').click();
+  await page.locator('#stock-tab-history').focus();await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#stock-history-replay').count(),1,'one integrated saved/replay history entry');
+  await page.locator('#stock-history-replay').focus();await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#backtest-sessions').inputValue(),'60');
+  assert.deepEqual(await page.locator('#backtest-sessions option').allTextContents(),['20','60','120']);
+  assert.equal(await page.locator('#backtest-start').isEnabled(),false,'empty watchlist');
+  assert.match(await page.locator('#stock-replay').textContent(),/No historical replay runs/);
+  for(const n of ['20','60','120'])await page.locator('#backtest-sessions').selectOption(n);
+  await page.evaluate(()=>{
+    stockSettingsStore.configure({enabled:false,provider:'toss',symbols:[{symbol:'TEST',market:'us',name:'=TEST,"quoted"\nnext',visible:false}]});
+    window.fixtureStarts=0;window.fixtureResumes=0;
+    const originalStart=stockBacktestStore.start.bind(stockBacktestStore),originalResume=stockBacktestStore.resume.bind(stockBacktestStore);
+    stockBacktestStore.resume=run=>{fixtureResumes++;return originalResume(run);};
+    stockBacktestStore.start=args=>{fixtureStarts++;window.startedSymbols=args.symbols;return originalStart(args);};
+    stockBacktestStore.stockRequest=()=>new Promise(resolve=>window.releaseReplay=()=>resolve({type:'calendar',requestedAt:Date.now(),value:null}));
+  });
+  assert.match(await page.locator('#stock-replay').textContent(),/including hidden.*1\/30/);
+  await page.locator('#backtest-start').focus();await page.keyboard.press('Enter');
+  await page.waitForFunction(()=>stockBacktestStore.busy&&window.releaseReplay);
+  await page.evaluate(()=>{
+    const generation=stockBacktestStore.generation;
+    stockSettingsStore.configure({...stockSettingsStore.settings,symbols:Array.from({length:30},(_,i)=>({symbol:'TK'+i,market:'us',visible:i!==0}))});
+    if(stockBacktestStore.generation!==generation)throw Error('Watchlist edit cancelled frozen replay');
+    stockSettingsStore.settings.accountNotchEnabled=true;stockSettingsStore.settings.accountNotchSeq=7;stockSettingsStore.settings.accountSeq=9;
+    document.getElementById('stock-client-id').value='PUBLIC_FIXTURE';
+    document.getElementById('stock-client-secret').value='PUBLIC_FIXTURE';
+    stockSettingsStore.viewerOverview={publicFixture:true};stockSettingsStore.viewerOpen=true;
+  });
+  await page.locator('#close').click();
+  assert.equal(await page.evaluate(()=>hideCount),1);assert.equal(await page.evaluate(()=>window.destroyCount||0),0);
+  assert.equal(await page.locator('#stock-client-secret').inputValue(),'');
+  assert.equal(await page.locator('#stock-client-id').inputValue(),'');
+  assert.equal(await page.evaluate(()=>stockSettingsStore.settings.accountNotchEnabled),true);
+  assert.equal(await page.evaluate(()=>stockSettingsStore.settings.accountSeq),9);
+  assert.equal(await page.evaluate(()=>startedSymbols.length),1);
+  assert.match(await page.locator('#stock-replay').textContent(),/30\/30/);
+  assert.equal(await page.evaluate(()=>stockSettingsStore.viewerOverview),null);
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  assert.equal(await page.locator('#stock-tab-history').getAttribute('aria-selected'),'true');
+  assert.equal(await page.locator('#stock-replay').isVisible(),true);
+  assert.equal(await page.locator('#backtest-sessions').inputValue(),'120');
+  assert.equal(await page.evaluate(()=>fixtureStarts),1);assert.equal(await page.evaluate(()=>startedSymbols[0].visible),false);
+  await page.evaluate(async()=>{window.preventedNative=0;await nativeCloseRequested({preventDefault(){preventedNative++;}});});
+  assert.equal(await page.evaluate(()=>preventedNative),1);assert.equal(await page.evaluate(()=>hideCount),2);
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await page.locator('#backtest-cancel').focus();await page.keyboard.press('Enter');
+  await page.evaluate(()=>releaseReplay());await page.waitForFunction(()=>!stockBacktestStore.busy);
+  assert.equal(await page.evaluate(()=>fixtureStarts),1);assert.equal(await page.evaluate(()=>fixtureResumes),0);
+  assert.match(await page.locator('#stock-replay').textContent(),/paused|collection_cancelled/);
+  // Public fake completed owner settles while hidden; official close proceeds normally and frees WebView.
+  await page.evaluate(async()=>{stockBacktestStore.busy=true;stockBacktestStore.activeRunID='public';await nativeCloseRequested({preventDefault(){}});stockBacktestStore.busy=false;stockBacktestStore.activeRunID=null;stockBacktestStore.emit();});
+  await page.waitForFunction(()=>window.destroyCount===1);
+  const hideBefore=await page.evaluate(()=>hideCount);
+  await page.locator('#close').click();assert.equal(await page.evaluate(()=>destroyCount),2);assert.equal(await page.evaluate(()=>hideCount),hideBefore);
+  await page.evaluate(async()=>{await __TAURI__.window.getCurrentWindow().close();window.dispatchEvent(new Event('focus'));});
+  assert.equal(await page.evaluate(()=>destroyCount),3);
+
+  const fixture=require('../../Tests/Fixtures/stock-forecast-evaluation-v1.json');
+  const sample=fixture.replayCases[0].caseData;
+  const models=['GBM daily zero drift v1 / replay v1','GBM 1m zero drift v1 / replay v1','GBM 10m zero drift v1 / replay v1'];
+  const hash='a'.repeat(64),resultHash='b'.repeat(64),runID='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const entry={caseID:sample.input.caseID,stockID:sample.input.stockID,tradingDay:sample.input.tradingDay,status:'saved',inputSHA256:hash,resultSHA256:resultHash,reason:null};
+  // Expected fixture uses interval keys; no prediction is run by the rendered UI.
+  const result={version:1,caseID:entry.caseID,inputSHA256:hash,calculationVersion:'replay-v1',computedAt:sample.target.fetchedAt,outcomes:models.map((model,i)=>({model,status:'forecast',reason:null,forecast:fixture.replayCases[0].expected[['1d','1m','10m'][i]]}))};
+  const day='2026-09-24',pending={...entry,caseID:entry.caseID.replace(entry.tradingDay,day),tradingDay:day,status:'pending',inputSHA256:null,resultSHA256:null};
+  const manifest={version:1,runID,createdAt:sample.target.fetchedAt,collectionStartedAt:sample.target.fetchedAt,collectionCompletedAt:null,protocolVersion:'replay-v1',codeVersion:'PUBLIC-FIXTURE',priceBasis:'provider-adjusted-as-fetched',cutoffMinutes:60,sessions:20,symbols:[entry.stockID],models,status:'paused',cases:[entry,pending]};
+  await page.evaluate(({manifest,sample,result,hash,resultHash})=>{
+    replayManifests=[manifest];replayBodies[manifest.runID+'/'+sample.input.caseID]={loadCase:{body:JSON.stringify(sample),sha256:hash},loadResult:{body:JSON.stringify(result),sha256:resultHash}};
+    stockBacktestStore.runs=replayManifests;stockBacktestStore.errorMessage=null;stockBacktestStore.emit();
+  },{manifest,sample,result,hash,resultHash});
+  await page.waitForSelector('#backtest-export');
+  await page.waitForFunction(()=>document.getElementById('stock-replay').textContent.includes('1/2')&&!document.getElementById('stock-replay').textContent.includes('Loading saved results'));
+  assert.match(await page.locator('#stock-replay').textContent(),/Pending: 1/);
+  assert.equal(await page.locator('.stock-evaluation').count(),3);
+  const disclosure=page.locator('.stock-evaluation details').first();await disclosure.locator(':scope > summary').click();
+  await page.evaluate(()=>stockBacktestStore.emit());assert.equal(await disclosure.getAttribute('open'),'');
+  await page.locator('#backtest-day').selectOption(entry.tradingDay);
+  assert.match(await page.locator('#stock-replay').textContent(),/1\/1/);
+  await page.evaluate(()=>stockBacktestStore.emit());assert.equal(await page.locator('#backtest-day').inputValue(),entry.tradingDay);
+  await page.locator('#backtest-model').selectOption(models[0]);assert.equal(await page.locator('.stock-evaluation').count(),1);
+  await page.locator('#backtest-model').selectOption('');
+  for(const language of ['en','ko']){
+    await page.evaluate(language=>setUiLanguage(language),language);
+    assert.ok((await page.locator('#stock-replay').textContent()).includes(language==='ko'?'현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음':'Reconstructed from data fetched now; availability at the original time is not guaranteed.'));
+    for(const size of [{width:680,height:520},{width:860,height:680}]){
+      await page.setViewportSize(size);await page.evaluate(()=>document.getElementById('stock-replay').style.fontSize='20px');
+      assert.equal(await page.evaluate(()=>document.getElementById('stock-panel-history').scrollWidth>document.getElementById('stock-panel-history').clientWidth),false);
+    }
+  }
+  await page.evaluate(()=>{document.getElementById('stock-replay').style.fontSize='';setUiLanguage('en');});
+  await page.setViewportSize({width:680,height:520});
+  const skipped=structuredClone(sample);skipped.input.dailyCloses=[];skipped.input.minutes=skipped.input.minutes.slice(-1);
+  const allSkipped={...result,outcomes:models.map(model=>({model,status:'skipped',reason:model.includes('daily')?'insufficient_daily_history':'insufficient_intraday_history',forecast:null}))};
+  await page.evaluate(({manifest,entry,skipped,allSkipped,hash,resultHash})=>{
+    const m={...manifest,runID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'completed',collectionCompletedAt:manifest.createdAt,cases:[entry]};
+    replayManifests.push(m);replayBodies[m.runID+'/'+entry.caseID]={loadCase:{body:JSON.stringify(skipped),sha256:hash},loadResult:{body:JSON.stringify(allSkipped),sha256:resultHash}};
+    stockBacktestStore.runs=replayManifests;stockBacktestStore.emit();
+  },{manifest,entry,skipped,allSkipped,hash,resultHash});
+  await page.locator('#backtest-run').selectOption('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  await page.waitForFunction(()=>document.getElementById('stock-replay').textContent.includes('Skipped: 1'));
+  assert.equal(await page.locator('.stock-evaluation').count(),0,'all skipped never becomes a perfect score');
+  await page.locator('[data-stock-disclosure^="replay-case:"] summary').click();
+  assert.match(await page.locator('.stock-raw').textContent(),/insufficient_daily_history/);
+  // A late failed read from the previous selection cannot contaminate the current run.
+  await page.evaluate(()=>{window.originalCaseLoader=stockBacktestStore.loadCase.bind(stockBacktestStore);stockBacktestStore.loadCase=(run,id)=>run==='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'?new Promise((_,reject)=>window.rejectStaleLoad=()=>reject(Error('public stale read'))):originalCaseLoader(run,id);});
+  await page.locator('#backtest-run').selectOption('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  await page.locator('#backtest-run').selectOption('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  await page.waitForFunction(()=>document.getElementById('stock-replay').textContent.includes('Skipped: 1')&&!document.getElementById('stock-replay').textContent.includes('Loading saved results'));
+  await page.evaluate(async()=>{rejectStaleLoad();await Promise.resolve();stockBacktestStore.emit();stockBacktestStore.loadCase=originalCaseLoader;});
+  assert.equal(await page.locator('#stock-replay [role="alert"]').count(),0,'stale failed archive reply stays with its original selection');
+  await page.evaluate(()=>{stockBacktestStore.errorMessage='archive_unavailable';stockBacktestStore.emit();});
+  assert.equal(await page.locator('#backtest-start').isEnabled(),false);
+  await page.evaluate(()=>{stockBacktestStore.errorMessage=null;stockSettingsStore.configure({provider:'finnhub',enabled:false,symbols:[{symbol:'TEST',market:'us'}]});});
+  assert.equal(await page.locator('#backtest-start').isEnabled(),false);
+  assert.match(await page.locator('#stock-replay').textContent(),/requires Toss Securities/);
+  await page.locator('#stock-history-saved').click();
+  const malicious=structuredClone(fixture.records[0]);malicious.name='=TEST,"quoted"\nnext';
+  await page.evaluate(record=>{stockSettingsStore.history={version:1,trends:[],forecasts:[record]};stockSettingsStore.configure({provider:'toss',enabled:false,symbols:[]});stockSettingsView.render();},malicious);
+  assert.ok((await page.locator('#stock-history').textContent()).includes(malicious.name));
+  assert.equal(await page.locator('#stock-history script').count(),0);
+  const csv=await page.evaluate(()=>PenguinNotchStocks.csv(stockSettingsStore.history.forecasts,false));
+  assert.ok(csv.includes("'=TEST"));assert.ok(csv.includes('""quoted""'));
+  await page.locator('#stock-history-filter-model').selectOption(malicious.model);
+  await page.locator('[data-stock-disclosure^="history:"] > summary').click();
+  await page.locator('[data-stock-disclosure^="record:"] > summary').click();
+  await page.evaluate(()=>stockSettingsView.render());
+  assert.equal(await page.locator('#stock-history-filter-model').inputValue(),malicious.model);
+  assert.equal(await page.locator('[data-stock-disclosure^="record:"]').getAttribute('open'),'');
+  assert.equal(await page.locator('#stock-export-forecasts').isEnabled(),true);
+  await page.evaluate(()=>{stockSettingsStore.history={version:1,trends:[],forecasts:[]};stockSettingsView.render();});
+  await page.locator('#stock-tab-watchlist').click();
+}

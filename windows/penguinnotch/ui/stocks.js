@@ -375,8 +375,8 @@ function csv(records,trace=false) {
   return [keys.join(','),...records.map(r=>keys.map(k=>quote(r[k])).join(','))].join('\r\n')+'\r\n';
 }
 class Store {
-  constructor({invoke,listen,emit=async()=>{},now=Date.now,owner=false,onChange=()=>{}}) {
-    Object.assign(this,{invoke,listen,emit,now,owner,onChange,settings:normalizeSettings(),credentials:{toss:false,finnhub:false},quotes:new Map(),names:new Map(),charts:new Map(),cache:new Map(),accounts:[],holdings:[],forecastStocks:[],candidates:[],reasons:new Map(),history:null,historyError:'',error:'',forecastError:'',accountError:'',accountsBusy:false,revision:0,settingsReady:false,busy:false,activeStock:null,visible:false});
+  constructor({invoke,listen,emit=async()=>{},now=Date.now,owner=false,onChange=()=>{},onReplayInvalidation=()=>{}}) {
+    Object.assign(this,{invoke,listen,emit,now,owner,onChange,onReplayInvalidation,settings:normalizeSettings(),credentials:{toss:false,finnhub:false},quotes:new Map(),names:new Map(),charts:new Map(),cache:new Map(),accounts:[],holdings:[],forecastStocks:[],candidates:[],reasons:new Map(),history:null,historyError:'',error:'',forecastError:'',accountError:'',accountsBusy:false,revision:0,settingsReady:false,busy:false,activeStock:null,visible:false});
     this.writes=Promise.resolve();this.reconcileAttempts=new Map();this.quoteTimes=new Map();this.unlisten=[];
     this.viewerGeneration=0;this.clearViewer(false);
     this.credentialGeneration=0;this.accountNotchGeneration=0;this.accountNotchPending=null;this.clearAccountNotch();
@@ -398,7 +398,7 @@ class Store {
     this.timer=setInterval(()=>{if(!this.owner&&this.visible)void this.emit('stock-view-state',{visible:true}).catch(()=>{});void this.tick();},60000);
     await this.tick();
   }
-  async reloadCredentials(){const generation=++this.credentialGeneration;this.credentials={toss:false,finnhub:false};this.invalidate();this.changed();try{const credentials=await this.invoke('get_stock_credential_status');if(this.disposed||generation!==this.credentialGeneration)return;this.credentials=credentials;this.changed();await this.tick();}catch(_){if(this.disposed||generation!==this.credentialGeneration)return;this.error='Credential status unavailable';this.changed();}}
+  async reloadCredentials(){this.onReplayInvalidation();const generation=++this.credentialGeneration;this.credentials={toss:false,finnhub:false};this.invalidate();this.changed();try{const credentials=await this.invoke('get_stock_credential_status');if(this.disposed||generation!==this.credentialGeneration)return;this.credentials=credentials;this.changed();await this.tick();}catch(_){if(this.disposed||generation!==this.credentialGeneration)return;this.error='Credential status unavailable';this.changed();}}
   invalidate(clearViewer=true){this.revision++;if(clearViewer){this.clearViewer(false);this.clearAccountNotch();}this.cache.clear();this.quotes.clear();this.quoteTimes.clear();this.charts.clear();this.accounts=[];this.holdings=[];this.forecastStocks=[];this.candidates=[];this.reasons.clear();this.forecastError='';this.accountError='';this.reconciliationError='';}
   viewerAvailable(){return !this.disposed&&this.settingsReady&&this.settings.provider==='toss'&&this.credentials.toss===true;}
   accountNotchAvailable(){return this.owner&&this.viewerAvailable()&&this.settings.accountNotchEnabled&&accountSequence(this.settings.accountNotchSeq);}
@@ -471,6 +471,7 @@ class Store {
   }
   configure(value) {
     const next=normalizeSettings(value),prior=this.settings;
+    if(prior.provider!==next.provider)this.onReplayInvalidation();
     this.settingsReady=true;
     if(JSON.stringify(prior)===JSON.stringify(next)){this.changed();return;}
     this.revision++;
@@ -481,7 +482,7 @@ class Store {
   }
   async saveSettings(next){
     if(this.busy) return false;
-    if(next.provider!==this.settings.provider){this.clearViewer(false);this.clearAccountNotch();}
+    if(next.provider!==this.settings.provider){this.onReplayInvalidation();this.clearViewer(false);this.clearAccountNotch();}
     this.busy=true;this.changed();
     try{this.configure(await this.invoke('set_stock_settings',{settings:normalizeSettings(next)}));return true;}
     catch(_){this.error='Could not save stock settings';return false;}
@@ -673,6 +674,65 @@ class Store {
   dispose(){this.disposed=true;this.clearAccountNotch();this.clearViewer();if(!this.owner)void this.emit('stock-view-state',{visible:false}).catch(()=>{});clearInterval(this.timer);this.revision++;this.unlisten.forEach(f=>f());}
 }
 const KO={
+'Direction excludes unchanged closes and 50% probabilities. Scores are not investment returns.':'방향 적중률은 보합과 50% 확률을 제외합니다. 평가는 투자 수익률이 아닙니다.',
+'Codex execution is available on macOS only.':'Codex 실행은 macOS에서만 제공합니다.',
+
+"Forecast history and evaluation":"예측 기록과 평가",
+"Historical replay":"과거 재현",
+"Saved predictions":"실제 저장 기록",
+"Reconstructed from data fetched now; availability at the original time is not guaranteed.":"현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음",
+"Adjusted inputs and target; regular close minus 60 minutes. GBM expected close equals the input price. No Codex requests are made.":"입력과 목표 모두 현재 조회한 수정 가격입니다. 정규장 종료 60분 전을 재현하며 GBM 기대 종가는 입력 가격과 같습니다. Codex 요청은 실행하지 않습니다.",
+"Completed trading days":"완료 거래일 수",
+"Start replay":"재현 시작",
+"Resume replay":"재현 재개",
+"Watched symbols (including hidden)":"관심 종목(숨긴 종목 포함)",
+"Historical replay requires Toss Securities.":"과거 재현은 토스증권이 필요합니다.",
+"Add watched symbols before starting replay.":"재현을 시작하기 전에 관심 종목을 추가하세요.",
+"Running":"실행 중",
+"Idle":"대기",
+"Replay run":"재현 실행 기록",
+"Select a run":"실행 기록 선택",
+"No historical replay runs.":"과거 재현 기록이 없습니다.",
+"Market":"시장",
+"Loading saved results…":"저장된 결과를 읽는 중…",
+"Acquired / requested":"자료 확보 / 요청",
+"Skipped":"제외",
+"Unavailable":"확인 불가",
+"Evaluated / pending":"평가 완료 / 대기",
+"MAPE minus baseline (percentage points)":"MAPE와 기준선의 차이(%p)",
+"Evaluation details":"평가 상세",
+"Mean range width":"평균 구간 폭",
+"Rises / evaluated":"상승 / 평가",
+"Calibration is descriptive; related stocks and dates can increase uncertainty. Ties count as not rising; 50% calls remain in calibration.":"보정 검사는 기술 통계이며 관련 종목과 날짜는 불확실성을 키울 수 있습니다. 보합은 상승하지 않은 것으로 계산하며 50% 예측도 보정 검사에 포함합니다.",
+"Excluded conflicts / missing evidence":"충돌 / 근거 누락 제외",
+"Reference":"원본 참조",
+"Export evaluation CSV":"평가 CSV 내보내기",
+"Saved analysis requests/responses":"저장된 분석 요청/응답",
+"Saved abstentions":"저장된 예측 보류 응답",
+"Saved records":"저장된 기록",
+"Saved Codex responses":"저장된 Codex 응답",
+"Paired calculation (no Codex request)":"짝지은 계산(Codex 요청 아님)",
+"Failed or invalid CLI attempts are not archived. Paired calculation is not a Codex request. Codex execution is available on macOS only.":"실패하거나 유효하지 않은 CLI 시도는 보관하지 않습니다. 짝지은 계산은 Codex 요청이 아닙니다. Codex 실행은 macOS에서만 제공합니다.",
+"Replay paused. Resume is explicit.":"재현이 일시 중지되었습니다. 직접 재개해야 합니다.",
+"Replay paused. Check the selected provider credentials.":"재현이 일시 중지되었습니다. 선택한 제공처의 인증 정보를 확인하세요.",
+"Replay failed. Saved cases are retained.":"재현에 실패했습니다. 저장된 사례는 유지됩니다.",
+"Completed":"완료",
+"Paused":"일시 중지",
+"Saved":"저장됨",
+"archive_unavailable":"기록을 읽을 수 없습니다. 원본을 보존하며 쓰기를 차단합니다.",
+"collection_cancelled":"재현이 일시 중지되었습니다. 직접 재개해야 합니다.",
+"collection_failed":"재현에 실패했습니다. 저장된 사례는 유지됩니다.",
+"authentication_paused":"재현이 일시 중지되었습니다. 선택한 제공처의 인증 정보를 확인하세요.",
+"pending":"대기",
+"saved":"저장됨",
+"skipped":"제외",
+"insufficient_daily_history":"일봉 근거 부족",
+"insufficient_intraday_history":"분봉 근거 부족",
+"missing_previous_close":"전일 종가 누락",
+"missing_target_close":"목표 종가 누락",
+"missing_cutoff_bar":"종료 60분 전 봉 누락",
+"invalid_pagination":"페이지 커서 오류",
+
  'My account':'내 계좌','Analysis':'분석','History':'기록','Display options':'표시 옵션','Connection':'연결',
  'Show account in notch':'노치에 계좌 표시','Account in notch':'노치 계좌','Include account holdings in estimates':'추정치에 계좌 보유 종목 포함',
  'Watchlist and account holdings':'관심 종목과 계좌 보유 종목','Manage accounts':'계좌 관리','Manage connection':'연결 관리',
@@ -765,16 +825,17 @@ function evidenceHTML(record,lang,key='evidence:'+forecastID(record)) {
   return `<details class="stock-evidence" data-stock-disclosure="${esc(key)}"><summary>${tr('Prediction evidence')}</summary><dl class="stock-metrics"><dt>${tr('Model')}</dt><dd>${esc(record.model)}</dd><dt>${tr('Input price')}</dt><dd>${p(record.inputPrice)}</dd><dt>${tr('Previous close')}</dt><dd>${p(record.previousClose)}</dd><dt>${tr('Quote time')}</dt><dd>${time(record.quoteAt)}</dd><dt>${tr('Prediction time')}</dt><dd>${time(record.createdAt)}</dd><dt>${tr('Target regular close')}</dt><dd>${time(record.sessionEnd)}</dd></dl><p class="stock-small">${tr('Source: Toss Securities · completed, adjusted daily closes')}</p><dl class="stock-metrics"><dt>${tr('Daily volatility')}</dt><dd>${percent(Math.sqrt(dailyVariance(closes.map(c=>c.price))))}</dd><dt>${tr('Past 5-session return')}</dt><dd>${percent(historical(5))}</dd><dt>${tr('Past 20-session return')}</dt><dd>${percent(historical(20))}</dd></dl><details data-stock-disclosure="${esc(key)}|closes"><summary>${tr('Completed daily closes')} (${closes.length})</summary><div class="stock-table-wrap"><table class="stock-table"><thead><tr><th scope="col">${tr('Date')}</th><th scope="col">${tr('Close')}</th></tr></thead><tbody>${closes.map(c=>`<tr><th scope="row">${esc(dayKey(c.date,record.market))}</th><td>${p(c.price)}</td></tr>`).join('')}</tbody></table></div></details>${record.model===MODEL?`<p class="stock-small">${tr('GBM assumes zero expected return from the input price to the close. Daily volatility sizes the price range; historical returns are context, not a trend prediction. No news or AI API is used.')}</p>`:''}</details>`;
 }
 function comparisonHTML(records,lang) {
-  const tr=key=>esc(t(lang,key)),comparison=compareModels(records),decimal=(v,suffix='')=>v===null?'—':v.toFixed(3)+suffix;
-  return `<details data-stock-disclosure="comparison"><summary>${tr('Model comparison')}</summary><p class="stock-small">${tr('All recorded models in the stock, day and capture filters are compared, regardless of the model filter.')}</p><p class="stock-small">${tr('Only completed records shared by every listed model are compared. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns.')}</p><div class="stock-table-wrap"><table class="stock-table"><thead><tr>${['Model','Saved / pending','Paired samples','MAPE','Brier score'].map(key=>`<th scope="col">${tr(key)}</th>`).join('')}</tr></thead><tbody>${comparison.rows.map(row=>`<tr><th scope="row">${esc(row.model)}</th><td>${row.available.total} / ${row.available.total-row.available.evaluated}</td><td>${row.paired.evaluated}</td><td>${decimal(row.paired.mape,'%')}</td><td>${decimal(row.paired.brier)}</td></tr>`).join('')}</tbody></table></div><p>${tr('Price-hold baseline MAPE')}: ${decimal(comparison.baseline,'%')} · n=${comparison.pairedCount}</p>${comparison.pairedCount?'':`<p>${tr('No completed records with matching inputs yet.')}</p>`}<p class="stock-small">${tr('This version records local GBM predictions. Its expected close equals the input price, so its MAPE equals the price-hold baseline. Lower MAPE and Brier are better; these are not investment returns.')}</p><button id="stock-export-comparison" ${records.length?'':'disabled'}>${tr('Export comparison CSV')}</button></details>`;
+  const tr=key=>esc(t(lang,key)),decimal=(v,suffix='')=>v===null?'—':v.toFixed(3)+suffix,groups=new Map();
+  for(const r of records){if(!groups.has(r.capture))groups.set(r.capture,[]);groups.get(r.capture).push(r);}
+  return `<details data-stock-disclosure="comparison"><summary>${tr('Model comparison')}</summary><p class="stock-small">${tr('All recorded models in the stock, day and capture filters are compared, regardless of the model filter.')}</p><p class="stock-small">${tr('Only completed records shared by every listed model are compared. Stock, quote time, input prices, daily candles, regular session, and recording mode must match. Unpaired records are excluded from both error columns.')}</p>${[...groups].map(([capture,own])=>{const comparison=compareModels(own);return `<h3>${tr(capture==='manual'?'Manual':'Scheduled')}</h3><div class="stock-table-wrap"><table class="stock-table"><thead><tr>${['Model','Saved / pending','Paired samples','MAPE','Brier score'].map(key=>`<th scope="col">${tr(key)}</th>`).join('')}</tr></thead><tbody>${comparison.rows.map(row=>`<tr><th scope="row">${esc(row.model)}</th><td>${row.available.total} / ${row.available.total-row.available.evaluated}</td><td>${row.paired.evaluated}</td><td>${decimal(row.paired.mape,'%')}</td><td>${decimal(row.paired.brier)}</td></tr>`).join('')}</tbody></table></div><p>${tr('Price-hold baseline MAPE')}: ${decimal(comparison.baseline,'%')} · n=${comparison.pairedCount}</p>${comparison.pairedCount?'':`<p>${tr('No completed records with matching inputs yet.')}</p>`}`;}).join('')}<p class="stock-small">${tr('This version records local GBM predictions. Its expected close equals the input price, so its MAPE equals the price-hold baseline. Lower MAPE and Brier are better; these are not investment returns.')}</p><button id="stock-export-comparison" ${records.length?'':'disabled'}>${tr('Export comparison CSV')}</button></details>`;
 }
-function probabilityHTML(records,lang) {
+function probabilityHTML(records,lang,binsFor=probabilityBins,key='probability') {
   const tr=key=>esc(t(lang,key)),percent=v=>(v*100).toFixed(1)+'%',groups=new Map();
   for(const r of records){const key=JSON.stringify([r.model,r.capture]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);}
-  let html=`<details data-stock-disclosure="probability"><summary>${tr('Probability check')}</summary><p class="stock-small">${tr('Only evaluated predictions are counted. An unchanged close counts as not rising; 50% predictions are included. Empty bands are omitted. These are descriptive 95% Wilson intervals; related stocks and dates can make uncertainty larger.')}</p>`;
+  let html=`<details data-stock-disclosure="${esc(key)}"><summary>${tr('Probability check')}</summary><p class="stock-small">${tr('Only evaluated predictions are counted. An unchanged close counts as not rising; 50% predictions are included. Empty bands are omitted. These are descriptive 95% Wilson intervals; related stocks and dates can make uncertainty larger.')}</p>`;
   if(!records.length)html+=`<p>${tr('Waiting for evaluated predictions')}</p>`;
   for(const rows of groups.values()) {
-    const bins=probabilityBins(rows);html+=`<h3>${esc(rows[0].model)} · ${tr(rows[0].capture==='manual'?'Manual':'Scheduled')}</h3>`;
+    const bins=binsFor(rows);html+=`<h3>${esc(rows[0].model)} · ${tr(rows[0].capture==='manual'?'Manual':rows[0].capture==='replay'?'Historical replay':'Scheduled')}</h3>`;
     html+=bins.length?`<div class="stock-table-wrap"><table class="stock-table"><thead><tr>${['Probability band','Samples','Mean predicted rise','Observed rise rate','95% Wilson interval'].map(key=>`<th scope="col">${tr(key)}</th>`).join('')}</tr></thead><tbody>${bins.map(bin=>`<tr><th scope="row">${bin.id===9?'90–100%':`${bin.id*10}–&lt;${(bin.id+1)*10}%`}</th><td>${bin.count}</td><td>${percent(bin.meanProbability)}</td><td>${percent(bin.observedRate)}</td><td>${percent(bin.lower)} – ${percent(bin.upper)}</td></tr>`).join('')}</tbody></table></div>`:`<p>${tr('Waiting for evaluated predictions')}</p>`;
   }
   return html+`<p class="stock-small">${tr('Observed frequencies do not change or train the model.')}</p></details>`;
@@ -921,14 +982,18 @@ function accountViewerHTML(store,lang) {
   html+=r.items.map(h=>`<details data-stock-disclosure="position-costs:${seq}:${esc(stockID(h))}"><summary>${esc(h.name)} · ${esc(stockID(h))} · ${tr('After costs')}</summary><dl class="stock-metrics"><dt>${tr('Investment')}</dt><dd>${money(h.marketValue.purchaseAmount,h.currency)}</dd><dt>${tr('Market value after costs')}</dt><dd>${money(h.marketValue.amountAfterCost,h.currency)}</dd><dt>${tr('P&L after costs')}</dt><dd>${money(h.profitLoss.amountAfterCost,h.currency)} · ${rate(h.profitLoss.rateAfterCost)}</dd><dt>${tr('Commission')}</dt><dd>${money(h.cost.commission,h.currency)}</dd><dt>${tr('Tax')}</dt><dd>${money(h.cost.tax,h.currency)}</dd></dl></details>`).join('');
   return html+'</details>';
 }
-function mountSettings({element,store,language=()=> 'en'}) {
+function mountSettings({element,store,backtests,language=()=> 'en'}) {
   let directory=[],message='',credentialMessage='',credentialError=false,snapshotMessage='',snapshotError=false,pendingSnapshot='',credentialBusy=false,snapshotBusy=false,historyFilter={stockID:'',day:'',model:'',capture:''},lastMarkup='',snapshotTimer;
   let lastViewerHost=null,lastViewerState=[];
   const tr=key=>esc(t(language(),key));
+  store.onReplayInvalidation=()=>backtests?.cancel();
   const save=patch=>store.saveSettings({...store.settings,...patch});
   const status=()=>{const e=element.querySelector('#stock-message');if(e)e.textContent=t(language(),message);const service=element.querySelector('#stock-service-message');if(service)service.textContent=t(language(),store.error);const credentials=element.querySelector('#stock-credential-message');if(credentials){credentials.textContent=t(language(),credentialMessage);credentials.classList.toggle('stock-error',credentialError);}};
   function toggle(label,key,value,disabled=false){return `<label class="stock-row"><span>${tr(label)}</span><input id="stock-setting-${key}" type="checkbox" data-setting="${key}" ${value?'checked':''} ${disabled||store.busy?'disabled':''}></label>`;}
   const tabs=[['watchlist','Watchlist'],['account','My account'],['analysis','Analysis'],['history','History']];
+  let historyPage='saved';
+  const replayHost=document.createElement('div');
+  const replayView=backtests?root.PenguinNotchBacktests.mountBacktests(replayHost,backtests,language,()=>store.settings.symbols):null;
   let activeTab='watchlist',settingsHidden=false,pendingFocus=null;
   const panelScroll={};
   function clearCredentialInputs(){element.querySelector('#stock-credentials')?.querySelectorAll('input').forEach(input=>input.value='');}
@@ -970,13 +1035,19 @@ function mountSettings({element,store,language=()=> 'en'}) {
       ${s.provider==='toss'?`<section><h2>${tr('Hover chart')}</h2><label class="stock-row">${tr('Chart interval')}<select id="stock-chart-interval" aria-label="${tr('Chart interval')}" ${store.busy?'disabled':''}>${Object.keys(TTL).map(k=>`<option ${s.chartInterval===k?'selected':''}>${k}</option>`).join('')}</select></label><label class="stock-row">${tr('Candles (1–20)')}<input type="number" id="stock-candle-count" aria-label="${tr('Candles (1–20)')}" min="1" max="20" value="${s.candleCount}" ${store.busy?'disabled':''}></label><details data-stock-disclosure="moving-averages"><summary>${tr('Moving averages')}</summary><div class="stock-actions">${[5,20,60,120].map(n=>`<label><input id="stock-sma-${n}" type="checkbox" data-sma="${n}" ${s.movingAverages.includes(n)?'checked':''} ${store.busy?'disabled':''}> SMA ${n}</label>`).join('')}</div></details>${toggle('Show technical analysis','showTechnical',s.showTechnical)}<details data-stock-disclosure="technical-methodology"><summary>${tr('How analysis works')}</summary><p class="stock-small">${tr('1m refreshes each minute; 10m every 10 minutes; 1d daily. SMA includes history before the visible candles.')}</p><p class="stock-small">${tr('20 completed bars across trading days; volume ≥1.5× prior 10 bars, SMA5/20 and breakout must agree. No account access needed.')}</p></details></section>`:`<section><p class="stock-small">${tr('Finnhub supports US quotes only. Candles and holdings are unavailable.')}</p><button id="stock-analysis-connection">${tr('Manage connection')}</button></section>`}
       <section><h2>${tr('Stock forecasts')}</h2>${s.provider==='toss'?toggle('Show forecasts for watched stocks','forecastsEnabled',s.forecastsEnabled):''}<p class="stock-small">${tr(s.accountSeq>0?'Watchlist and account holdings':'Watchlist only · no account access')}${s.accountSeq>0?' · '+tr('Saved account selection'):''}</p>${s.accountSeq>0?`<p class="stock-small">${tr('Estimates use a saved account. Select an account to change it, or turn off holdings.')}</p>`:''}<button id="stock-manage-accounts">${tr('Manage accounts')}</button><p id="stock-account-message" role="status" class="stock-error"></p>
       ${s.provider==='toss'?`<details data-stock-disclosure="forecast-methodology"><summary>${tr('How estimates work')}</summary><p class="stock-small">${tr('Read-only account access is opt-in. Account numbers, quantities and balances are never saved in history.')}</p><p class="stock-small">${tr('Uncalibrated GBM: expected close equals the current quote; odds are versus the previous close.')}</p></details>${s.forecastsEnabled?`<details data-stock-disclosure="current-estimates"><summary>${tr('Current estimates')}</summary><button id="stock-refresh-holdings">${tr('Refresh')}</button><div id="stock-holdings"></div></details><details data-stock-disclosure="recording-options"><summary>${tr('Recording options')}</summary>${toggle('Automatically record forecasts','recordForecasts',s.recordForecasts)}<p class="stock-small">${tr('One prediction per stock 55–60 minutes before regular close while this app is running. Missed predictions are not backfilled.')}</p><button id="stock-snapshot">${tr('Save current predictions')}</button></details>`:''}`:''}<p id="stock-forecast-status" class="stock-error" role="status"></p><p id="stock-snapshot-status" role="status"></p><p id="stock-analysis-history-status" class="stock-error" role="status"></p></section></div>
-      <div id="stock-panel-history" class="stock-panel" data-stock-panel="history" role="tabpanel" aria-labelledby="stock-tab-history" tabindex="0" hidden><section><h2>${tr('Forecast history')}</h2><p class="stock-small">${tr('Saved snapshots and minute traces are separate. Scoring starts on the next market-local calendar day using unadjusted closes.')}</p><div id="stock-history"></div></section></div></div>`;
+      <div id="stock-panel-history" class="stock-panel" data-stock-panel="history" role="tabpanel" aria-labelledby="stock-tab-history" tabindex="0" hidden><section><h2>${tr('Forecast history and evaluation')}</h2><p class="stock-small">${tr('Codex execution is available on macOS only.')}</p><div class="stock-actions" role="group" aria-label="${tr('Forecast view')}"><button id="stock-history-saved">${tr('Saved predictions')}</button><button id="stock-history-replay">${tr('Historical replay')}</button></div><div id="stock-replay" hidden></div><div id="stock-saved"><p class="stock-small">${tr('Saved snapshots and minute traces are separate. Scoring starts on the next market-local calendar day using unadjusted closes.')}</p><div id="stock-history"></div></div></section></div></div>`;
       bind();
       if(focused?.id==='stock-symbol'){const next=element.querySelector('#stock-symbol');next.value=focused.value;next.setSelectionRange(focused.start,focused.end);search();}
     }
     element.querySelectorAll('[data-stock-tab]').forEach(tab=>{tab.setAttribute('aria-selected',String(tab.dataset.stockTab===activeTab));tab.tabIndex=tab.dataset.stockTab===activeTab?0:-1;});
     element.querySelectorAll('[data-stock-panel]').forEach(panel=>{panel.hidden=panel.dataset.stockPanel!==activeTab;if(!panel.hidden)panel.scrollTop=panelScroll[panel.dataset.stockPanel]||0;});
-    status();renderViewer();renderPortfolio();renderHistory();restoreDisclosures();
+    status();renderViewer();renderPortfolio();
+    backtests?.configure({provider:store.settings.provider});
+    const replay=element.querySelector('#stock-replay');if(replay&&replayHost.parentElement!==replay)replay.appendChild(replayHost);
+    element.querySelector('#stock-saved').hidden=historyPage!=='saved';
+    if(replay)replay.hidden=historyPage!=='replay';
+    replayView?.show(activeTab==='history'&&historyPage==='replay'&&!settingsHidden);
+    renderHistory();restoreDisclosures();
     if(rebuilt)restoreFocus(focused);
   }
   function renderViewer(){
@@ -1018,6 +1089,8 @@ function mountSettings({element,store,language=()=> 'en'}) {
     element.querySelector('#stock-manage-accounts').onclick=()=>selectTab('account');
     const connection=element.querySelector('#stock-analysis-connection');if(connection)connection.onclick=openConnection;
     element.querySelectorAll('[data-setting]').forEach(e=>e.onchange=()=>save({[e.dataset.setting]:e.checked}));
+    element.querySelector('#stock-history-saved').onclick=()=>{historyPage='saved';render();};
+    element.querySelector('#stock-history-replay').onclick=()=>{historyPage='replay';render();};
     element.querySelector('#stock-provider').onchange=e=>save({provider:e.target.value});
     const number=(id,key)=>{const input=element.querySelector('#'+id);if(input)input.onchange=()=>{if(input.checkValidity())save({[key]:Number(input.value)});};};
     number('stock-display-interval','displayInterval');number('stock-candle-count','candleCount');
@@ -1034,6 +1107,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
       e.preventDefault();if(credentialBusy)return;
       const provider=store.settings.provider,form=e.currentTarget;
       if(!form.reportValidity())return;
+      backtests?.cancel();
       store.clearViewer();
       credentialBusy=true;form.querySelector('fieldset').disabled=true;
       // Secrets exist only in the password inputs and this transient IPC argument.
@@ -1041,7 +1115,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
       form.querySelectorAll('input').forEach(input=>input.value='');
       try{store.credentials=await store.invoke('save_stock_credentials',args);credentialMessage='Keys saved';credentialError=false;store.invalidate();await store.emit('stock-credentials',{});void store.tick();}catch(_){credentialMessage='Could not save credentials. Inputs have been cleared.';credentialError=true;}finally{args=null;credentialBusy=false;lastMarkup='';render();}
     };
-    element.querySelector('#stock-remove-keys').onclick=async()=>{if(credentialBusy)return;store.clearViewer();const provider=store.settings.provider;credentialBusy=true;render();try{store.credentials=await store.invoke('delete_stock_credentials',{provider});credentialMessage='Keys removed';credentialError=false;store.invalidate();await store.emit('stock-credentials',{});}catch(_){credentialMessage='Could not remove credentials.';credentialError=true;}finally{credentialBusy=false;lastMarkup='';render();}};
+    element.querySelector('#stock-remove-keys').onclick=async()=>{if(credentialBusy)return;backtests?.cancel();store.clearViewer();const provider=store.settings.provider;credentialBusy=true;render();try{store.credentials=await store.invoke('delete_stock_credentials',{provider});credentialMessage='Keys removed';credentialError=false;store.invalidate();await store.emit('stock-credentials',{});}catch(_){credentialMessage='Could not remove credentials.';credentialError=true;}finally{credentialBusy=false;lastMarkup='';render();}};
     const snapshot=element.querySelector('#stock-snapshot');if(snapshot)snapshot.onclick=async()=>{
       if(snapshotBusy)return;snapshotBusy=true;snapshotMessage='';snapshotError=false;pendingSnapshot=String(Date.now());renderPortfolio();
       const failed=()=>{snapshotBusy=false;snapshotMessage='Stock recording service did not respond. Open the notch and try again.';snapshotError=true;renderPortfolio();};
@@ -1063,7 +1137,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
   }
   let historyRenderSignature='';
   function renderHistory() {
-    if(activeTab!=='history'||settingsHidden)return;
+    if(activeTab!=='history'||historyPage!=='saved'||settingsHidden)return;
     const host=element.querySelector('#stock-history');if(!host)return;
     const h=store.history;
     const signature=JSON.stringify([language(),historyFilter,h?.trends.length,h?.forecasts.map(r=>r.actualClose),store.historyError,store.reconciliationError]);
@@ -1082,7 +1156,8 @@ function mountSettings({element,store,language=()=> 'en'}) {
     host.innerHTML+=`<h3>${tr('Saved forecasts')} (${records.length})</h3>`;
     if(!records.length)host.innerHTML+=`<p>${tr('No saved forecasts.')}</p>`;
     const decimal=v=>v===null?'—':v.toFixed(3),percentage=v=>v===null?'—':(v*100).toFixed(1)+'%';
-    for(const [key,rows] of groups){const sc=score(rows);host.innerHTML+=`<details data-stock-disclosure="history:${esc(key)}"><summary>${esc(key)} · ${sc.evaluated}/${sc.total} ${tr('Evaluated')}</summary><dl class="stock-metrics"><dt>${tr('Direction accuracy')} (${sc.directionCount})</dt><dd>${percentage(sc.accuracy)}</dd><dt>${tr('MAE')}</dt><dd>${decimal(sc.mae)}</dd><dt>${tr('MAPE')}</dt><dd>${decimal(sc.mape)}%</dd><dt>${tr('Price-hold baseline MAPE')}</dt><dd>${decimal(sc.baseline)}%</dd><dt>${tr('80% range coverage')}</dt><dd>${percentage(sc.range)}</dd><dt>${tr('Brier score')}</dt><dd>${decimal(sc.brier)}</dd></dl>${rows.map(r=>`<details data-stock-disclosure="record:${esc(forecastID(r))}"><summary>${esc(r.name||r.stockID)} · ${esc(dateText(r.createdAt,r.market,language()))}: ${priceText(r.expectedClose,r.currency,language())} → ${r.actualClose===null?tr('Pending'):priceText(r.actualClose,r.currency,language())}</summary>${forecastHTML(r,r,language())}${evidenceHTML(r,language(),'saved-evidence:'+forecastID(r))}</details>`).join('')}</details>`;}
+    if(root.PenguinNotchBacktests)host.innerHTML+=root.PenguinNotchBacktests.evaluationSummaryHTML(evaluationRows(records),language());
+    for(const [key,rows] of groups){const sc=score(rows);host.innerHTML+=`<details data-stock-disclosure="history:${esc(key)}"><summary>${esc(key)} · ${sc.evaluated}/${sc.total} ${tr('Evaluated')}</summary><dl class="stock-metrics"><dt>${tr('Direction accuracy')} (${sc.directionCount})</dt><dd>${percentage(sc.accuracy)}</dd><dt>${tr('MAE')}</dt><dd>${decimal(sc.mae)}</dd><dt>${tr('MAPE')}</dt><dd>${decimal(sc.mape)}%</dd><dt>${tr('Price-hold baseline MAPE')}</dt><dd>${decimal(sc.baseline)}%</dd><dt>${tr('80% range coverage')}</dt><dd>${percentage(sc.range)}</dd><dt>${tr('Brier score')}</dt><dd>${decimal(sc.brier)}</dd></dl>${rows.map(r=>`<details data-stock-disclosure="record:${esc(forecastID(r))}"><summary>${esc(r.name||r.stockID)} · ${esc(dateText(r.createdAt,r.market,language()))}: ${priceText(r.expectedClose,r.currency,language())} → ${r.actualClose===null?tr('Pending'):priceText(r.actualClose,r.currency,language())}</summary><p>${tr('Reference')}: ${esc(forecastID(r))}</p>${forecastHTML(r,r,language())}${evidenceHTML(r,language(),'saved-evidence:'+forecastID(r))}</details>`).join('')}</details>`;}
     host.innerHTML+=comparisonHTML(cohort,language())+probabilityHTML(records,language());
     const traceGroups=new Map();for(const r of traces){const key=groupID(r);if(!traceGroups.has(key))traceGroups.set(key,[]);traceGroups.get(key).push(r);}
     host.innerHTML+=`<h3>${tr('Observed minute traces')} (${traces.length})</h3>`;
@@ -1090,9 +1165,10 @@ function mountSettings({element,store,language=()=> 'en'}) {
     if(!traces.length)host.innerHTML+=`<p>${tr('No observed samples. Past values are not reconstructed.')}</p>`;
     for(const points of traceGroups.values()){points.sort((a,b)=>a.createdAt-b.createdAt);const r=points[0];host.innerHTML+=`<details data-stock-disclosure="trace:${esc(groupID(r))}"><summary>${esc(r.name||r.stockID)} · ${dayKey(r.sessionStart,r.market)} · ${esc(r.model)} (${points.length})</summary>${traceSVG(points,r.market,language())}</details>`;}
     if(store.reconciliationError)host.innerHTML+=`<p class="stock-error">${tr(store.reconciliationError)}</p>`;
-    host.innerHTML+=`<div class="stock-actions"><button id="stock-export-forecasts">${tr('Export forecast CSV')}</button><button id="stock-export-traces">${tr('Export trace CSV')}</button><button id="stock-history-refresh">${tr('Refresh')}</button></div>`;
+    host.innerHTML+=`<div class="stock-actions"><button id="stock-export-evaluation">${tr('Export evaluation CSV')}</button><button id="stock-export-forecasts">${tr('Export forecast CSV')}</button><button id="stock-export-traces">${tr('Export trace CSV')}</button><button id="stock-history-refresh">${tr('Refresh')}</button></div>`;
     restoreDisclosures();
     host.querySelectorAll('[data-history-filter]').forEach(e=>e.onchange=()=>{historyFilter[e.dataset.historyFilter]=e.value;renderHistory();});
+    host.querySelector('#stock-export-evaluation').onclick=()=>root.PenguinNotchBacktests?.downloadEvaluationCSV(evaluationRows(records),Object.fromEntries(records.map(r=>[forecastID(r),JSON.stringify(r)])));
     host.querySelector('#stock-export-forecasts').onclick=()=>downloadCSV(records,false);host.querySelector('#stock-export-traces').onclick=()=>downloadCSV(traces,true);host.querySelector('#stock-history-refresh').onclick=()=>store.loadHistory();
     host.querySelector('#stock-export-comparison').onclick=()=>downloadCSV(cohort,false);
     restoreFocus(focused);
@@ -1101,7 +1177,7 @@ function mountSettings({element,store,language=()=> 'en'}) {
   fetch('krx-listed-companies.tsv').then(r=>{if(!r.ok)throw Error();return r.text();}).then(text=>{directory=parseDirectory(text);search();}).catch(()=>{message='KRX lookup unavailable; codes and US tickers still work.';status();});
   store.unlisten.push(bindStockDrag(element,store));
   render();
-  return {render,show(visible,moveFocus=true){store.visible=visible;settingsHidden=!visible;if(!visible){clearCredentialInputs();store.clearViewer(false);renderViewer();}void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();if(moveFocus)requestAnimationFrame(()=>element.querySelector('#stock-tab-'+activeTab)?.focus({preventScroll:true}));void store.tick();}}};
+  return {render,show(visible,moveFocus=true){store.visible=visible;settingsHidden=!visible;if(!visible){replayView?.show(false);clearCredentialInputs();store.clearViewer(false);renderViewer();}void store.emit('stock-view-state',{visible}).catch(()=>{});if(visible){if(store.historyDirty){store.historyDirty=false;void store.loadHistory();}render();if(moveFocus)requestAnimationFrame(()=>element.querySelector('#stock-tab-'+activeTab)?.focus({preventScroll:true}));void store.tick();}}};
 }
 const api={DEFAULTS,TTL,MODEL,TREND_KEYS,FORECAST_KEYS,parseStock,stockID,normalizeSettings,dayKey,timestamp,decodeQuotes,decodeFinnhub,decodeAccounts,decodeAccountOverview,accountMoneyText,accountRateText,accountCardHTML,bindAccountCard,accountViewerHTML,dailyCloses,previousClose,quoteContext,changeRate,decodeCandles,validBars,movingAverage,tenMinuteBars,completedBars,regularSession,dailyVariance,estimate,intradayEstimate,chartEstimate,technical,validTrend,validForecast,validateHistory,appendSamples,saveSnapshots,groupID,trendID,forecastID,evaluationRows,coalescedEvaluationRows,evaluationMetrics,evaluationComparison,score,compareModels,probabilityBins,probabilityBinsForRows,filterHistory,csv,Store,t,esc,priceText,dateText,cells,candleSVG,traceSVG,forecastHTML,rememberDisclosures,evidenceHTML,comparisonHTML,probabilityHTML,cardHTML,bindCard,moveStock,reorderStocks,dragStarted,bindStockDrag,parseDirectory,findCompanies,mountSettings};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;

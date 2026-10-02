@@ -1,9 +1,99 @@
 import Foundation
+import SwiftUI
+import AppKit
 import XCTest
 import Darwin
 @testable import PenguinNotch
 
 final class StockForecastEvaluationTests: XCTestCase {
+    func testTask6UnifiedHistoryContract() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let settings = try String(contentsOf: root.appending(path: "Sources/Settings/StockSettings.swift"), encoding: .utf8)
+        let history = try String(contentsOf: root.appending(path: "Sources/Settings/StockForecastHistoryView.swift"), encoding: .utf8)
+        XCTAssertTrue(settings.contains("Forecast history and evaluation"))
+        XCTAssertFalse(settings.contains("View Codex analysis history…"))
+        XCTAssertTrue(history.contains("StockBacktestView(store: backtests)"))
+        XCTAssertTrue(history.contains("StockEvaluation.rows(journal:"))
+        XCTAssertTrue(history.contains("Saved analysis requests/responses"))
+    }
+    @MainActor func testTask6SavedCohortsAndPublicRender() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "task6-public-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = try fixture().records[0]
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .millisecondsSince1970
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(base)) as? [String: Any])
+        let malicious = "=TEST,\"quoted\"\nnext"
+        json["name"] = malicious
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .millisecondsSince1970
+        let sample = try decoder.decode(StockForecastRecord.self, from: JSONSerialization.data(withJSONObject: json))
+        var scheduled = sample; scheduled.capture = .scheduled
+        var pending = sample; pending.actualClose = nil; pending.evaluatedAt = nil
+        let input = try StockCodexAnalysisInput(record: pending, now: pending.createdAt)
+        let response = StockCodexAnalysisResponse(status: .forecast, expectedClose: 104, lowerClose: 100, upperClose: 106, riseProbability: 0.8, notes: "Public fixture response")
+        let forecast = StockCodexAnalysis(id: UUID(), input: input, model: "public-mock", promptVersion: 1,
+            createdAt: pending.createdAt, completedAt: pending.createdAt, response: response,
+            resolution: .init(actualClose: 105, evaluatedAt: sample.evaluatedAt!))
+        let abstain = StockCodexAnalysis(id: UUID(), input: input, model: "public-mock", promptVersion: 1,
+            createdAt: pending.createdAt, completedAt: pending.createdAt,
+            response: .init(status: .abstain, expectedClose: nil, lowerClose: nil, upperClose: nil, riseProbability: nil, notes: "Public fixture abstention"), resolution: nil)
+        struct JournalFixture: Encodable { let version = 1; let records: [StockForecastRecord] }
+        struct AnalysisFixture: Encodable { let version = 1; let analyses: [StockCodexAnalysis] }
+        let journalURL = directory.appending(path: "history.json"), analysisURL = directory.appending(path: "analyses.json")
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(JournalFixture(records: [sample, scheduled])).write(to: journalURL)
+        encoder.dateEncodingStrategy = .secondsSince1970
+        try encoder.encode(AnalysisFixture(analyses: [forecast, abstain])).write(to: analysisURL)
+        let journal = StockForecastJournal(url: journalURL)
+        let analyses = StockCodexAnalysisStore(url: analysisURL, runner: { _, _ in XCTFail("No Codex execution in render"); throw CancellationError() })
+        var requests = 0
+        let backtests = StockBacktestStore(archive: StockBacktestArchive(directory: directory.appending(path: "Backtests")),
+            request: { _ in requests += 1; XCTFail("No provider execution in render"); throw CancellationError() }, provider: { .toss })
+        XCTAssertNil(journal.errorMessage); XCTAssertNil(analyses.errorMessage)
+        XCTAssertEqual(journal.records.count, 2); XCTAssertEqual(analyses.analyses.count, 2)
+        let saved = StockForecastHistoryView.savedAnalyses(analyses.analyses)
+        XCTAssertEqual(saved.count, 2); XCTAssertEqual(saved.filter { $0.response.status == .abstain }.count, 1)
+        XCTAssertEqual(StockForecastHistoryView.savedAnalyses(saved, capture: "scheduled").count, 0)
+        XCTAssertEqual(StockForecastHistoryView.savedAnalyses(saved, stockID: "us:OTHER").count, 0)
+        let rows = StockEvaluation.rows(journal: journal.records, analyses: analyses.analyses)
+        let groups = EvaluationSummaryView.groups(rows)
+        XCTAssertEqual(groups.count, 4, "Manual/scheduled GBM, Codex and paired GBM keep distinct cohorts")
+        XCTAssertEqual(rows.count, 4, "Paired calculation adds a score, never a saved request")
+        XCTAssertTrue(groups.allSatisfy { Set($0.rows.map(\.model)).count == 1 && Set($0.rows.map(\.capture)).count == 1 })
+        XCTAssertTrue(groups.allSatisfy { StockEvaluation.calibration($0.rows).reduce(0) { $0 + $1.count } == 1 })
+        XCTAssertEqual(Set(groups.map(\.id)).count, groups.count)
+        let raw = String(decoding: try encoder.encode(sample), as: UTF8.self)
+        let csv = EvaluationSummaryView.csv(rows: rows, details: [sample.id: raw, abstain.id.uuidString: "Public fixture abstention"])
+        let parsed = readCSV(csv), header = parsed[0]
+        let exported = parsed.dropFirst().map { Dictionary(uniqueKeysWithValues: zip(header, $0)) }
+        XCTAssertTrue(exported.contains { $0["rawDetail"] == raw })
+        XCTAssertTrue(exported.contains { $0["referenceID"] == abstain.id.uuidString })
+        XCTAssertEqual(exported.filter { $0["type"] == "metrics" && $0["evaluated"] == "1" }.count, 4)
+        let previousLocale = L10n.testLocale
+        defer { L10n.testLocale = previousLocale }
+        for language in ["en", "ko"] {
+            L10n.testLocale = Locale(identifier: language)
+            let views = [AnyView(StockForecastHistoryView(journal: journal, analyses: analyses, backtests: backtests)),
+                         AnyView(StockBacktestView(store: backtests)),
+                         AnyView(StockCodexHistoryView(store: analyses, journal: journal, backtests: backtests))]
+            for (index, view) in views.enumerated() {
+                let content = view.padding(4).frame(width: 680, height: 520).environment(\.colorScheme, .light)
+                let host = NSHostingView(rootView: content); host.frame = NSRect(x: 0, y: 0, width: 680, height: 520); host.layoutSubtreeIfNeeded()
+                XCTAssertEqual(host.bounds.size, NSSize(width: 680, height: 520))
+                let renderer = ImageRenderer(content: content); renderer.scale = 1
+                let image = try XCTUnwrap(renderer.nsImage)
+                XCTAssertEqual(image.size, NSSize(width: 680, height: 520))
+                let png = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(image.tiffRepresentation))?.representation(using: .png, properties: [:]))
+                XCTAssertGreaterThan(png.count, 2000, "A real, nonblank public UI render")
+                let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+                attachment.name = "task6-public-\(language)-\(index)"; attachment.lifetime = .keepAlways; add(attachment)
+            }
+        }
+        XCTAssertEqual(requests, 0)
+        XCTAssertEqual(L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."),
+            "현재 조회 자료로 재구성; 당시 정보만 사용한 검증을 보장하지 않음")
+    }
+
     private struct Fixture: Decodable {
         struct MetricCase: Decodable {
             let name: String
