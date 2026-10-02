@@ -16,7 +16,7 @@
 
 Karpathy의 [LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)를 PenguinNotch에 적용한 개발 지식 모음입니다. 원자료, 근거를 연결한 요약, 유지 규칙을 분리하고 새로 확인한 내용을 누적합니다. 기존 코드와 문서는 Git 커밋으로 고정하여 원자료로 사용합니다. [출처 목록](sources.md)은 그 시점의 기록이며, 현재 동작을 변경하기 전에는 최신 코드를 다시 확인해야 합니다.
 
-2026-10-02에는 [예측 성과를 통합하기 전의 계약](stocks.md#2026-10-02-예측-성과를-통합하기-전의-확인)을 검수했습니다. [S18](sources.md#s18)은 봉별 근거·Codex 이력·비교 표본·과거 재현의 한계를 기록합니다. 사용자가 범위를 승인한 뒤 [정규장 종가 평가 설계](../superpowers/specs/2026-10-02-stock-forecast-evaluation-design.md)를 작성했으며, 문서는 검토용이고 통합 기능·백테스트 구현은 아직 시작하지 않았습니다.
+2026-10-02에는 [예측 성과를 통합하기 전의 계약](stocks.md#2026-10-02-예측-성과를-통합하기-전의-확인)을 검수했습니다. [S18](sources.md#s18)은 봉별 근거·Codex 이력·비교 표본·과거 재현의 한계를 기록합니다. 사용자가 작성된 [정규장 종가 평가 설계](../superpowers/specs/2026-10-02-stock-forecast-evaluation-design.md)를 승인하여 [구현 계획](../superpowers/plans/2026-10-02-stock-forecast-evaluation.md)을 작성했습니다. 계획은 실행 검토 전이며 통합 기능·백테스트 구현은 아직 시작하지 않았습니다.
 
 ## 주제
 
