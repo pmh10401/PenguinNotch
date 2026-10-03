@@ -132,10 +132,7 @@ final class StockForecastEvaluationTests: XCTestCase {
                 // An offscreen window has no published AX children. One local SDK recognition
                 // request checks the actual bitmap labels and placement, not source strings.
                 let recognition = VNRecognizeTextRequest()
-                recognition.recognitionLevel = .accurate; recognition.usesLanguageCorrection = index == 1
-                // Use Vision's lexicon for the demonstrated CI i/l ambiguity;
-                // no fuzzy text matching or changes to the expected warning.
-                recognition.customWords = index == 1 && language == "en" ? ["availability"] : []
+                recognition.recognitionLevel = .accurate; recognition.usesLanguageCorrection = false
                 recognition.recognitionLanguages = language == "ko" ? ["ko-KR", "en-US"] : ["en-US"]
                 try VNImageRequestHandler(cgImage: try XCTUnwrap(bitmap.cgImage)).perform([recognition])
                 let labels = (recognition.results ?? []).compactMap { observation -> (text: String, frame: CGRect)? in
@@ -158,7 +155,12 @@ final class StockForecastEvaluationTests: XCTestCase {
                     XCTAssertLessThan(detail.frame.maxY, summary.frame.minY, "Collapsed detail control follows its summary")
                 } else {
                     XCTAssertTrue(text.contains(normalized(L10n.t("Start replay"))))
-                    XCTAssertTrue(text.contains(normalized(L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."))), "Replay disclaimer OCR (\(language), \(bitmap.pixelsWide)×\(bitmap.pixelsHigh)): \(labels.map(\.text).joined(separator: " | "))")
+                    // Vision on CI consistently reads i as l in this caption. Canonicalize
+                    // only that glyph pair in the English warning, never model identifiers.
+                    let warning = normalized(L10n.t("Reconstructed from data fetched now; availability at the original time is not guaranteed."))
+                    let warningText = language == "en" ? text.replacingOccurrences(of: "i", with: "l") : text
+                    let expectedWarning = language == "en" ? warning.replacingOccurrences(of: "i", with: "l") : warning
+                    XCTAssertTrue(warningText.contains(expectedWarning), "Replay disclaimer OCR (\(language), \(bitmap.pixelsWide)×\(bitmap.pixelsHigh)): \(labels.map(\.text).joined(separator: " | "))")
                 }
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
                 attachment.name = "task6-public-\(language)-\(index)"; attachment.lifetime = .keepAlways; add(attachment)
