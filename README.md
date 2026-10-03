@@ -20,7 +20,7 @@ Screenshot from PenguinNotch. Usage and prices reflect the capture time; click f
 
 </div>
 
-**Latest stable release: [1.25.0](../../releases/tag/v1.25.0).** Stock settings on
+**Latest stable release: [1.25.1](../../releases/tag/v1.25.1).** Stock settings on
 macOS and Windows use **Watchlist / My account / Analysis / History**,
 with account selection in one place and detailed information collapsed until needed.
 Optional Toss account viewing and 60-second account-notch summaries keep private
@@ -29,7 +29,14 @@ The summary covers stock assets, excluding cash, bonds and options.
 Both platforms support wheel/trackpad scrolling on all four edges, in circle and
 bar styles. See [Scrolling long lists](#scrolling-long-lists).
 
-**New in 1.25.0 (macOS build 66 / Windows r58):** unified forecast history and
+**New in 1.25.1 (macOS build 67 / Windows r59):** Toss Client ID and Secret share
+one protected macOS Keychain item. Automatic stock refreshes never open a password
+dialog; use **Settings → Stocks → Watchlist → Allow access…** when access is needed
+after an update. Concurrent reads share one request and failed migration preserves
+the original keys. The first migration and other services may still require separate
+approvals. Windows already stores each provider's pair in one Credential Manager blob.
+
+**Added in 1.25.0 (macOS build 66 / Windows r58):** unified forecast history and
 evaluation, plus historical replay over 20, 60 or 120 completed trading days.
 Compare daily, 1-minute and 10-minute GBM results against the same-input baseline,
 preserve original evidence, pause/resume collection and export results to CSV.
@@ -45,7 +52,7 @@ that Claude Code's own `/usage` leads with.
 [![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
 Download `PenguinNotch.dmg` from the [latest release](../../releases/latest).
-Version 1.25.0 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
+Version 1.25.1 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
 signature verifies the download's origin; it does not remove Gatekeeper warnings.
 
 To try unreleased `main` without an Xcode install, the [preview

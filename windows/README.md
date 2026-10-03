@@ -9,7 +9,7 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-**Stable release: [1.25.0](../../../releases/tag/v1.25.0) (Windows build r58).** Stock quotes retain
+**Stable release: [1.25.1](../../../releases/tag/v1.25.1) (Windows build r59).** Stock quotes retain
 a validated same-session closing baseline through transient request failures;
 a new session or trading day still requires a valid new baseline. This integrates upstream 1.19.0
 with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.
@@ -20,6 +20,10 @@ in both Circles and Bars. See [Scrolling long lists](#scrolling-long-lists).
 and evaluation, plus historical replay over 20, 60 or 120 completed trading days.
 Compare daily, 1-minute and 10-minute GBM results against the same-input baseline,
 preserve original evidence, pause/resume collection and export matching results to CSV.
+
+1.25.1 matches macOS build 67's release. Windows already stores each provider's
+credential pair in one atomic Credential Manager blob; the format is preserved.
+The new explicit Keychain access button is specific to macOS.
 
 ## What it shows
 
