@@ -1340,7 +1340,7 @@ final class NotchViewModel: ObservableObject {
             compactRowCount: snapshot.compactRowCount,
             showsDeepSeekPricing: deepSeekPricingEnabled,
             hasNetworkSettings: snapshot.id == "system-network",
-            cpuCoreCount: snapshot.cpuCores.count)
+            cpuCoreCount: snapshot.cpuCores.count, diskVolumeCount: snapshot.diskVolumes.count)
         let showsStockChart = snapshot.id.hasPrefix("widget-stock:")
             && stockCharts != nil && todoPreferences?.stockQuoteSource == .toss
         return height + (showsStockChart ? NotchLayout.stockDetailsHeight(forecasts: todoPreferences?.portfolioForecastEnabled == true,

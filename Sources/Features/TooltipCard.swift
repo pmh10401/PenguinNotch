@@ -600,6 +600,70 @@ private struct MoneyStat: View {
     }
 }
 
+private struct DiskVolumesSection: View {
+    let volumes: [SystemDiskVolume]
+    let colorOverride: Color?
+    @Environment(\.tooltipSecondaryInk) private var secondaryInk
+    @Environment(\.penguinnotchAccentColor) private var accentColor
+    @Environment(\.usageWatchLimit) private var watchLimit
+    @Environment(\.usageCriticalLimit) private var criticalLimit
+
+    private func bytes(_ value: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: value), countStyle: .memory)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NotchLayout.blockSpacing) {
+            Text(L10n.t("Other mounted volumes"))
+                .fontWeight(.semibold)
+                .frame(height: NotchLayout.cardBodyLineHeight)
+            ForEach(volumes) { volume in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(volume.name)
+                        .lineLimit(2)
+                        .frame(height: 2 * NotchLayout.cardBodyLineHeight, alignment: .topLeading)
+                        .help(volume.name)
+                    Text(volume.mountPath)
+                        .foregroundStyle(secondaryInk)
+                        .lineLimit(1).truncationMode(.middle)
+                        .frame(height: NotchLayout.cardBodyLineHeight)
+                        .help(volume.mountPath)
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Palette.barTrack)
+                            Capsule().fill(colorOverride ?? UsageBand.band(for: volume.capacity.fraction,
+                                watchLimit: watchLimit, criticalLimit: criticalLimit).color(accent: accentColor))
+                                .frame(width: geometry.size.width * volume.capacity.fraction)
+                        }
+                    }
+                    .frame(height: NotchLayout.barHeight)
+                    .padding(.top, NotchLayout.labelToBar)
+                    HStack {
+                        Text("\(bytes(volume.capacity.used)) / \(bytes(volume.capacity.total))")
+                        Spacer()
+                        Text("\(Percent.text(for: volume.capacity.fraction))%")
+                    }
+                    .monospacedDigit()
+                    .frame(height: NotchLayout.cardBodyLineHeight)
+                    .padding(.top, NotchLayout.barToUsed)
+                    HStack {
+                        Text(L10n.t("Free space"))
+                        Spacer()
+                        Text(bytes(volume.free)).monospacedDigit()
+                    }
+                    .foregroundStyle(secondaryInk)
+                    .frame(height: NotchLayout.cardBodyLineHeight)
+                    .padding(.top, NotchLayout.sessionRowGap)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .font(Typography.cardBody)
+        .foregroundStyle(Palette.textPrimary)
+        .padding(.top, NotchLayout.blockSpacing)
+    }
+}
+
 private struct CPUCoreLoads: View {
     let cores: [SystemUsageReading.CoreLoad]
     let colorOverride: Color?
@@ -1230,7 +1294,8 @@ struct TooltipCard: View {
             compactRowCount: snapshot.compactRowCount,
             showsDeepSeekPricing: deepSeekPricingEnabled,
             hasNetworkSettings: snapshot.id == "system-network",
-            cpuCoreCount: snapshot.cpuCores.count
+            cpuCoreCount: snapshot.cpuCores.count,
+            diskVolumeCount: snapshot.diskVolumes.count
         )
         return height + (chartStock == nil ? 0 : NotchLayout.stockDetailsHeight(forecasts: stockPreferences?.portfolioForecastEnabled == true,
                                                  timing: stockPreferences?.showsStockTimingSignals == true))
@@ -1251,6 +1316,9 @@ struct TooltipCard: View {
                     }
                     if !snapshot.cpuCores.isEmpty {
                         CPUCoreLoads(cores: snapshot.cpuCores, colorOverride: snapshot.systemColor?.color)
+                    }
+                    if !snapshot.diskVolumes.isEmpty {
+                        DiskVolumesSection(volumes: snapshot.diskVolumes, colorOverride: snapshot.systemColor?.color)
                     }
                     if let resetCredits = snapshot.availableResetCredits(at: now) {
                         UsageResetCreditsSection(credits: resetCredits, now: now)

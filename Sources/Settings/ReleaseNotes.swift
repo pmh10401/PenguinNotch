@@ -31,6 +31,9 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.26.0", headline: L10n.t("View external disks in the disk hover card"),
+                        changes: [.init(title: L10n.t("Mounted local volumes show individual capacity and free space."),
+                                        detail: L10n.t("Long volume lists scroll; the main ring still shows your home volume."))]),
             ReleaseNote(version: "1.25.1", headline: L10n.t("Fewer Keychain prompts after updates"),
                         changes: [.init(title: L10n.t("Toss keys share one protected item")),
                                   .init(title: L10n.t("Unlock saved keys explicitly in stock settings."),

@@ -301,6 +301,7 @@ struct ProviderSnapshot: Identifiable, Equatable {
     /// An explicit system-meter colour; nil keeps the automatic usage colours.
     var systemColor: AccentColorChoice? = nil
     var cpuCores: [SystemUsageReading.CoreLoad] = []
+    var diskVolumes: [SystemDiskVolume] = []
     var localRuntime: LocalRuntimeReading?
     var localModel: LocalRuntimeReading.Model?
     var localPerformance: LocalModelPerformance?

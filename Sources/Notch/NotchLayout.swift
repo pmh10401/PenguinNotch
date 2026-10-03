@@ -420,7 +420,7 @@ enum NotchLayout {
                            compactRowCount: Int = 0,
                            showsDeepSeekPricing: Bool = true,
                            hasNetworkSettings: Bool = false,
-                           cpuCoreCount: Int = 0) -> CGFloat {
+                           cpuCoreCount: Int = 0, diskVolumeCount: Int = 0) -> CGFloat {
         let header = max(glyphSize, cardTitleLineHeight)
             + (hasPlan ? cardBodyLineHeight : 0)
         var height = 2 * cardPadding + header
@@ -501,7 +501,18 @@ enum NotchLayout {
         if cpuCoreCount > 0 {
             height += blockSpacing + cardBodyLineHeight + sessionRowGap + cpuCoreGridHeight(cpuCoreCount)
         }
+        height += diskVolumesHeight(diskVolumeCount)
         return height
+    }
+
+    static var diskVolumeRowHeight: CGFloat {
+        5 * cardBodyLineHeight + labelToBar + barHeight + barToUsed + sessionRowGap
+    }
+
+    static func diskVolumesHeight(_ count: Int) -> CGFloat {
+        guard count > 0 else { return 0 }
+        return blockSpacing + cardBodyLineHeight + blockSpacing
+            + CGFloat(count) * diskVolumeRowHeight + CGFloat(count - 1) * blockSpacing
     }
 
     static func cpuCoreGridHeight(_ count: Int) -> CGFloat {

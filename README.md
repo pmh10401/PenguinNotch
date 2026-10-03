@@ -396,7 +396,8 @@ The detailed sensor descriptions below are for macOS. On Windows, **Settings →
 System** controls monitoring; native PDH counters provide logical-core CPU and
 supported GPU-engine usage, with the busiest engine as the GPU headline. DISK
 combines mounted fixed/removable volumes once per volume and lists each partition
-or folder-mounted volume on hover, refreshing capacity every 30 seconds. NET uses
+or folder-mounted volume on hover. A separate scan is scheduled by the one-second
+meter loop; a slow scan cannot overlap another scan or stall CPU/network reads. NET uses
 Windows WLAN signal quality for Wi-Fi, fills the circle for wired connections,
 and opens Windows Wi-Fi settings. Unavailable sensors show `—`. Windows PWR is
 an estimated battery discharge rate, not the Mac's system-load telemetry.
@@ -421,6 +422,13 @@ an estimated battery discharge rate, not the Mac's system-load telemetry.
   make this differ from Finder. Hover also shows free space and the OS's
   available-for-important-files estimate, which can include reclaimable space.
   This measures capacity, not disk I/O speed.
+  In the **1.26.0 development source**, hover also lists other visible mounted
+  local volumes, including USB/Thunderbolt disks, with their names, mount paths,
+  used/total capacity and free space. Connection, disconnection, rename and wake
+  trigger a refresh; capacity is otherwise refreshed every 30 seconds on a separate
+  worker. Long lists scroll within the card. The main ring continues to represent
+  the home volume; APFS shared capacity is not summed across volumes. Unmounted,
+  locked and network volumes are excluded. This change is not yet in the stable installer.
 - **NET:** total receive + send throughput on active `en*` Ethernet/Wi-Fi
   interfaces. Hover for separate download and upload rates in decimal B/s,
   KB/s and MB/s. Loopback, VPN, bridge and AirDrop interfaces are excluded to

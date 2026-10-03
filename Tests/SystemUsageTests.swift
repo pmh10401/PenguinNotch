@@ -4,6 +4,48 @@ import XCTest
 @testable import PenguinNotch
 
 final class SystemUsageTests: XCTestCase {
+    @MainActor
+    func testMountedExternalVolumesHaveSpaceInDiskHover() async throws {
+        let keys: Set<URLResourceKey> = [.volumeIsLocalKey, .volumeUUIDStringKey,
+                                       .volumeTotalCapacityKey, .volumeAvailableCapacityKey,
+                                       .volumeURLKey, .volumeIsInternalKey]
+        let home = try URL(fileURLWithPath: NSHomeDirectory()).resourceValues(forKeys: keys)
+        let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: Array(keys),
+                                                        options: [.skipHiddenVolumes]) ?? []
+        var expectedIDs = Set<String>()
+        for url in urls {
+            guard let value = try? url.resourceValues(forKeys: keys), value.volumeIsLocal == true,
+                  value.volumeIsInternal == false,
+                  (value.volumeTotalCapacity ?? 0) > 0, (value.volumeAvailableCapacity ?? -1) >= 0,
+                  value.volume != home.volume else { continue }
+            if let uuid = home.volumeUUIDString, value.volumeUUIDString == uuid { continue }
+            if home.volume?.path == "/System/Volumes/Data", url.path == "/" { continue }
+            // Compare identities rather than demanding that every mount alias
+            // survives the production deduplication.
+            if let uuid = value.volumeUUIDString, !uuid.isEmpty {
+                expectedIDs.insert("uuid:\(uuid.lowercased())")
+            } else { expectedIDs.insert("path:\(url.standardizedFileURL.path)") }
+        }
+        guard !expectedIDs.isEmpty else { throw XCTSkip("No additional mounted external volume on this host") }
+        let monitor = SystemUsageMonitor()
+        monitor.setEnabled(true)
+        defer { monitor.setEnabled(false) }
+        let model = NotchViewModel()
+        let deadline = Date().addingTimeInterval(5)
+        var fitsAdditionalVolume = false
+        while Date() < deadline {
+            if let disk = monitor.snapshots.first(where: { $0.id == "system-disk" }), disk.hasReading {
+                let homeOnlyHeight = NotchLayout.cardHeight(windowCount: disk.windows.count,
+                                                           compactRowCount: disk.compactRowCount)
+                fitsAdditionalVolume = model.cardHeight(for: disk) > homeOnlyHeight
+                    && Set(disk.diskVolumes.map(\.id)).isSuperset(of: expectedIDs)
+                if fitsAdditionalVolume { break }
+            }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertTrue(fitsAdditionalVolume, "Mounted local volumes must reach the DISK hover, not just the home capacity")
+    }
+
     func testNetworkRingReflectsPrimaryLinkAndKeepsTrafficLabel() {
         var reading = Self.reading
         reading.networkLink = .init(kind: .wifi, interface: "en0", rssi: -65, noise: -94, transmitMbps: 360)

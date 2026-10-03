@@ -1,6 +1,6 @@
 # PenguinNotch 개발 지식 위키
 
-검증일: 2026-10-03 · 초기 코드 기준: `b7b1b69d29944f76f7431933d5d78a41c135f81f` · 현재 정식 배포: [v1.25.1](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.25.1), [S23](sources.md#s23)
+검증일: 2026-10-04 · 초기 코드 기준: `b7b1b69d29944f76f7431933d5d78a41c135f81f` · 현재 정식 배포: [v1.25.1](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.25.1), [S23](sources.md#s23)
 
 정식 1.24.1에는 [내 토스 계좌](stocks.md#명시적으로-여는-내-토스-계좌)와 [계좌 노치의 일간 증감](stocks.md#계좌-노치의-일간-증감)을 추가합니다. 노치 표시와 예측 포함은 별도 선택이며, [S14](sources.md#s14)는 이전 뷰어 검증, [S15](sources.md#s15)는 후속 노치·최적화 검증과 배포 경계를 기록합니다. 주식 설정을 목적별 네 탭으로 정리한 후속 검증은 [S16](sources.md#s16), 정식 CI·설치 파일·업데이트 검증은 [S17](sources.md#s17)에 기록합니다.
 
@@ -19,6 +19,8 @@ Karpathy의 [LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11
 2026-10-03 정식 **1.25.0 / macOS build 66 / Windows r58**은 예측 기록·성과 평가를 통합하고 일봉·1분봉·10분봉의 과거 재현을 제공합니다. [사용법](stocks.md#1250-개발-소스의-통합-평가와-과거-재현), [승인 설계](../superpowers/specs/2026-10-02-stock-forecast-evaluation-design.md)와 [계획](../superpowers/plans/2026-10-02-stock-forecast-evaluation.md), 단계별 오프라인 검증 [S19](sources.md#s19), Native/Grok 독립 검토와 최종 보완 [S20](sources.md#s20), 정식 원격 CI·설치 파일·공개 업데이트 검증 [S21](sources.md#s21)을 구분합니다. 실제 제공처 과거 데이터 확보율·모델 순위와 사용자 Windows 실기 검증은 미수행입니다. S18 및 과거 실패·미배포 기록은 해당 시점의 근거로 보존합니다.
 
 정식 1.25.1은 [토스 키체인 접근](maintenance.md#1251-개발-소스의-토스-키체인-접근)을 통합합니다. [S22](sources.md#s22)는 배포 전 로컬 검증과 실제 OS 승인 횟수/서명 인증서의 제한을, [S23](sources.md#s23)는 원격 CI·공개 파일·업데이트 서명·이 Mac의 설치를 기록합니다.
+
+1.26.0 개발 소스는 [외장 볼륨 표시](project.md#1260-개발-소스의-외장-볼륨-표시)를 추가합니다. macOS 홈 볼륨 대표 원과 Windows 합계 원의 기존 차이를 보존하며 개별 볼륨 상세·갱신·스크롤 검사와 실제 장치 검증 범위는 [S24](sources.md#s24)에 구분합니다. 설치·정식 배포는 아직 진행하지 않았습니다.
 
 ## 주제
 

@@ -389,6 +389,39 @@ if(process.argv.includes('--serve')){
     }
     assert.equal(await page.locator('body').getAttribute('data-behind'),null,'off restores the selected theme');
     console.log('PASS OpenCode rolling/weekly rendering, live dark/light color transitions in the open card, folded probe lifecycle and adaptive pill opt-out');
+    // External disks use the same real card/scroll path as local partitions.
+    const externalVolumes=Array.from({length:12},(_,i)=>({id:'usb-'+i,
+      name:`Portable <USB> archive 자료 ${i}`,mountPoints:[`E:\\Archive\\Partition ${i}\\`],
+      used:200e9,total:500e9,available:300e9}));
+    for(const lang of ['en','ko']) for(const edge of ['left','right','top','bottom']) for(const style of ['ring','bar']) {
+      await configure(edge,1,style,0);
+      await page.evaluate(({lang,volumes})=>{
+        uiLang=lang;
+        stockStore.settings.enabled=false;
+        applyUiFlags({notch_visible:true,notch_on_hover:false});
+        send('system-usage',{system:true,hidden:['system-cpu','system-memory','system-gpu','system-network','system-battery','system-power'],
+          volumes,diskUsed:2400e9,diskTotal:6000e9,diskAvailable:3600e9});
+      },{lang,volumes:externalVolumes});
+      const disk=await page.locator('.cell[data-p="system-disk"]').boundingBox();
+      await hover({x:disk.x+disk.width/2,y:disk.y+disk.height/2});
+      await page.waitForFunction(()=>hoverId==='system-disk'&&card.classList.contains('show'));
+      const text=await page.locator('#card').innerText();
+      assert.ok(text.includes(externalVolumes[11].name),'full external volume names survive rendering');
+      assert.ok(text.includes(lang==='ko'?'남은 공간':'Free space'));
+      assert.equal(await page.locator('#card usb').count(),0,'volume names are escaped');
+      const before=await page.locator('#card').boundingBox();
+      await page.mouse.move(before.x+before.width/2,before.y+before.height/2);
+      await page.mouse.wheel(0,100000);
+      await page.waitForFunction(()=>card.scrollTop>0&&Math.abs(card.scrollTop-(card.scrollHeight-card.clientHeight))<2);
+      const last=await page.locator('#card .win').last().boundingBox();
+      const bounds=await page.locator('#card').boundingBox();
+      assert.ok(last.y>=bounds.y-1&&last.y+last.height<=bounds.y+bounds.height+1,'last mounted volume remains reachable');
+      await page.evaluate(()=>send('system-usage',{system:true,hidden:['system-cpu','system-memory','system-gpu','system-network','system-battery','system-power'],
+        volumes:[],diskUsed:null,diskTotal:null,diskAvailable:null}));
+      assert.ok(!(await page.locator('#card').innerText()).includes(externalVolumes[11].name),'unmounted volumes leave the open card');
+      assert.ok((await page.locator('#card').innerText()).includes(lang==='ko'?'측정값 없음':'No reading'));
+    }
+    console.log('PASS external volume cards: EN/KO, four edges, ring/bar, escaped names, last-volume wheel access and disconnect updates');
     assert.deepEqual(errors,[],'no console warnings/errors or page exceptions');
     assert.deepEqual(requests,[],'no non-fixture network requests');
     assert.equal(await page.evaluate(()=>calls.some(c=>c.cmd==='stock_request')),false,'no account or market calls');

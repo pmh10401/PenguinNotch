@@ -63270,7 +63270,27 @@
     "All": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "전체"}}}},
     "Source": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "출처"}}}},
     "Evaluated": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "평가 완료"}}}},
-    "Export forecast CSV": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "예측 CSV 내보내기"}}}}
+    "Export forecast CSV": {"extractionState": "manual", "localizations": {"ko": {"stringUnit": {"state": "translated", "value": "예측 CSV 내보내기"}}}},
+    "Other mounted volumes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other mounted volumes"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다른 마운트된 볼륨"
+          }
+        }
+      }
+    },
+    "View external disks in the disk hover card": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "View external disks in the disk hover card"}}, "ko": {"stringUnit": {"state": "translated", "value": "디스크 호버 카드에서 외장 디스크 확인"}}}},
+    "Mounted local volumes show individual capacity and free space.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Mounted local volumes show individual capacity and free space."}}, "ko": {"stringUnit": {"state": "translated", "value": "마운트된 로컬 볼륨의 개별 용량과 여유 공간을 표시합니다."}}}},
+    "Long volume lists scroll; the main ring still shows your home volume.": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Long volume lists scroll; the main ring still shows your home volume."}}, "ko": {"stringUnit": {"state": "translated", "value": "긴 볼륨 목록은 스크롤할 수 있으며, 대표 원은 홈 볼륨을 계속 표시합니다."}}}}
   },
   "version": "1.0"
 }

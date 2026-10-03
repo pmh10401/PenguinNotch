@@ -63,6 +63,7 @@ struct SystemUsageReading: Equatable, Sendable {
     var energy: Energy?
     var cpuCores: [CoreLoad] = []
     var gpuDetails: GPUDetails?
+    var diskVolumes: [SystemDiskVolume] = []
 }
 
 /// A bounded, in-memory view of this sampling period; gaps are never billed as activity.
@@ -172,10 +173,18 @@ actor SystemUsageSampler {
     private var previousNetwork: [String: SystemNetworkBytes]?
     private var previousTime: TimeInterval?
     private var history = SystemUsageHistory()
+    private let diskSampler: SystemDiskSampler
+
+    init(diskSampler: SystemDiskSampler = SystemDiskSampler()) {
+        self.diskSampler = diskSampler
+    }
+
+    func invalidateDiskVolumes() async { await diskSampler.invalidate() }
 
     deinit { mach_port_deallocate(mach_task_self_, host) }
 
-    func sample() -> SystemUsageReading {
+    func sample() async -> SystemUsageReading {
+        let diskVolumes = await diskSampler.snapshot()
         let now = ProcessInfo.processInfo.systemUptime
         let cpu = readCPU()
         let cores = readCPUCores()
@@ -192,6 +201,7 @@ actor SystemUsageSampler {
                                          networkInterfaces: network?.keys.sorted() ?? [], networkLink: SystemNetworkLink.read())
         reading.cpuCores = SystemCPUTicks.coreLoads(current: cores ?? [], previous: previousCores, elapsed: elapsed)
         reading.gpuDetails = gpu?.details
+        reading.diskVolumes = diskVolumes
         // First readings and long gaps establish a baseline, never a since-boot average.
         if let elapsed, elapsed > 0, elapsed <= 10 {
             if let cpu, let previousCPU, let fractions = cpu.fractions(since: previousCPU) {

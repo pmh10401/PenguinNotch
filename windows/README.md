@@ -59,7 +59,8 @@ DISK covers mounted local fixed/removable volumes, including separate partitions
 and folder mount points. Each volume is counted once even if it has several
 paths. Its hover card shows each volume's used, total and available space;
 unmounted recovery volumes and network drives are excluded. Capacity refreshes
-every 30 seconds on a separate worker so a slow disk does not stall the meters.
+on a separate worker scheduled by the one-second meter loop; at most one scan
+runs at a time, so a slow disk does not stall the other meters.
 NET fills its ring for a wired connection, uses Windows WLAN signal quality for
 Wi-Fi, and offers **Wi-Fi settings…** to open Windows network settings. Unknown
 signal remains unmeasured; a filled ring does not guarantee Internet access.

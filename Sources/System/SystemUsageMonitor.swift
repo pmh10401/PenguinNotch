@@ -6,6 +6,7 @@ final class SystemUsageMonitor: ObservableObject {
     @Published private(set) var snapshots: [ProviderSnapshot] = []
     private var task: Task<Void, Never>?
     private var wakeObserver: AnyCancellable?
+    private var volumeObserver: AnyCancellable?
     /// One sampler for as long as monitoring stays on. Wake reuses it so the
     /// traffic and energy totals survive sleep; only turning monitoring off
     /// starts a new period.
@@ -13,6 +14,19 @@ final class SystemUsageMonitor: ObservableObject {
     private(set) var isEnabled = false
 
     init() {
+        let center = NSWorkspace.shared.notificationCenter
+        volumeObserver = Publishers.MergeMany([
+            NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification,
+            NSWorkspace.didRenameVolumeNotification, NSWorkspace.didWakeNotification
+        ].map { center.publisher(for: $0) })
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.isEnabled else { return }
+                    let sampler = self.sampler
+                    Task { await sampler.invalidateDiskVolumes() }
+                }
+            }
         wakeObserver = NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -77,6 +91,7 @@ extension SystemUsageReading {
                           label: "Home volume"),
          networkSnapshot, batterySnapshot, powerSnapshot]
         snapshots[0].cpuCores = cpuCores
+        snapshots[3].diskVolumes = diskVolumes
         for index in snapshots.indices where snapshots[index].hasReading {
             let id = String(snapshots[index].id.dropFirst("system-".count))
             var extra: [LimitWindow] = []

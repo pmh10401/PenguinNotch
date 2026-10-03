@@ -343,3 +343,43 @@ Swift 실패 원본·집중 GREEN·정확한 명령/종료 코드·로그/해시
 - 최초 appcast 생성은 검증용 DMG가 이미 마운트되어 추출에 실패했습니다. 해당 마운트만 해제한 뒤 동일 DMG로 재시도해 성공했습니다. 승인된 기존 Sparkle 키를 도구 내부에서 사용했으며 개인 키를 내보내거나 키체인 ACL을 바꾸지 않았습니다. 로컬 상세 로그·소스/파일 해시·설치 결과는 `build/release-1.25.1-20261003/verification.json`에 보관합니다.
 - 한계: Mac 공개/설치 앱은 **Apple 공증 미적용**, Windows는 **Authenticode 미적용**입니다. 업데이트 서명과 OS 설치 경고는 별개입니다. 실제 암호 창이 정확히 1회라는 검증, 실제 계좌 대조, 사용자 Windows의 센서·다중 모니터·키체인/자격 증명 검증은 수행하지 않았습니다. Sparkle 빌드 도구의 서명 승인은 주식 자동 조회의 키체인 접근과 별도입니다.
 - 최종 SHA-256: PenguinNotch.dmg `0b9c073a3593684ac22e44d5de2b1de81641fc00293db0101dcfe397e4950840`, appcast.xml `5ea8de1d48f95674ef070dfb3b9fafab09ef49cc129b6e35d68fb34e385c5a62`, PenguinNotch-Setup.exe `dfbe6f3207eaf4b9457082afdabe29685d4d702423cb543dbdb9db040feb4b9f`, latest.json `0583eebda639171effd8e5d4f8b14d91632aa78e93272d7feed61582d424d1f3`, SHA256SUMS.txt `aa1dbc73c2631d8466e766f871487ef7ed3e3f6427072cda43af8f1f08b41637`.
+
+
+## S24
+
+### 2026-10-04 1.26.0 개발 소스의 외장 볼륨 표시
+
+- 기준 커밋: `65934fc12278ea0d06f3d2cada1757ca10284e21` 이후 로컬 `codex/external-disk-monitoring` 작업 트리. **macOS 1.26.0/build68 · Windows 1.26.0/r60**으로 버전을 올렸으며, 설치·커밋·푸시·정식 릴리즈·원격 CI는 수행하지 않았습니다. 정식 배포는 S23의 1.25.1입니다.
+- macOS는 홈 볼륨만 읽던 경로에 추가 로컬 마운트 볼륨을 전달합니다. UUID/루트 중복·홈 볼륨 제외, 알 수 없는/잘못된 용량과 네트워크 제외, 합산 없는 볼륨별 표시, 단일 별도 조회·30초 캐시·마운트/해제/이름/복귀 세대 무효화, 호버 높이와 스크롤을 구현했습니다. 추가 디스크 때문에 홈 대표 원의 분모를 바꾸지 않습니다.
+- RED: 실제 읽기 가능한 추가 볼륨이 있는 이 Mac에서 기존 호버가 추가 높이를 할당하지 않는 검사가 **1개 실패**했습니다. 구현 후 모니터링·디스크·호버/배치/스크롤·언어 회귀 **89개 중 선택적 1개 skip·실패0**입니다. 이후 테스트만 보강한 영어/한국어 렌더·볼륨 경계·캐시·실제 마운트 경로 전달 검사 **7개 실패0**을 별도로 기록하며 서로 중복된 분모를 합산하지 않습니다.
+- 실제 연결된 추가 로컬 볼륨 1개의 유효 용량과 앱 호버 데이터로의 전달을 확인했습니다. 실제 이름·경로·UUID·기기 정보는 이 위키에 저장하지 않습니다. 실제 장치 분리/재연결·잠금 해제·네트워크 저장소는 검사하지 않았습니다. 잠긴·미마운트 장치를 자동으로 마운트/포맷/해제하지 않습니다.
+- Windows 기존 볼륨 열거·가중 합산은 유지합니다. 로컬 Mac의 `system_usage::disk_tests` **2개 실패0**, Windows GNU 전체 대상 교차 컴파일 통과, Node 위젯·한국어 8개·UI 문법 검사 통과입니다. 기존 실제 Chromium 스크롤/조작 검사와 추가 **EN/KO × 네 가장자리 × 원/막대 16개** 외장 볼륨 카드 검사(이스케이프·휠 마지막 행·분리 목록 제거)가 통과했습니다. Win32 기기 조회·WebView2·실제 Windows USB 장치 런타임 검증은 수행하지 않았습니다.
+- 처음 추가한 언어 렌더 테스트는 공용 언어 설정에 쓰는 경로를 사용해 언어 선택을 시스템 자동으로 초기화했습니다. 해당 테스트를 `L10n.testLocale` 임시 주입/원상 복귀 방식으로 수정해 사용자 설정에 쓰지 않도록 했습니다. 원래 사용자 언어 값은 확인할 수 없어 별도 복구 선택을 요청했습니다. 카탈로그는 EN/KO 키 1개만 추가했고 기존 모든 항목을 동일하게 보존했습니다.
+- README 두 언어와 Windows README에 실제 볼륨/캐시 동작을 반영하고 개발/정식 배포 경계를 구분합니다. 과거 Windows “30초 조회” 문구는 실제 1초 샘플 루프의 단일 별도 조회와 달라 수정했습니다.
+- Grok의 공개 소스 최종 검토에서 실제 호스트 테스트가 UUID 별칭·APFS System/Data 루트를 중복 요구할 수 있다는 테스트 문제 1개를 지적했습니다. OS가 외장으로 식별한 볼륨의 UUID 집합으로 검증하도록 보완했고 실제 호스트 단독 검사 1개가 실패 없이 통과했습니다. 앱 제품 코드 지적은 없었습니다.
+- 주요 코드/검사 파일 SHA-256 (로컬 검증 시점):
+  - `Sources/System/SystemDiskVolumes.swift`: `699e38a5cd4a2756b04da098ef9f773b231d2995f3c494517aa730f623ebc25a`
+  - `Sources/System/SystemUsageSampler.swift`: `817b6ec3aba74e7ac89b89403e0d86b7b162e048f1ca1f1344af4e20f5b18dde`
+  - `Sources/System/SystemUsageMonitor.swift`: `ad3f55d1f2c1a74a738c9691e06f87f1713c0a60cbe82edfbfd59c485b96a70c`
+  - `Sources/Features/TooltipCard.swift`: `ef440d929922fe9ce433780cd112de837077f05bd6a392f1816988cb80693d38`
+  - `Sources/Model/UsageModel.swift`: `ed675d2bd61ab9f1df79e5633126430bbb79cbf0cf3ccc34d4fb707efcfa09b3`
+  - `Sources/Notch/NotchLayout.swift`: `30f32774b3a84255fe0199f308e04f5876bc2d155cf476ed1c98b56601bd67a0`
+  - `Sources/Notch/NotchViewModel.swift`: `31362b9da52590e92a25d36164a90b353ace8e4e59e9f54ef8549658aa082d00`
+  - `Tests/SystemDiskTests.swift`: `ac68de43b11c61f2a1fb81afdeef203eb1d661f1bd74501ec8a5583585a72564`
+  - `Tests/SystemUsageTests.swift`: `a18f460e8b27824246ad4b6860a38e9358ab3b04a9538163ee3734282618aec2`
+  - `windows/scripts/test-notch-scroll-browser.cjs`: `8f7981b857c1c4af9f8e21cd09fc2236d23f31d5637a30b9cf4cb54e25c7f006`
+
+재현 명령(저장소 루트; Xcode/고정 의존성과 기존 Playwright 필요):
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make gen
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project PenguinNotch.xcodeproj -scheme PenguinNotch -destination 'platform=macOS,arch=arm64' -configuration Debug -only-testing:PenguinNotchTests/SystemDiskTests -only-testing:PenguinNotchTests/SystemUsageTests -only-testing:PenguinNotchTests/SystemUsageIntegrationTests CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO test
+cargo test --manifest-path windows/Cargo.toml -p penguinnotch --locked --features tauri/macos-private-api system_usage::disk_tests::
+cargo check --manifest-path windows/Cargo.toml --locked --offline --workspace --all-targets --target x86_64-pc-windows-gnu
+node windows/scripts/test-widgets.cjs
+node windows/scripts/test-ko-i18n.cjs
+node windows/scripts/check-ui-scripts.mjs
+node windows/scripts/test-notch-scroll-browser.cjs
+```
+
+macOS 호스팅 Rust 테스트의 `tauri/macos-private-api`는 Mac 빌드에만 필요합니다. 실제 Windows에서는 이 기능 없이 네이티브 테스트를 수행합니다. 위 교차 컴파일에는 설치된 GNU 대상/링커가 필요합니다. 실제 장치가 없으면 Mac의 추가 볼륨 검사는 skip됩니다.
