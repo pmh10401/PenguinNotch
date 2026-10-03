@@ -1,6 +1,6 @@
 # 주식 시세와 예측 규칙
 
-검증일: 2026-10-03 · 기존 규칙: `b7b1b69`, [S4](sources.md#s4), [S5](sources.md#s5) · 갱신 오류 보완: `v1.22.1` / `7621465`, [S13](sources.md#s13) · 현재 정식 배포: [v1.24.1](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.24.1), [S17](sources.md#s17).
+검증일: 2026-10-03 · 기존 규칙: `b7b1b69`, [S4](sources.md#s4), [S5](sources.md#s5) · 갱신 오류 보완: `v1.22.1` / `7621465`, [S13](sources.md#s13) · 현재 정식 배포: [v1.25.0](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.25.0), [S21](sources.md#s21).
 
 ## 현재가와 등락률을 분리해서 확인
 
@@ -103,7 +103,7 @@ macOS의 수동 Codex 분석은 공개 체결가·정규장 시각·완료 일�
 
 ## 1.25.0 개발 소스의 통합 평가와 과거 재현
 
-위 S18은 구현 전 감사 기록입니다. 승인 후 Task1–6을 구현하고 각 독립 검토를 완료했으며 개발 소스는 **1.25.0 / macOS build 66 / Windows r58**입니다. 정식 공개 버전은 **1.24.1**을 유지합니다. Task7의 공개 fixture 검증과 미검증 범위는 [S19](sources.md#s19)에 있습니다. 이 문단은 S19 시점의 검증 상태이며, 이후 Native/Grok 통합 검토와 단일 수정 wave의 범위·미검증은 [S20](sources.md#s20)에 추가합니다.
+위 S18은 구현 전 감사 기록입니다. 승인 후 Task1–7과 각 독립 검토 및 Native/Grok 후속 검토를 완료했습니다. **1.25.0 / macOS build 66 / Windows r58**의 정식 배포·원격 CI·설치 파일·업데이트 검증은 [S21](sources.md#s21)에 있습니다. 개발 당시 공개 fixture와 검증 한계는 [S19](sources.md#s19), 통합 검토와 최종 보완은 [S20](sources.md#s20)에 해당 시점의 기록으로 보존합니다. 실자료 확보율·모델 순위·매매 수익률을 검증했다고 주장하지 않습니다.
 
 **설정 → 주식 → 기록 → 예측 기록과 평가**에서 **실제 저장 기록 / Saved predictions**와 **과거 재현 / Historical replay**을 전환합니다. 저장 GBM·실제 Codex 응답의 원본 참조를 함께 읽으며 모형·수동/자동·저장/재현 집단을 섞지 않습니다. 초기 요약은 평가/대기 건수·기준선과의 MAPE 차이(%p)·Brier입니다. 상세 지표·확률 검증·대응 비교·원본 근거는 접어 둡니다. 저장 분석 요청/응답 수에는 판단 보류를 포함하되 같은 입력의 GBM 계산은 Codex 요청이 아닙니다. 실패·무효 CLI 시도는 저장하지 않고 Codex 수동 실행은 macOS 전용입니다.
 

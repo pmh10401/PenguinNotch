@@ -9,16 +9,17 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-**Stable release: [1.24.1](../../../releases/tag/v1.24.1) (Windows build r57).** Stock quotes retain
+**Stable release: [1.25.0](../../../releases/tag/v1.25.0) (Windows build r58).** Stock quotes retain
 a validated same-session closing baseline through transient request failures;
 a new session or trading day still requires a valid new baseline. This integrates upstream 1.19.0
 with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.
 Overflowing notch items now scroll with the mouse wheel or trackpad on every edge,
 in both Circles and Bars. See [Scrolling long lists](#scrolling-long-lists).
 
-**Development source: 1.25.0 / r58**, matching macOS 1.25.0 / build 66.
-Unified evaluation and historical replay are implemented locally; stable 1.24.1
-is unchanged. This branch has not been published or installed.
+**New in 1.25.0 / r58**, matching macOS 1.25.0 / build 66: unified forecast history
+and evaluation, plus historical replay over 20, 60 or 120 completed trading days.
+Compare daily, 1-minute and 10-minute GBM results against the same-input baseline,
+preserve original evidence, pause/resume collection and export matching results to CSV.
 
 ## What it shows
 
@@ -114,7 +115,7 @@ deltas; settings loads the archive for filtering/export. No age-based pruning or
 omission-based deletion occurs, and unreadable/unknown archives are preserved
 with an error. macOS uses its own files; history is not synchronized between PCs.
 
-### Forecast history and historical replay (development 1.25.0)
+### Forecast history and historical replay (1.25.0)
 
 Open **Settings → Stocks → History → Forecast history and evaluation**.
 **Saved predictions** combines the existing journal and saved-response evaluation;
@@ -180,10 +181,12 @@ and [public verification ledger](../docs/wiki/sources.md#s19).
 
 Offline fixture checks, rendered browser mocks and Mac-host Rust/GNU compilation
 do not establish native Windows WebView2/Credential Manager or real historical
-provider coverage. Remote CI for this branch and onscreen macOS integration remain
-unverified. The optional real-data probe was not performed: safe noninteractive
-authentication was not established. Controller-owned whole-branch independent
-review is still pending.
+provider coverage. Onscreen macOS integration also remains unverified. Native
+remote CI, Windows installer/doctor/uninstall smoke checks and public update
+signatures for 1.25.0 are recorded in the [release verification ledger](../docs/wiki/sources.md#s21).
+The optional real-data probe was not performed: safe noninteractive authentication
+was not established. Whole-branch independent review and bounded follow-up reviews
+are recorded in [S20](../docs/wiki/sources.md#s20).
 
 Focused checks from `windows/`:
 

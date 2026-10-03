@@ -1,6 +1,6 @@
 # 프로젝트 목표와 코드 위치
 
-검증일: 2026-09-28 UTC · 기본 기준: [S2](sources.md#s2), 커밋 `b7b1b69` · Windows 설정 변경: [S8](sources.md#s8)의 1.20.5 작업 트리. 원본 통합: 2026-09-29 KST, [S9](sources.md#s9)의 1.21.0 소스.
+검증일: 2026-10-03 KST · 기본 기준: [S2](sources.md#s2), 커밋 `b7b1b69` · Windows 설정 변경: [S8](sources.md#s8)의 1.20.5 작업 트리. 원본 통합: 2026-09-29 KST, [S9](sources.md#s9)의 1.21.0 소스. 현재 정식 배포: [v1.25.0](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.25.0), 양 플랫폼 검증은 [S21](sources.md#s21).
 
 ## 현재 목표
 

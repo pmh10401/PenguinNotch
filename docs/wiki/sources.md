@@ -308,3 +308,17 @@ Swift 실패 원본·집중 GREEN·정확한 명령/종료 코드·로그/해시
 - 독립 재검토에서 새 잠자기 observer가 유휴 상태의 초기 저장 목록 조회를 무효화하는 B1을 확인했습니다. 로컬 `7914244c3568b372f94472a2cddf73bcc455e28a`에서 유휴 취소를 무시하고 읽기 전용 초기 목록을 현재 상태와 병합합니다. 현재 ID의 최신 상태가 우선하며 이전의 미발견 ID도 유지합니다. 기존 아카이브 검사와 실행 중 취소·쓰기 검증은 그대로입니다. 해당 bootstrap 범위의 재검토에서 B1 해결과 새 문제 없음을 확인했습니다.
 - 최종 보완의 집중 Swift 검사는 **고유 51개**, 최신 Node 검사는 서로 다른 두 실행의 **51개 + 9개 = 60개**가 통과했습니다. 실제 설정 페이지의 모의 IPC 검사는 EN/KO 24개 배치와 지연 읽기·선택 비교·CSV 경계를 통과했습니다. B1 후속은 **관련 6개 통과**이고 테스트 종료 정리만 변경한 뒤 그 1개를 재확인했습니다. 서로 겹치는 실행 건수를 합산하거나 새 전체 Swift 통과로 표현하지 않습니다. 명령·로그·해시·종료 코드는 로컬 `final-fix-report.md`, `b1-fix-report.md`, `final-rereview.md`, `b1-rereview.md`에 보존합니다.
 - 필수 구현·오프라인 검증·검토를 수락했고 결과는 `codex/stock-forecast-evaluation`의 로컬 개발 브랜치에 남깁니다. 선택적 실제 제공처 과거 조회는 미수행이므로 실제 확보율이나 모델 순위를 결론내리지 않습니다. 개인 이력·연구 파일·원본 main·설치본을 변경하거나 GitHub에 게시하지 않았습니다.
+
+
+## S21
+
+### 2026-10-03 1.25.0 정식 릴리즈
+
+- 고정 소스: [`8d5b35e0fa3b8b70cc8c257d740b007e4e88a820`](https://github.com/pmh10401/PenguinNotch/commit/8d5b35e0fa3b8b70cc8c257d740b007e4e88a820), [v1.25.0](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.25.0). **macOS 1.25.0/build 66·Windows 1.25.0/r58**이며 2026-10-03 00:22:46 UTC에 정식 공개했습니다. 통합 예측 기록·평가, 20/60/120거래일의 일봉·1분봉·10분봉 재현과 원본 근거·CSV를 포함합니다. S18–S20의 당시 미배포·실패 기록은 보존합니다.
+- [최종 macOS CI](https://github.com/pmh10401/PenguinNotch/actions/runs/37080679514): **2,265개 중 선택적 13개 skip·실패 0**, SwiftPM 고정 의존성 확인 통과입니다. 공개 EN/KO 세 화면씩의 실제 네이티브 렌더도 통과했습니다. 앞선 CI OCR 오인식은 [변경 기록](log.md)에 남겼으며, 영어 경고의 `i/l` 일치 판단만 정규화합니다. 전체 경고·부정어, 모델 식별자, 픽셀·위치·접힘 검사는 유지하며 OCR로 정확한 영어 철자를 증명했다고 주장하지 않습니다.
+- [Windows CI](https://github.com/pmh10401/PenguinNotch/actions/runs/37073250698): **246개 통과·선택적 4개 제외·실패 0**, Clippy와 실제 Chromium의 영어·한국어 모의 IPC 검사가 통과했습니다. 검사 소스는 `65fd6e5`이며 이후 태그까지 Windows 제품·테스트·의존성/패키지 구성은 바뀌지 않았습니다. 이 근거를 새 동일 소스 재실행으로 표현하거나 로컬과 합산하지 않습니다.
+- [최종 macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/37080679461)와 [초기 Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/37073250570)가 성공했습니다. 공개 DMG는 이미 업데이트 서명한 `3eba02a` 빌드이며 최종 `8d5b35e` 앱과 **90개 파일·링크·파일 모드가 모두 일치**합니다. 변경은 테스트·CI 진단·위키뿐이며 추가 키체인 읽기 없이 서명된 동일 앱을 사용합니다. DMG 내부 버전/build, arm64·x86_64, 엄격한 코드 서명과 디버그 권한 부재를 확인했습니다.
+- [릴리즈 후 Windows 배포](https://github.com/pmh10401/PenguinNotch/actions/runs/37081819946)는 태그의 같은 `8d5b35e`에서 **NSIS 설치·doctor·제거·설치 파일 게시·서명 피드 게시를 모두 통과**했습니다. 최종 EXE/피드를 공개 최신 주소에서 다시 받아 초기 패키지 자산과 섞지 않고 검증했습니다.
+- 공개 키로 Sparkle Ed25519와 Tauri Minisign 설치 파일 서명 및 변조 거부를 확인했습니다. Sparkle은 DMG enclosure를 서명하며 XML 자체의 분리 서명이 있다고 주장하지 않습니다. 두 피드는 버전별 `v1.25.0` 파일을 가리키며 `releases/latest/download/`의 다섯 파일은 모두 **HTTP 200·GitHub SHA-256 일치**입니다. 최종 Windows 파일에 맞춰 [SHA256SUMS.txt](https://github.com/pmh10401/PenguinNotch/releases/download/v1.25.0/SHA256SUMS.txt)를 갱신했고 목록 자체의 SHA-256은 `d11b161151757a64cdb5642327df7f7e72b1c6bbdfaa057b8b59ef9a4c481e37`입니다.
+- 한계: 공개 Mac은 임시 서명·**Apple 공증 미적용**, Windows는 **Authenticode 미적용**입니다. 업데이트 서명과 OS 첫 설치 경고는 별개입니다. 실제 제공처의 과거 확보율·모델 성능·주문 수익, 실계좌 대조·사용자 Windows 실기·physical suspend는 검증하지 않았습니다. 현재 조회한 수정 데이터 재현을 당시 가용 정보로 보장하지 않으며 모델을 자동 채택하지 않습니다. Codex 수동 실행은 macOS 전용입니다. 기존 이력·연구 자료와 이 Mac의 1.24.1 설치본은 보존합니다.
+- 최종 파일 SHA-256: DMG `c0be38d8d41be521afcbce2090d6fc8f9c4c3b7f8746dcad317502f5af05add5`, appcast `c4c16befcca6ed7de1d37667766cd848fe5ddf0ae1ce1e96addb8e8edad03bdf`, EXE `831c4e2c4a941f29f7d117251638ac5dc7a5d8363a410ffe7b6912e53b5a8c54`, latest.json `68dc7e75983c98978612fcc24c04fc38cec3a07e74a46749e98bfd415a10f74b`.

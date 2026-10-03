@@ -20,8 +20,8 @@ Screenshot from PenguinNotch. Usage and prices reflect the capture time; click f
 
 </div>
 
-**Latest stable release: [1.24.1](../../releases/tag/v1.24.1).** Stock settings on
-macOS and Windows now separate **Watchlist / My account / Analysis / History**,
+**Latest stable release: [1.25.0](../../releases/tag/v1.25.0).** Stock settings on
+macOS and Windows use **Watchlist / My account / Analysis / History**,
 with account selection in one place and detailed information collapsed until needed.
 Optional Toss account viewing and 60-second account-notch summaries keep private
 financial values in memory; notch display and holdings inclusion are separate choices.
@@ -29,9 +29,11 @@ The summary covers stock assets, excluding cash, bonds and options.
 Both platforms support wheel/trackpad scrolling on all four edges, in circle and
 bar styles. See [Scrolling long lists](#scrolling-long-lists).
 
-**Development source: 1.25.0 (macOS build 66 / Windows r58).** Forecast history and
-historical replay are implemented locally; the published stable release remains
-1.24.1. See [Forecast history and historical replay](#forecast-history-and-historical-replay)
+**New in 1.25.0 (macOS build 66 / Windows r58):** unified forecast history and
+evaluation, plus historical replay over 20, 60 or 120 completed trading days.
+Compare daily, 1-minute and 10-minute GBM results against the same-input baseline,
+preserve original evidence, pause/resume collection and export results to CSV.
+See [Forecast history and historical replay](#forecast-history-and-historical-replay)
 for usage and verification limits.
 
 Hover an item for details: quota windows and session activity, system readings,
@@ -43,7 +45,7 @@ that Claude Code's own `/usage` leads with.
 [![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
 Download `PenguinNotch.dmg` from the [latest release](../../releases/latest).
-Version 1.24.1 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
+Version 1.25.0 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
 signature verifies the download's origin; it does not remove Gatekeeper warnings.
 
 To try unreleased `main` without an Xcode install, the [preview
@@ -575,7 +577,7 @@ cached for the regular session.
 
 ### Forecast history and historical replay
 
-In development source 1.25.0, open **Settings → Stocks → History → Forecast history
+In 1.25.0, open **Settings → Stocks → History → Forecast history
 and evaluation**. **Saved predictions** reads the existing GBM journal and actual
 saved Codex responses together, retaining their original references. Summaries
 keep model, manual/automatic capture and saved/replay cohorts separate; details,
@@ -645,10 +647,12 @@ Offline verification and exact counts are recorded in the [public verification l
 Tests use public synthetic fixtures, injected transport and temporary archives;
 rendered browser mocks and offscreen native snapshots are separate evidence.
 Real provider historical coverage, native Windows WebView2/Credential Manager,
-onscreen macOS keyboard/window integration and remote CI for this branch remain
-unverified. The optional real-data probe was not performed because safe
-noninteractive authentication was not established. Whole-branch independent review
-remains controller-owned; this source work is not a release or installation.
+and onscreen macOS keyboard/window integration remain unverified. Native remote CI,
+installer checks and public signed-update verification for 1.25.0 are recorded in
+the [release verification ledger](docs/wiki/sources.md#s21). The optional real-data
+probe was not performed because safe noninteractive authentication was not
+established. Whole-branch independent review and the bounded follow-up reviews
+are recorded separately in [S20](docs/wiki/sources.md#s20).
 
 **Manual Codex analysis (macOS, 1.20.0):** install the official Codex CLI and sign in
 with ChatGPT, then enable Toss watchlist estimates. In **Settings → Stocks → Codex
