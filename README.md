@@ -20,7 +20,7 @@ Screenshot from PenguinNotch. Usage and prices reflect the capture time; click f
 
 </div>
 
-**Latest stable release: [1.25.1](../../releases/tag/v1.25.1).** Stock settings on
+**Latest stable release: [1.26.0](../../releases/tag/v1.26.0).** Stock settings on
 macOS and Windows use **Watchlist / My account / Analysis / History**,
 with account selection in one place and detailed information collapsed until needed.
 Optional Toss account viewing and 60-second account-notch summaries keep private
@@ -29,7 +29,12 @@ The summary covers stock assets, excluding cash, bonds and options.
 Both platforms support wheel/trackpad scrolling on all four edges, in circle and
 bar styles. See [Scrolling long lists](#scrolling-long-lists).
 
-**New in 1.25.1 (macOS build 67 / Windows r59):** Toss Client ID and Secret share
+**New in 1.26.0 (macOS build 68 / Windows r60):** the macOS DISK hover lists
+other mounted local volumes, including USB/Thunderbolt disks, with individual
+capacity and free space. Long volume lists scroll; the main ring keeps the home
+volume. Windows retains its existing fixed/removable volume details.
+
+**Added in 1.25.1 (macOS build 67 / Windows r59):** Toss Client ID and Secret share
 one protected macOS Keychain item. Automatic stock refreshes never open a password
 dialog; use **Settings → Stocks → Watchlist → Allow access…** when access is needed
 after an update. Concurrent reads share one request and failed migration preserves
@@ -52,7 +57,7 @@ that Claude Code's own `/usage` leads with.
 [![Download for macOS](docs/design/download-macos.svg)](../../releases/latest/download/PenguinNotch.dmg)
 
 Download `PenguinNotch.dmg` from the [latest release](../../releases/latest).
-Version 1.25.1 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
+Version 1.26.0 is ad-hoc signed and **not Apple-notarized**. The Sparkle update
 signature verifies the download's origin; it does not remove Gatekeeper warnings.
 
 To try unreleased `main` without an Xcode install, the [preview
@@ -422,13 +427,13 @@ an estimated battery discharge rate, not the Mac's system-load telemetry.
   make this differ from Finder. Hover also shows free space and the OS's
   available-for-important-files estimate, which can include reclaimable space.
   This measures capacity, not disk I/O speed.
-  In the **1.26.0 development source**, hover also lists other visible mounted
+  In **1.26.0**, hover also lists other visible mounted
   local volumes, including USB/Thunderbolt disks, with their names, mount paths,
   used/total capacity and free space. Connection, disconnection, rename and wake
   trigger a refresh; capacity is otherwise refreshed every 30 seconds on a separate
   worker. Long lists scroll within the card. The main ring continues to represent
   the home volume; APFS shared capacity is not summed across volumes. Unmounted,
-  locked and network volumes are excluded. This change is not yet in the stable installer.
+  locked and network volumes are excluded.
 - **NET:** total receive + send throughput on active `en*` Ethernet/Wi-Fi
   interfaces. Hover for separate download and upload rates in decimal B/s,
   KB/s and MB/s. Loopback, VPN, bridge and AirDrop interfaces are excluded to

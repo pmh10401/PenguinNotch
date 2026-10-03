@@ -9,12 +9,17 @@ hover card with per-window bars), rebuilt for Windows in Rust + Tauri 2 / WebVie
 The providers and stock calculations follow the macOS app's behaviour and wire
 formats, using native Windows storage and system APIs.
 
-**Stable release: [1.25.1](../../../releases/tag/v1.25.1) (Windows build r59).** Stock quotes retain
+**Stable release: [1.26.0](../../../releases/tag/v1.26.0) (Windows build r60).** Stock quotes retain
 a validated same-session closing baseline through transient request failures;
 a new session or trading day still requires a valid new baseline. This integrates upstream 1.19.0
 with PenguinNotch's six-section settings, stocks, monitoring and daily widgets.
 Overflowing notch items now scroll with the mouse wheel or trackpad on every edge,
 in both Circles and Bars. See [Scrolling long lists](#scrolling-long-lists).
+
+1.26.0 matches macOS build 68's external-volume release. Windows keeps its existing
+fixed/removable volume enumeration and per-volume hover details. English/Korean,
+four-edge, circle/bar, escaping, wheel access and disconnect updates are covered by
+browser fixtures; physical Windows USB hardware remains untested.
 
 **New in 1.25.0 / r58**, matching macOS 1.25.0 / build 66: unified forecast history
 and evaluation, plus historical replay over 20, 60 or 120 completed trading days.

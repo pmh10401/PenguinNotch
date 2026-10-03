@@ -383,3 +383,27 @@ node windows/scripts/test-notch-scroll-browser.cjs
 ```
 
 macOS 호스팅 Rust 테스트의 `tauri/macos-private-api`는 Mac 빌드에만 필요합니다. 실제 Windows에서는 이 기능 없이 네이티브 테스트를 수행합니다. 위 교차 컴파일에는 설치된 GNU 대상/링커가 필요합니다. 실제 장치가 없으면 Mac의 추가 볼륨 검사는 skip됩니다.
+
+
+## S25
+
+### 2026-10-04 정식 1.26.0 배포·설치·업데이트 검증
+
+- 정식 [v1.26.0](https://github.com/pmh10401/PenguinNotch/releases/tag/v1.26.0) · 소스 [`7e97dbe90c7f8d4decb7f7e045f58207d047df25`](https://github.com/pmh10401/PenguinNotch/commit/7e97dbe90c7f8d4decb7f7e045f58207d047df25) · **macOS build68 / Windows r60**. S24의 외장 볼륨 기능을 배포했으며 대표 원·APFS·Windows 합산 규칙과 물리적 장치 검증의 제한은 유지합니다.
+- [macOS 네이티브 CI](https://github.com/pmh10401/PenguinNotch/actions/runs/37156248261)는 **2,283개 중 14개 skip·실패0**, [Windows CI](https://github.com/pmh10401/PenguinNotch/actions/runs/37156248250)는 **246개 통과·4개 제외·실패0**입니다. Windows의 EN/KO·네 가장자리·원/막대 외장 볼륨 카드·마지막 행 휠 접근·목록 제거 모의 검사도 통과했습니다. 앱 내부 1.26.0 변경 안내와 EN/KO 문구를 추가했으며 기존 카탈로그 1,611개는 보존하고 키 4개를 추가했습니다. 로컬 ReleaseNotes 7개도 통과했습니다.
+- [macOS 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/37156248241)의 범용 arm64/x86_64 DMG는 macOS 15 이상, ad-hoc 서명, 깊은 서명 검증 통과, get-task-allow 없음입니다. 실제 Release 바이너리를 기존 테스트 실행 가드로 오프라인 기동해 로딩을 확인했습니다. 이는 정상 서비스/키체인/모니터 UI의 실사용 검사와 다릅니다.
+- [최초 Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/37156248247)와 [릴리즈 후 Windows 패키지](https://github.com/pmh10401/PenguinNotch/actions/runs/37156905270)에서 설치·doctor·제거·서명된 업데이트 피드 생성·재게시가 성공했습니다. 후속 작업의 설치 파일/피드는 최초 파일과 해시가 달라 최종 파일에 맞춰 SHA256SUMS를 다시 게시했습니다. 최초와 최종 검증 결과를 로컬 기록에서 구분합니다.
+- Sparkle DMG enclosure Ed25519 및 Tauri Windows 설치 파일 Minisign 서명을 공개 키로 검증하고 변조 거부를 확인했습니다. XML 자체의 분리 서명은 없습니다. 최종 두 설치 파일·두 피드·[SHA256SUMS.txt](https://github.com/pmh10401/PenguinNotch/releases/download/v1.26.0/SHA256SUMS.txt)의 `releases/latest/download/` 주소가 모두 **HTTP 200·GitHub SHA-256 일치**이며, 피드는 해당 버전의 설치 파일을 가리킵니다.
+- 이 Mac의 `/Applications/PenguinNotch.app`에 **1.26.0/build68**을 설치해 실제 실행 경로를 확인했습니다. 이전 1.25.1 앱은 `build/release-1.26.0-20261004/rollback/`의 `.previous` 폴더에 보관합니다. 이번 설치는 사용자 설정·주식 기록·키체인 항목을 삭제하지 않았습니다. S24의 이전 테스트에서 초기화된 언어 설정은 원래 언어 선택을 확인하지 못해 별도 복구 대기 상태이며, 설치가 이 문제를 해결한 것으로 표현하지 않습니다.
+- Apple 공증과 Windows Authenticode 서명은 없습니다. 실제 암호 창 횟수·사용자 Windows USB/물리적 창·Mac 케이블 분리/재연결·잠긴 볼륨은 미검증입니다. 실제 Mac 추가 볼륨 전달은 S24의 로컬 검사입니다. 업데이트 서명은 운영체제 게시자 신뢰/공증을 대신하지 않습니다. 기존 Sparkle 키를 도구 내부에서 사용했으며 개인 키를 내보내거나 키체인 ACL을 바꾸지 않았습니다.
+- 로컬 소스·로그·설치·최초/최종 공개 파일 검증 기록: `build/release-1.26.0-20261004/verification.json`. README 두 언어·Windows README·위키의 현재 배포 설명을 갱신합니다.
+
+최종 공개 파일 SHA-256:
+
+| 파일 | SHA-256 |
+| --- | --- |
+| `PenguinNotch.dmg` | `bb3d3a9a8bb1c62d3d05801056b3994dc20bda3fcb3504f477f3462b43a66da7` |
+| `appcast.xml` | `89c6efc4abea4655399d34251edc0c3d9293622b0066736d7cd454cdd2652881` |
+| `PenguinNotch-Setup.exe` | `b460f193734816d9a8691c04ac4d047ed269300a0eef0a7983ac62fedd3b4cb6` |
+| `latest.json` | `de480888d482147702b6cfc575a2daa3fc820918162e7ef66fdf5d03df5fc7fd` |
+| `SHA256SUMS.txt` | `72609944e4e4a9038bc1cb4fbd23f21c49009331037ffe2336fc5367337dd08f` |
