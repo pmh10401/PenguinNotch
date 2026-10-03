@@ -1,6 +1,159 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Could not remove all API keys. Retry Allow access first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not remove all API keys. Retry Allow access first."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 키를 모두 삭제하지 못했습니다. 먼저 접근 허용을 다시 시도하세요."
+          }
+        }
+      }
+    },
+    "Could not save API keys. Allow access first or enter both keys.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save API keys. Allow access first or enter both keys."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 키를 저장하지 못했습니다. 먼저 접근을 허용하거나 두 키를 모두 입력하세요."
+          }
+        }
+      }
+    },
+    "Could not unlock saved keys. Retry or enter both keys.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not unlock saved keys. Retry or enter both keys."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 인증 정보에 접근하지 못했습니다. 다시 시도하거나 두 키를 모두 입력하세요."
+          }
+        }
+      }
+    },
+    "Fewer Keychain prompts after updates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fewer Keychain prompts after updates"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트 후 키체인 인증 요청 감소"
+          }
+        }
+      }
+    },
+    "Older keys may require separate approvals during the first migration.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Older keys may require separate approvals during the first migration."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기존 인증 정보는 처음 이전할 때 각각 접근 승인이 필요할 수 있습니다."
+          }
+        }
+      }
+    },
+    "Toss keys share one protected item": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toss keys share one protected item"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "토스 인증 정보를 하나의 보호된 항목에 저장"
+          }
+        }
+      }
+    },
+    "Toss keys unlocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toss keys unlocked"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "토스 인증 정보에 대한 접근을 허용했습니다"
+          }
+        }
+      }
+    },
+    "Unlock saved keys after an update. Automatic refreshes never ask for the Keychain password.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock saved keys after an update. Automatic refreshes never ask for the Keychain password."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트 후 저장된 인증 정보의 접근을 허용하세요. 자동 갱신에서는 키체인 암호를 묻지 않습니다."
+          }
+        }
+      }
+    },
+    "Unlock saved keys explicitly in stock settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock saved keys explicitly in stock settings."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주식 설정에서 저장된 인증 정보의 접근을 직접 허용합니다."
+          }
+        }
+      }
+    },
     "Comparison models": {
       "localizations": {
         "ko": {

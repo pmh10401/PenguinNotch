@@ -31,6 +31,10 @@ struct ReleaseNote: Equatable {
 enum ReleaseNotes {
     static var all: [ReleaseNote] {
         [
+            ReleaseNote(version: "1.25.1", headline: L10n.t("Fewer Keychain prompts after updates"),
+                        changes: [.init(title: L10n.t("Toss keys share one protected item")),
+                                  .init(title: L10n.t("Unlock saved keys explicitly in stock settings."),
+                                        detail: L10n.t("Older keys may require separate approvals during the first migration."))]),
             ReleaseNote(version: "1.25.0", headline: L10n.t("Forecast history and evaluation"),
                         changes: [.init(title: L10n.t("Saved predictions")),
                                   .init(title: L10n.t("Historical replay"),

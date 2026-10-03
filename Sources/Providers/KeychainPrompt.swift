@@ -112,6 +112,14 @@ enum KeychainSecret {
                          let status = SecItemCopyMatching(query as CFDictionary, &item)
                          return (status, item as? Data)
                      }) -> (status: OSStatus, data: Data?) {
+        var query = query
+        if !interactive { query[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail }
+        return perform(interactive: interactive) { copyMatching(query) }
+    }
+
+    /// Writes during a background migration need the same process-wide
+    /// interaction policy as reads. Explicit settings actions can opt in.
+    static func perform<Value>(interactive: Bool, _ operation: () -> Value) -> Value {
         interactionLock.lock()
         defer { interactionLock.unlock() }
 
@@ -122,9 +130,6 @@ enum KeychainSecret {
         }
         defer { if !interactive { SecKeychainSetUserInteractionAllowed(wasAllowed.boolValue) } }
 
-        var query = query
-        if !interactive { query[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail }
-
-        return copyMatching(query)
+        return operation()
     }
 }

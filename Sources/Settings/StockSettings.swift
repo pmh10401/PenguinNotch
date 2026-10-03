@@ -26,6 +26,7 @@ struct StockSettings: View {
     @State private var apiMessage: String?
     @State private var showsFinnhubKeys = false
     @State private var showsTossKeys = false
+    @State private var isUnlockingToss = false
     @State private var showsForecastHistory = false
     @State private var forecastSaveMessage: String?
     @State private var page: StockSettingsPage
@@ -77,6 +78,12 @@ struct StockSettings: View {
                             connectionContent
                         } label: {
                             LabeledContent(L10n.t("Connection"), value: preferences.stockQuoteSource.title)
+                        }
+                        if preferences.stockQuoteSource == .toss {
+                            unlockTossButton
+                            Text(L10n.t("Unlock saved keys after an update. Automatic refreshes never ask for the Keychain password."))
+                                .font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         if let apiMessage { Text(apiMessage).font(.caption).foregroundStyle(.secondary) }
                     }
@@ -147,6 +154,28 @@ struct StockSettings: View {
         }
     }
 
+    private var unlockTossButton: some View {
+        Button(L10n.t("Allow access…")) {
+            isUnlockingToss = true
+            Task {
+                let unlocked = await Task.detached(priority: .userInitiated) {
+                    TossCredentials.authorize()
+                }.value
+                if preferences.stockQuoteSource == .toss {
+                    if unlocked {
+                        clientID = TossCredentials.load().clientID
+                        preferences.stockSettingsRevision += 1
+                        apiMessage = L10n.t("Toss keys unlocked")
+                    } else {
+                        apiMessage = L10n.t("Could not unlock saved keys. Retry or enter both keys.")
+                    }
+                }
+                isUnlockingToss = false
+            }
+        }
+        .disabled(isUnlockingToss)
+    }
+
     private func clearKeyInputs() {
         showsFinnhubKeys = false
         showsTossKeys = false
@@ -210,24 +239,33 @@ struct StockSettings: View {
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     TextField(L10n.t("Client ID"), text: $clientID)
+                        .disabled(isUnlockingToss)
                     SecureField(L10n.t("Client secret"), text: $clientSecret)
+                        .disabled(isUnlockingToss)
                     HStack {
                         Button(L10n.t("Save API keys")) {
                             backtests.cancel()
-                            TossCredentials.save(clientID: clientID, clientSecret: clientSecret)
-                            clientSecret = ""
-                            preferences.stockSettingsRevision += 1
-                            apiMessage = L10n.t("API keys saved")
+                            if TossCredentials.save(clientID: clientID, clientSecret: clientSecret) {
+                                clientSecret = ""
+                                preferences.stockSettingsRevision += 1
+                                apiMessage = L10n.t("API keys saved")
+                            } else {
+                                apiMessage = L10n.t("Could not save API keys. Allow access first or enter both keys.")
+                            }
                         }
-                        .disabled(clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(isUnlockingToss || clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         Button(L10n.t("Remove API keys")) {
                             backtests.cancel()
-                            TossCredentials.clear()
-                            clientID = ""
-                            clientSecret = ""
-                            preferences.stockSettingsRevision += 1
-                            apiMessage = nil
+                            if TossCredentials.clear() {
+                                clientID = ""
+                                clientSecret = ""
+                                preferences.stockSettingsRevision += 1
+                                apiMessage = nil
+                            } else {
+                                apiMessage = L10n.t("Could not remove all API keys. Retry Allow access first.")
+                            }
                         }
+                        .disabled(isUnlockingToss)
                     }
                 }
             }

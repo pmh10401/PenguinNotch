@@ -721,6 +721,69 @@ final class AntigravityBridgeTests: XCTestCase {
 final class CredentialCacheTests: XCTestCase {
     private struct Token { let expired: Bool }
 
+    func testConcurrentColdReadsShareOneKeychainRead() {
+        let cache = CredentialCache<Int> { _ in false }
+        let started = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let secondStarted = DispatchSemaphore(value: 0)
+        let secondReload = DispatchSemaphore(value: 0)
+        let done = DispatchGroup()
+        let lock = NSLock()
+        var reads = 0
+        var values: [Int] = []
+        done.enter()
+        DispatchQueue.global().async {
+            let value = try? cache.value {
+                lock.withLock { reads += 1 }
+                started.signal()
+                _ = release.wait(timeout: .now() + 3)
+                return 42
+            }
+            lock.withLock { if let value { values.append(value) } }
+            done.leave()
+        }
+        XCTAssertEqual(started.wait(timeout: .now() + 2), .success)
+        done.enter()
+        DispatchQueue.global().async {
+            secondStarted.signal()
+            let value = try? cache.value {
+                lock.withLock { reads += 1 }
+                secondReload.signal()
+                return 99
+            }
+            lock.withLock { if let value { values.append(value) } }
+            done.leave()
+        }
+        XCTAssertEqual(secondStarted.wait(timeout: .now() + 2), .success)
+        XCTAssertEqual(secondReload.wait(timeout: .now() + 0.2), .timedOut,
+                       "a second reader started another protected read")
+        release.signal()
+        XCTAssertEqual(done.wait(timeout: .now() + 2), .success)
+        XCTAssertEqual(lock.withLock { reads }, 1)
+        XCTAssertEqual(lock.withLock { values.sorted() }, [42, 42])
+    }
+
+    func testForgettingDuringAReadDoesNotRestoreTheOldCredential() {
+        let cache = CredentialCache<Int> { _ in false }
+        let started = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            _ = try? cache.value {
+                started.signal()
+                _ = release.wait(timeout: .now() + 3)
+                return 1
+            }
+            done.signal()
+        }
+        XCTAssertEqual(started.wait(timeout: .now() + 2), .success)
+        cache.forget()
+        release.signal()
+        XCTAssertEqual(done.wait(timeout: .now() + 2), .success)
+        XCTAssertNil(cache.held, "an old read undid credential removal")
+        XCTAssertEqual(try? cache.value { 2 }, 2)
+    }
+
     /// -60008 is what a refusal looks like when a prompt was needed and could
     /// not be shown — seen five seconds before a clamshell sleep. It has to
     /// age the reading like a dark wake does, not sign the account out.

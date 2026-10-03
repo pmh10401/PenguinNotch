@@ -19,7 +19,10 @@ import Foundation
 /// prompting. Expiry is left to the caller, who is the one that knows what an
 /// expired token means.
 final class CredentialCache<Credential>: @unchecked Sendable {
-    private let lock = NSLock()
+    private let lock = NSCondition()
+    private var reloading = false
+    private var generation: UInt64 = 0
+    enum Failure: Error { case invalidated }
     private var stored: Credential?
     /// The item's modification date the last time we *asked* about it — on a
     /// refusal as much as on a success. Recording it only on success was what
@@ -77,19 +80,30 @@ final class CredentialCache<Credential>: @unchecked Sendable {
     /// it can be called freely.
     ///
     /// `reload` runs outside the lock: it can block on a keychain prompt, and
-    /// holding a lock across a modal dialogue would stall every other caller
-    /// behind it.
+    /// the state lock remains available to `held` and `forget`. Other requests
+    /// for this same credential wait for that read instead of raising another
+    /// dialogue. Unrelated credentials have their own cache.
     func value(itemModifiedAt: () -> Date? = { nil },
                reload: () throws -> Credential) throws -> Credential {
         lock.lock()
+        while reloading { lock.wait() }
         let held = stored
         let askedStamp = attemptedStamp
         let askedAt = attemptedAt
         let failure = lastError
+        let revision = generation
+        if let held, !isExpired(held) {
+            lock.unlock()
+            return held
+        }
+        reloading = true
         lock.unlock()
-
-        // Still good: nothing to decide.
-        if let held, !isExpired(held) { return held }
+        defer {
+            lock.lock()
+            reloading = false
+            lock.broadcast()
+            lock.unlock()
+        }
 
         // Expired, or nothing held at all. Ask the cheap question first.
         let current = itemModifiedAt()
@@ -122,6 +136,10 @@ final class CredentialCache<Credential>: @unchecked Sendable {
         }
 
         if alreadyAsked {
+            lock.lock()
+            let currentGeneration = generation
+            lock.unlock()
+            guard revision == currentGeneration else { throw Failure.invalidated }
             if let held { return held }
             // Nothing held and macOS has already refused this item: give back
             // the same answer rather than raising the same dialogue again.
@@ -131,6 +149,10 @@ final class CredentialCache<Credential>: @unchecked Sendable {
         do {
             let fresh = try reload()
             lock.lock()
+            guard revision == generation else {
+                lock.unlock()
+                throw Failure.invalidated
+            }
             stored = fresh
             attemptedStamp = current
             attemptedAt = now()
@@ -139,6 +161,10 @@ final class CredentialCache<Credential>: @unchecked Sendable {
             return fresh
         } catch {
             lock.lock()
+            guard revision == generation else {
+                lock.unlock()
+                throw Failure.invalidated
+            }
             // The attempt is recorded, the credential is not: a failure must
             // never be handed back as if it were one.
             attemptedStamp = current
@@ -168,6 +194,7 @@ final class CredentialCache<Credential>: @unchecked Sendable {
     /// "Allow access…", where raising the dialogue again *is* the point.
     func forget() {
         lock.lock()
+        generation &+= 1
         stored = nil
         attemptedStamp = nil
         attemptedAt = nil

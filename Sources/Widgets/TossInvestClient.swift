@@ -2,69 +2,148 @@ import Combine
 import Foundation
 import Security
 
-/// Client id and secret for the Toss Securities Open API. The secret never
-/// goes into UserDefaults; both values live in the login keychain.
+/// The Toss pair is one Keychain item, so a changed signing identity needs
+/// one authorization for the pair. Background callers never ask for a password.
 enum TossCredentials {
     static let service = "com.pmh10401.penguinnotch.tossinvest"
-    private static let previousService = "com.vinz.codenotch.tossinvest"
-    private static let migratedLegacyItems = migrateLegacyItems(from: previousService, to: service)
-    private static let cache = CredentialCache<(clientID: String, clientSecret: String)> { _ in false }
+    private static let store = TossCredentialStore(
+        service: service, previousService: "com.vinz.codenotch.tossinvest",
+        read: KeychainItem.readData,
+        write: { KeychainItem.store(service: $0, account: $1, value: $2, interactive: $3) },
+        remove: { KeychainItem.delete(service: $0, account: $1, interactive: $2) })
 
     static func load() -> (clientID: String, clientSecret: String) {
-        _ = migratedLegacyItems
-        return (try? cache.value { (read("client-id"), read("client-secret")) }) ?? ("", "")
+        guard let value = try? store.load() else { return ("", "") }
+        return (value.clientID, value.clientSecret)
     }
 
-    private static func read(_ account: String) -> String {
-        // A refused read of a new item must not fall back to an older copy.
-        let selected = KeychainItem.newest(service: service, account: account) == nil
-            ? previousService : service
-        return KeychainItem.read(service: selected, account: account) ?? ""
-    }
-
+    /// Called only by the user's Allow access button, never by a refresh.
+    static func authorize() -> Bool { (try? store.authorize()) != nil }
     static var hasSecret: Bool { !(load().clientSecret.isEmpty) }
 
-    /// An empty secret leaves the stored secret in place, so saving a corrected
-    /// client id does not wipe a key the field is no longer showing.
-    static func save(clientID: String, clientSecret: String) {
-        _ = migratedLegacyItems
-        defer { cache.forget() }
+    @discardableResult
+    static func save(clientID: String, clientSecret: String) -> Bool {
+        store.save(clientID: clientID, clientSecret: clientSecret)
+    }
+
+    @discardableResult
+    static func clear() -> Bool { store.clear() }
+}
+
+/// The native operations are injected so preservation and refusal paths can
+/// run offline without reading or modifying a person's Keychain.
+final class TossCredentialStore: @unchecked Sendable {
+    struct Credentials: Codable {
+        let version: Int
+        let clientID: String
+        let clientSecret: String
+        init(clientID: String, clientSecret: String) {
+            version = 1; self.clientID = clientID; self.clientSecret = clientSecret
+        }
+    }
+    enum Failure: Error { case keychain(OSStatus), invalid, pending }
+    private let service: String
+    private let previousService: String
+    private let read: (String, String, Bool) -> (OSStatus, Data?)
+    private let write: (String, String, String, Bool) -> Bool
+    private let remove: (String, String, Bool) -> Bool
+    private let cache = CredentialCache<Credentials> { _ in false }
+    private let prompt = PromptPermission()
+    // Serialize migration and settings writes so an old pair cannot overwrite
+    // a freshly saved pair. Background reads return while an unlock is pending.
+    private let operationLock = NSLock()
+
+    init(service: String, previousService: String,
+         read: @escaping (String, String, Bool) -> (OSStatus, Data?),
+         write: @escaping (String, String, String, Bool) -> Bool,
+         remove: @escaping (String, String, Bool) -> Bool) {
+        self.service = service; self.previousService = previousService
+        self.read = read; self.write = write; self.remove = remove
+    }
+
+    func load() throws -> Credentials {
+        guard operationLock.try() else { throw Failure.pending }
+        defer { operationLock.unlock() }
+        return try loadUnlocked()
+    }
+
+    func authorize() throws -> Credentials {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+        prompt.grant()
+        cache.forget()
+        return try loadUnlocked()
+    }
+
+    private func loadUnlocked() throws -> Credentials {
+        try cache.value {
+            let interactive = prompt.take()
+            let (status, data) = read(service, "credentials", interactive)
+            if status == errSecSuccess {
+                guard let data,
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      Set(object.keys) == ["version", "clientID", "clientSecret"],
+                      let value = try? JSONDecoder().decode(Credentials.self, from: data),
+                      value.version == 1, !value.clientID.isEmpty, !value.clientSecret.isEmpty else {
+                    throw Failure.invalid
+                }
+                return value
+            }
+            guard status == errSecItemNotFound else { throw Failure.keychain(status) }
+
+            // Only an absent item permits fallback. Refusal, corrupt data or
+            // another OS error must never resurrect a different stored pair.
+            func legacy(_ account: String) throws -> String {
+                var result = read(service, account, interactive)
+                if result.0 == errSecItemNotFound { result = read(previousService, account, interactive) }
+                guard result.0 == errSecSuccess else { throw Failure.keychain(result.0) }
+                guard let data = result.1, let value = String(data: data, encoding: .utf8), !value.isEmpty else {
+                    throw Failure.invalid
+                }
+                return value
+            }
+            let value = try Credentials(clientID: legacy("client-id"), clientSecret: legacy("client-secret"))
+            // Add the complete pair atomically. Never rename/delete old items
+            // or show another dialog for a background migration write.
+            guard persist(value, interactive: false) else { throw Failure.keychain(errSecNotAvailable) }
+            return value
+        }
+    }
+
+    func save(clientID: String, clientSecret: String) -> Bool {
+        operationLock.lock()
+        defer { operationLock.unlock() }
         let id = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
-        if id.isEmpty {
-            KeychainItem.delete(service: service, account: "client-id")
-            KeychainItem.delete(service: previousService, account: "client-id")
-        } else {
-            _ = KeychainItem.store(service: service, account: "client-id", value: id)
-        }
         let secret = clientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !secret.isEmpty else { return }
-        _ = KeychainItem.store(service: service, account: "client-secret", value: secret)
+        guard !id.isEmpty else { return false }
+        let savedSecret: String
+        if secret.isEmpty {
+            guard let saved = try? loadUnlocked() else { return false }
+            savedSecret = saved.clientSecret
+        } else { savedSecret = secret }
+        guard persist(Credentials(clientID: id, clientSecret: savedSecret), interactive: true) else { return false }
+        cache.forget()
+        return true
     }
 
-    static func clear() {
-        defer { cache.forget() }
-        KeychainItem.delete(service: service, account: "client-id")
-        KeychainItem.delete(service: service, account: "client-secret")
-        KeychainItem.delete(service: previousService, account: "client-id")
-        KeychainItem.delete(service: previousService, account: "client-secret")
+    private func persist(_ value: Credentials, interactive: Bool) -> Bool {
+        guard let data = try? JSONEncoder().encode(value), let json = String(data: data, encoding: .utf8) else { return false }
+        return write(service, "credentials", json, interactive)
     }
 
-    /// Rename existing items in place so the Keychain prompt shows this app's
-    /// name. The secret never leaves the Keychain during the migration.
-    static func migrateLegacyItems(from oldService: String, to newService: String) {
-        for account in ["client-id", "client-secret"] {
-            guard KeychainItem.newest(service: newService, account: account) == nil else { continue }
-            let query: [CFString: Any] = [
-                kSecClass: kSecClassGenericPassword,
-                kSecAttrService: oldService,
-                kSecAttrAccount: account
-            ]
-            let changes: [CFString: Any] = [
-                kSecAttrService: newService,
-                kSecAttrLabel: "PenguinNotch Stocks"
-            ]
-            _ = SecItemUpdate(query as CFDictionary, changes as CFDictionary)
+    func clear() -> Bool {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+        // Remove legacy copies first so a partial failure cannot remove the
+        // authoritative bundle then restore old keys on the next refresh.
+        for name in [service, previousService] {
+            for account in ["client-id", "client-secret"] {
+                guard remove(name, account, true) else { return false }
+            }
         }
+        guard remove(service, "credentials", true) else { return false }
+        cache.forget()
+        return true
     }
 }
 

@@ -121,37 +121,54 @@ enum KeychainItem {
         return String(data: data, encoding: .utf8)
     }
 
-    /// Stores a string under a service+account, creating or updating the item.
-    /// For items this app owns, no prompt is involved on either write or read.
-    static func store(service: String, account: String, value: String) -> Bool {
-        let data = Data(value.utf8)
-        let query: [CFString: Any] = [
+    /// Unlike `newest`, this preserves the OSStatus so a refused read cannot
+    /// be mistaken for a missing item and trigger a legacy fallback.
+    static func readData(service: String, account: String, interactive: Bool) -> (OSStatus, Data?) {
+        KeychainSecret.read(query: [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
-            kSecAttrAccount: account
-        ]
-        let attributes: [CFString: Any] = [
-            kSecValueData: data,
-            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock
-        ]
-        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if updateStatus == errSecSuccess { return true }
-        if updateStatus == errSecItemNotFound {
-            var addQuery = query
-            addQuery.merge(attributes) { _, new in new }
-            return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+            kSecAttrAccount: account,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne
+        ], interactive: interactive)
+    }
+
+    /// Stores a string under a service+account, creating or updating the item.
+    /// A background migration must pass false to avoid an authorization UI.
+    static func store(service: String, account: String, value: String, interactive: Bool = true) -> Bool {
+        KeychainSecret.perform(interactive: interactive) {
+            let data = Data(value.utf8)
+            let query: [CFString: Any] = [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: account
+            ]
+            let attributes: [CFString: Any] = [
+                kSecValueData: data,
+                kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock
+            ]
+            let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            if updateStatus == errSecSuccess { return true }
+            if updateStatus == errSecItemNotFound {
+                var addQuery = query
+                addQuery.merge(attributes) { _, new in new }
+                return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+            }
+            return false
         }
-        return false
     }
 
     /// Deletes the item under a service+account, if one exists.
     @discardableResult
-    static func delete(service: String, account: String) -> Bool {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account
-        ]
-        return SecItemDelete(query as CFDictionary) == errSecSuccess
+    static func delete(service: String, account: String, interactive: Bool = true) -> Bool {
+        KeychainSecret.perform(interactive: interactive) {
+            let query: [CFString: Any] = [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: account
+            ]
+            let status = SecItemDelete(query as CFDictionary)
+            return status == errSecSuccess || status == errSecItemNotFound
+        }
     }
 }
